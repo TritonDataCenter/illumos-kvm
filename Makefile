@@ -3,12 +3,16 @@
 #
 
 # Use the Sun Studio compiler and Sun linker.
+KERNEL_SOURCE=
 CC=/opt/SUNWspro/bin/cc -xarch=sse2a -m64 -xmodel=kernel
 LD=/usr/bin/ld
+CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 _DCONFIG_X86_64 -DDEBUG -c -O
+INCLUDEDIR=$(KERNEL_SOURCE)/usr/src/uts/intel $(KERNEL_SOURCE)/usr/src/uts/i86pc
 
-kvm: kvm.c kvm.h
-	$(CC) -D_KERNEL -DDEBUG -c kvm.c
-	$(LD) -r -o kvm kvm.o
+kvm: kvm.c kvm_x86.c kvm.h
+	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
+	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
+	$(LD) -r -o kvm kvm.o kvm_x86.o
 
 install: kvm
 	@echo "==> Installing kvm module"
