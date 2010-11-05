@@ -2,17 +2,23 @@
 # Copyright (c) 2010 Joyent Inc., All Rights Reserved.
 #
 
-# Use the Sun Studio compiler and Sun linker.
-KERNEL_SOURCE=
-CC=/opt/SUNWspro/bin/cc -xarch=sse2a -m64 -xmodel=kernel
+# Use the gcc compiler and Sun linker.
+KERNEL_SOURCE=/wd320/max/onnv.121
+CC=gcc -m64 -mcmodel=kernel
 LD=/usr/bin/ld
-CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 _DCONFIG_X86_64 -DDEBUG -c -O
-INCLUDEDIR=$(KERNEL_SOURCE)/usr/src/uts/intel $(KERNEL_SOURCE)/usr/src/uts/i86pc
+CTFCONVERT=$(KERNEL_SOURCE)/usr/src/tools/proto/opt/onbld/bin/i386/ctfconvert
+CTFMERGE=$(KERNEL_SOURCE)/usr/src/tools/proto/opt/onbld/bin/i386/ctfmerge
+
+CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 -DCONFIG_X86_64 -DDEBUG -c -O -g
+INCLUDEDIR= -I $(KERNEL_SOURCE)/usr/src/uts/intel -I $(KERNEL_SOURCE)/usr/src/uts/i86pc
 
 kvm: kvm.c kvm_x86.c kvm.h
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
+	$(CTFCONVERT) -i -L VERSION kvm.o
+	$(CTFCONVERT) -i -L VERSION kvm_x86.o
 	$(LD) -r -o kvm kvm.o kvm_x86.o
+	$(CTFMERGE) -L VERSION -o kvm kvm.o kvm_x86.o
 
 install: kvm
 	@echo "==> Installing kvm module"
@@ -34,3 +40,5 @@ clean:
 uninstall:
 	@pfexec rem_drv kvm || /bin/true
 	@pfexec rm -vf /usr/kernel/drv/kvm* /usr/kernel/drv/amd64/kvm*
+# gcc -m64 -mcmodel=kernel -D_KERNEL -D_MACHDEP -Dx86 -DCONFIG_X86_64 -DDEBUG -c -O -g -I /wd320/max/onnv.121/usr/src/uts/intel -I /wd320/max/onnv.121/usr/src/uts/i86pc kvm.c
+# gcc -m64 -mcmodel=kernel -D_KERNEL -D_MACHDEP -Dx86 -DCONFIG_X86_64 -DDEBUG -c -O -g -I /wd320/max/onnv.121/usr/src/uts/intel -I /wd320/max/onnv.121/usr/src/uts/i86pc kvm_x86.c

@@ -1,1 +1,11 @@
 Work toward making a "Linux KVM" /dev/kvm compatible device for Solaris.
+
+To build the driver, the opensolaris kernel header files must be accessible.
+In the Makefile, modify the KERNEL_SOURCE variable to the top level
+of the kernel source tree.  For example, if the kernel source is in
+"/export/home/max/snv147/usr/src/uts", the KERNEL_SOURCE variable should be
+"KERNEL_SOURCE=/export/home/max/snv147".
+
+The driver currently loads.  This is definitely pre-alpha, as it will
+almost certainly panic the system when it is used.
+
