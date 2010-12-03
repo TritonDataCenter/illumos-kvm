@@ -9,16 +9,19 @@ LD=/usr/bin/ld
 CTFCONVERT=$(KERNEL_SOURCE)/usr/src/tools/proto/opt/onbld/bin/i386/ctfconvert
 CTFMERGE=$(KERNEL_SOURCE)/usr/src/tools/proto/opt/onbld/bin/i386/ctfmerge
 
-CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 -DCONFIG_X86_64 -DDEBUG -c -O -g
-INCLUDEDIR= -I $(KERNEL_SOURCE)/usr/src/uts/intel -I $(KERNEL_SOURCE)/usr/src/uts/i86pc
+CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 -DCONFIG_X86_64 -DDEBUG -c -g -DCONFIG_SOLARIS -DCONFIG_KVM_MMIO
 
-kvm: kvm.c kvm_x86.c kvm.h
+INCLUDEDIR= -I $(KERNEL_SOURCE)/usr/src/uts/intel -I $(KERNEL_SOURCE)/usr/src/uts/i86pc -I $(KERNEL_SOURCE)/usr/src/uts/common
+
+kvm: kvm.c kvm_x86.c emulate.c kvm.h kvm_x86host.h
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
+	$(CC) $(CFLAGS) $(INCLUDEDIR) emulate.c
 	$(CTFCONVERT) -i -L VERSION kvm.o
 	$(CTFCONVERT) -i -L VERSION kvm_x86.o
-	$(LD) -r -o kvm kvm.o kvm_x86.o
-	$(CTFMERGE) -L VERSION -o kvm kvm.o kvm_x86.o
+	$(CTFCONVERT) -i -L VERSION emulate.o
+	$(LD) -r -o kvm kvm.o kvm_x86.o emulate.o
+	$(CTFMERGE) -L VERSION -o kvm kvm.o kvm_x86.o emulate.o
 
 install: kvm
 	@echo "==> Installing kvm module"
