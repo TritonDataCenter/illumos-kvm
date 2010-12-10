@@ -16,6 +16,65 @@
 
 #define offset_in_page(p)	((unsigned long)(p) & ~PAGEMASK)
 
+#define PT_WRITABLE_SHIFT 1
+#define PT_PRESENT_MASK (1ULL << 0)
+#define PT64_BASE_ADDR_MASK (((1ULL << 52) - 1) & ~(uint64_t)(PAGESIZE-1))
+#define PT_WRITABLE_MASK (1ULL << PT_WRITABLE_SHIFT)
+#define PT_USER_MASK (1ULL << 2)
+#define ACC_EXEC_MASK    1
+#define ACC_WRITE_MASK   PT_WRITABLE_MASK
+#define ACC_USER_MASK    PT_USER_MASK
+#define ACC_ALL          (ACC_EXEC_MASK | ACC_WRITE_MASK | ACC_USER_MASK)
+
+#define PT64_PT_BITS 9
+#define PT64_ENT_PER_PAGE (1 << PT64_PT_BITS)
+#define PT32_PT_BITS 10
+#define PT32_ENT_PER_PAGE (1 << PT32_PT_BITS)
+
+#define PT64_PT_BITS 9
+#define PT64_ENT_PER_PAGE (1 << PT64_PT_BITS)
+#define PT32_PT_BITS 10
+#define PT32_ENT_PER_PAGE (1 << PT32_PT_BITS)
+
+#define PT_WRITABLE_SHIFT 1
+
+#define PT_PRESENT_MASK (1ULL << 0)
+#define PT_WRITABLE_MASK (1ULL << PT_WRITABLE_SHIFT)
+#define PT_USER_MASK (1ULL << 2)
+#define PT_PWT_MASK (1ULL << 3)
+#define PT_PCD_MASK (1ULL << 4)
+#define PT_ACCESSED_SHIFT 5
+#define PT_ACCESSED_MASK (1ULL << PT_ACCESSED_SHIFT)
+#define PT_DIRTY_MASK (1ULL << 6)
+#define PT_PAGE_SIZE_MASK (1ULL << 7)
+#define PT_PAT_MASK (1ULL << 7)
+#define PT_GLOBAL_MASK (1ULL << 8)
+#define PT64_NX_SHIFT 63
+#define PT64_NX_MASK (1ULL << PT64_NX_SHIFT)
+
+#define PT_PAT_SHIFT 7
+#define PT_DIR_PAT_SHIFT 12
+#define PT_DIR_PAT_MASK (1ULL << PT_DIR_PAT_SHIFT)
+
+#define PT32_DIR_PSE36_SIZE 4
+#define PT32_DIR_PSE36_SHIFT 13
+#define PT32_DIR_PSE36_MASK \
+	(((1ULL << PT32_DIR_PSE36_SIZE) - 1) << PT32_DIR_PSE36_SHIFT)
+
+#define PT64_ROOT_LEVEL 4
+#define PT32_ROOT_LEVEL 2
+#define PT32E_ROOT_LEVEL 3
+
+#define PT_PDPE_LEVEL 3
+#define PT_DIRECTORY_LEVEL 2
+#define PT_PAGE_TABLE_LEVEL 1
+
+#define PFERR_PRESENT_MASK (1U << 0)
+#define PFERR_WRITE_MASK (1U << 1)
+#define PFERR_USER_MASK (1U << 2)
+#define PFERR_RSVD_MASK (1U << 3)
+#define PFERR_FETCH_MASK (1U << 4)
+
 /* borrowed liberally from linux... */
 
 #define MAX_IO_MSRS 256
@@ -273,6 +332,28 @@ struct pvclock_vcpu_time_info {
 } __attribute__((__packed__)); /* 32 bytes */
 
 #define	APIC_LDR	0xD0
+
+#define APIC_LVT_NUM			6
+/* 14 is the version for Xeon and Pentium 8.4.8*/
+#define APIC_VERSION			(0x14UL | ((APIC_LVT_NUM - 1) << 16))
+#define LAPIC_MMIO_LENGTH		(1 << 12)
+/* followed define is not in apicdef.h */
+#define APIC_SHORT_MASK			0xc0000
+#define APIC_DEST_NOSHORT		0x0
+#define APIC_DEST_MASK			0x800
+#define MAX_APIC_VECTOR			256
+
+#define KVM_IOAPIC_NUM_PINS  24
+
+#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+
+#define LVT_MASK	\
+	(APIC_LVT_MASKED | APIC_SEND_PENDING | APIC_VECTOR_MASK)
+
+#define LINT_MASK	\
+	(LVT_MASK | APIC_MODE_MASK | APIC_INPUT_POLARITY | \
+	 APIC_LVT_REMOTE_IRR | APIC_LVT_LEVEL_TRIGGER)
+
 #ifdef _KERNEL
 struct kvm_lapic {
 	unsigned long base_address;
@@ -1468,8 +1549,6 @@ static inline unsigned long kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memsl
 	     idx = bt_getlowbit(bitmap, idx+1, 512))
 
 #define PT_PAGE_SIZE_MASK (1ULL << 7)
-
-#define INVALID_PAGE (~(hpa_t)0)
 
 #endif
 
