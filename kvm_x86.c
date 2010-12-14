@@ -19,6 +19,7 @@
 #include <sys/cpuvar.h>
 #include <vm/hat_i86.h>
 #include <sys/segments.h>
+#include <sys/mman.h>
 
 #include "msr-index.h"
 #include "msr.h"
@@ -610,7 +611,7 @@ static int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
 	return 0;
 }
 
-static inline int apic_hw_enabled(struct kvm_lapic *apic)
+inline int apic_hw_enabled(struct kvm_lapic *apic)
 {
 	return (apic)->vcpu->arch.apic_base & MSR_IA32_APICBASE_ENABLE;
 }
@@ -746,7 +747,7 @@ static inline int apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
 	return apic_test_and_set_vector(vec, apic->regs + APIC_IRR);
 }
 
-static inline int  apic_sw_enabled(struct kvm_lapic *apic)
+inline int  apic_sw_enabled(struct kvm_lapic *apic)
 {
 	return apic_get_reg(apic, APIC_SPIV) & APIC_SPIV_APIC_ENABLED;
 }
@@ -3182,6 +3183,28 @@ void kvm_get_pfn(pfn_t pfn)
 #include "paging_tmpl.h"
 #undef PTTYPE
 
+void mmu_pte_write_new_pte(struct kvm_vcpu *vcpu,
+				  struct kvm_mmu_page *sp,
+				  uint64_t *spte,
+				  const void *new)
+{
+	if (sp->role.level != PT_PAGE_TABLE_LEVEL) {
+#ifdef XXX
+		++vcpu->kvm->stat.mmu_pde_zapped;
+#endif /*XXX*/
+		return;
+        }
+
+#ifdef XXX
+	++vcpu->kvm->stat.mmu_pte_updated;
+#endif /*XXX*/
+	if (sp->role.glevels == PT32_ROOT_LEVEL)
+		paging32_update_pte(vcpu, sp, spte, new);
+	else
+		paging64_update_pte(vcpu, sp, spte, new);
+}
+
+
 static int init_kvm_tdp_mmu(struct kvm_vcpu *vcpu)
 {
 	struct kvm_mmu *context = &vcpu->arch.mmu;
@@ -3498,13 +3521,14 @@ vcpu_destroy:
 
 extern int largepages_enabled;
 
+extern caddr_t smmap32(caddr32_t addr, size32_t len, int prot, int flags, int fd, off32_t pos);
+
 int kvm_arch_prepare_memory_region(struct kvm *kvm,
 				struct kvm_memory_slot *memslot,
 				struct kvm_memory_slot old,
 				struct kvm_userspace_memory_region *mem,
 				int user_alloc)
 {
-#ifdef XXX
 	int npages = memslot->npages;
 
 	/*To keep backward compatibility with older userspace,
@@ -3512,6 +3536,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 	 */
 	if (!user_alloc) {
 		if (npages && !old.rmap) {
+#ifdef XXX
 			unsigned long userspace_addr;
 			down_write(&current->mm->mmap_sem);
 			userspace_addr = do_mmap(NULL, 0,
@@ -3523,12 +3548,23 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 
 			if (IS_ERR((void *)userspace_addr))
 				return PTR_ERR((void *)userspace_addr);
+			memslot->userspace_addr = (unsigned long) userspace_addr;
+#else
+			{
+				int rval;
+				caddr_t userspace_addr = NULL;
+				userspace_addr = smmap32(NULL, npages*PAGESIZE,
+							 PROT_READ|PROT_WRITE,
+							 MAP_PRIVATE|MAP_ANON,
+							 -1, 0);
+				cmn_err(CE_NOTE, "kvm_arch_prepare_memory_region: mmap at %lx\n", userspace_addr);
+				memslot->userspace_addr = (unsigned long) userspace_addr;
+			}
+#endif /*XXX*/
 
-			memslot->userspace_addr = userspace_addr;
 		}
 	}
 
-#endif /*XXX*/
 	return 0;
 }
 

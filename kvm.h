@@ -415,10 +415,13 @@ struct kvm_shared_msrs_global {
 	uint32_t msrs[KVM_NR_SHARED_MSRS];
 };
 
+struct user_return_notifier {
+	void (*on_user_return)(struct user_return_notifier *urn);
+	list_t link;
+};
+
 struct kvm_shared_msrs {
-#ifdef XXX
 	struct user_return_notifier urn;
-#endif /*XXX*/
 	int registered;
 	struct kvm_shared_msr_values {
 		uint64_t host;
