@@ -161,7 +161,7 @@ struct kvm_mmu_memory_cache {
 
 struct kvm_pte_chain {
 	uint64_t *parent_ptes[NR_PTE_CHAIN_ENTRIES];
-	list_t link;
+	struct list_node link;
 };
 
 /*
@@ -190,12 +190,12 @@ union kvm_mmu_page_role {
 };
 
 struct kvm_mmu_page {
-	list_t link;
-	list_t hash_link;
+	struct list_node link;
+	struct list_node hash_link;
 
-	list_t oos_link;
+	struct list_node oos_link;
 
-	hpa_t kvm__mmu_page_hpa;
+	hpa_t hpa;
 	/*
 	 * The following two entries are used to key the shadow page in the
 	 * hash table.

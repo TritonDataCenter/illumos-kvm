@@ -472,7 +472,7 @@ int kvm_mmu_create(struct kvm_vcpu *vcpu)
 	for (i = 0; i < KVM_NUM_MMU_PAGES; i++)
 		list_create(&vcpu->kvm->arch.mmu_page_hash[i],
 			    sizeof(struct kvm_mmu_page), 
-			    offsetof(struct kvm_mmu_page,link));
+			    offsetof(struct kvm_mmu_page, hash_link));
 
 	return alloc_mmu_pages(vcpu);
 }
@@ -2244,7 +2244,7 @@ struct kvm_shadow_walk_iterator {
 	unsigned index;
 };
 
-extern struct kvm_mmu_page * page_header(hpa_t shadow_page);
+extern struct kvm_mmu_page * page_header(hpa_t shadow_page, struct kvm *kvm);
 
 pfn_t spte_to_pfn(uint64_t pte)
 {
@@ -2343,7 +2343,7 @@ void rmap_remove(struct kvm *kvm, uint64_t *spte)
 
 	if (!is_rmap_spte(*spte))
 		return;
-	sp = page_header(kvm_va2pa(spte));
+	sp = page_header(kvm_va2pa(spte), kvm);
 	pfn = spte_to_pfn(*spte);
 	if (*spte & shadow_accessed_mask)
 		kvm_set_pfn_accessed(pfn);
@@ -2415,7 +2415,7 @@ static int rmap_add(struct kvm_vcpu *vcpu, uint64_t *spte, gfn_t gfn)
 	if (!is_rmap_spte(*spte))
 		return count;
 	gfn = unalias_gfn(vcpu->kvm, gfn);
-	sp = page_header(kvm_va2pa(spte));
+	sp = page_header(kvm_va2pa(spte), vcpu->kvm);
 	sp->gfns[spte - sp->spt] = gfn;
 	rmapp = gfn_to_rmap(vcpu->kvm, gfn, sp->role.level);
 	if (!*rmapp) {
@@ -2468,7 +2468,7 @@ int memslot_id(struct kvm *kvm, gfn_t gfn)
 static void page_header_update_slot(struct kvm *kvm, void *pte, gfn_t gfn)
 {
 	int slot = memslot_id(kvm, gfn);
-	struct kvm_mmu_page *sp = page_header(kvm_va2pa(pte));
+	struct kvm_mmu_page *sp = page_header(kvm_va2pa(pte), kvm);
 
 	BT_SET(sp->slot_bitmap, slot);
 }
@@ -2691,7 +2691,7 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 			struct kvm_mmu_page *child;
 			uint64_t pte = *sptep;
 
-			child = page_header(pte & PT64_BASE_ADDR_MASK);
+			child = page_header(pte & PT64_BASE_ADDR_MASK, vcpu->kvm);
 			mmu_page_remove_parent_pte(child, sptep);
 		} else if (pfn != spte_to_pfn(*sptep)) {
 			rmap_remove(vcpu->kvm, sptep);
@@ -2842,7 +2842,7 @@ void mmu_free_roots(struct kvm_vcpu *vcpu)
 	if (vcpu->arch.mmu.shadow_root_level == PT64_ROOT_LEVEL) {
 		hpa_t root = vcpu->arch.mmu.root_hpa;
 
-		sp = page_header(root);
+		sp = page_header(root, vcpu->kvm);
 		--sp->root_count;
 		if (!sp->root_count && sp->role.invalid)
 			kvm_mmu_zap_page(vcpu->kvm, sp);
@@ -2855,7 +2855,7 @@ void mmu_free_roots(struct kvm_vcpu *vcpu)
 
 		if (root) {
 			root &= PT64_BASE_ADDR_MASK;
-			sp = page_header(root);
+			sp = page_header(root, vcpu->kvm);
 			--sp->root_count;
 			if (!sp->root_count && sp->role.invalid)
 				kvm_mmu_zap_page(vcpu->kvm, sp);

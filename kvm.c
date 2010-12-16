@@ -642,6 +642,8 @@ static struct kvm_mmu_page *kvm_mmu_alloc_page(struct kvm_vcpu *vcpu,
 	sp->gfns = mmu_memory_cache_alloc(&vcpu->arch.mmu_page_cache, PAGESIZE);
 #ifdef XXX
 	set_page_private(virt_to_page(sp->spt), (unsigned long)sp);
+#else
+	sp->hpa = (hat_getpfnum(kas.a_hat, sp->spt)<< PAGESHIFT);
 #endif /*XXX*/
 	list_insert_head(&vcpu->kvm->arch.active_mmu_pages, sp);
 #ifdef XXX
@@ -660,19 +662,25 @@ typedef int (*mmu_parent_walk_fn) (struct kvm_vcpu *vcpu, struct kvm_mmu_page *s
 extern uint64_t kvm_va2pa(caddr_t va);
 
 struct kvm_mmu_page *
-shadow_hpa_to_kvmpage(hpa_t shadow_page)
+shadow_hpa_to_kvmpage(hpa_t shadow_page, struct kvm *kvm)
 {
+	struct kvm_mmu_page *sp;
 	/*
 	 * XXX - We'll probably need a faster way to do this...
 	 * For right now, search all kvm_mmu_page for matching hpa
 	 */
-
+	for (sp = list_head(&kvm->arch.active_mmu_pages); sp;
+	     sp = list_next(&kvm->arch.active_mmu_pages, sp)) {
+		if (sp->hpa == (shadow_page & ~PAGEOFFSET))
+			     return sp;
+	}
+	return NULL;
 }	
 
 struct kvm_mmu_page *
-page_header(hpa_t shadow_page)
+page_header(hpa_t shadow_page, struct kvm *kvm)
 {
-	return (struct kvm_mmu_page *)shadow_hpa_to_kvmpage(shadow_page);
+	return (struct kvm_mmu_page *)shadow_hpa_to_kvmpage(shadow_page, kvm);
 }
 
 static void mmu_parent_walk(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
@@ -684,7 +692,7 @@ static void mmu_parent_walk(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 	int i;
 
 	if (!sp->multimapped && sp->parent_pte) {
-		parent_sp = page_header(kvm_va2pa(sp->parent_pte));
+		parent_sp = page_header(kvm_va2pa(sp->parent_pte), vcpu->kvm);
 		fn(vcpu, parent_sp);
 		mmu_parent_walk(vcpu, parent_sp, fn);
 		return;
@@ -694,17 +702,17 @@ static void mmu_parent_walk(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 		for (i = 0; i < NR_PTE_CHAIN_ENTRIES; ++i) {
 			if (!pte_chain->parent_ptes[i])
 				break;
-			parent_sp = page_header(kvm_va2pa(pte_chain->parent_ptes[i]));
+			parent_sp = page_header(kvm_va2pa(pte_chain->parent_ptes[i]), vcpu->kvm);
 			fn(vcpu, parent_sp);
 			mmu_parent_walk(vcpu, parent_sp, fn);
 		}
 	}
 }
 
-static void kvm_mmu_update_unsync_bitmap(uint64_t *spte)
+static void kvm_mmu_update_unsync_bitmap(uint64_t *spte, struct kvm *kvm)
 {
 	unsigned int index;
-	struct kvm_mmu_page *sp = page_header(kvm_va2pa((caddr_t)spte));
+	struct kvm_mmu_page *sp = page_header(kvm_va2pa((caddr_t)spte), kvm);
 
 	index = spte - sp->spt;
 	/* XXX - need protection */
@@ -714,7 +722,7 @@ static void kvm_mmu_update_unsync_bitmap(uint64_t *spte)
 	}
 }
 
-static void kvm_mmu_update_parents_unsync(struct kvm_mmu_page *sp)
+static void kvm_mmu_update_parents_unsync(struct kvm_mmu_page *sp, struct kvm *kvm)
 {
 	struct kvm_pte_chain *pte_chain;
 	int i;
@@ -723,7 +731,7 @@ static void kvm_mmu_update_parents_unsync(struct kvm_mmu_page *sp)
 		return;
 
 	if (!sp->multimapped) {
-		kvm_mmu_update_unsync_bitmap(sp->parent_pte);
+		kvm_mmu_update_unsync_bitmap(sp->parent_pte, kvm);
 		return;
 	}
 
@@ -732,14 +740,14 @@ static void kvm_mmu_update_parents_unsync(struct kvm_mmu_page *sp)
 		for (i = 0; i < NR_PTE_CHAIN_ENTRIES; ++i) {
 			if (!pte_chain->parent_ptes[i])
 				break;
-			kvm_mmu_update_unsync_bitmap(pte_chain->parent_ptes[i]);
+			kvm_mmu_update_unsync_bitmap(pte_chain->parent_ptes[i], kvm);
 		}
 	}
 }
 
 static int unsync_walk_fn(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp)
 {
-	kvm_mmu_update_parents_unsync(sp);
+	kvm_mmu_update_parents_unsync(sp, vcpu->kvm);
 	return 1;
 }
 
@@ -747,7 +755,7 @@ void kvm_mmu_mark_parents_unsync(struct kvm_vcpu *vcpu,
 					struct kvm_mmu_page *sp)
 {
 	mmu_parent_walk(vcpu, sp, unsync_walk_fn);
-	kvm_mmu_update_parents_unsync(sp);
+	kvm_mmu_update_parents_unsync(sp, vcpu->kvm);
 }
 
 unsigned kvm_page_table_hashfn(gfn_t gfn)
@@ -881,7 +889,7 @@ int is_large_pte(uint64_t pte)
 extern int is_shadow_present_pte(uint64_t pte);
 
 static int __mmu_unsync_walk(struct kvm_mmu_page *sp,
-			   struct kvm_mmu_pages *pvec)
+			     struct kvm_mmu_pages *pvec, struct kvm *kvm)
 {
 	int i, ret, nr_unsync_leaf = 0;
 
@@ -890,12 +898,12 @@ static int __mmu_unsync_walk(struct kvm_mmu_page *sp,
 
 		if (is_shadow_present_pte(ent) && !is_large_pte(ent)) {
 			struct kvm_mmu_page *child;
-			child = page_header(ent & PT64_BASE_ADDR_MASK);
+			child = page_header(ent & PT64_BASE_ADDR_MASK, kvm);
 
 			if (child->unsync_children) {
 				if (mmu_pages_add(pvec, child, i))
 					return -ENOSPC;
-				ret = __mmu_unsync_walk(child, pvec);
+				ret = __mmu_unsync_walk(child, pvec, kvm);
 				if (!ret) {
 					BT_CLEAR(sp->unsync_child_bitmap, i);
 				} else if (ret > 0)
@@ -919,13 +927,13 @@ static int __mmu_unsync_walk(struct kvm_mmu_page *sp,
 }
 
 static int 
-mmu_unsync_walk(struct kvm_mmu_page *sp, struct kvm_mmu_pages *pvec)
+mmu_unsync_walk(struct kvm_mmu_page *sp, struct kvm_mmu_pages *pvec, struct kvm *kvm)
 {
 	if (!sp->unsync_children)
 		return 0;
 
 	mmu_pages_add(pvec, sp, 0);
-	return __mmu_unsync_walk(sp, pvec);
+	return __mmu_unsync_walk(sp, pvec, kvm);
 }
 
 static int 
@@ -939,7 +947,7 @@ mmu_zap_unsync_children(struct kvm *kvm, struct kvm_mmu_page *parent)
 		return 0;
 
 	kvm_mmu_pages_init(parent, &parents, &pages);
-	while (mmu_unsync_walk(parent, &pages)) {
+	while (mmu_unsync_walk(parent, &pages, kvm)) {
 		struct kvm_mmu_page *sp;
 
 #ifdef XXX		
@@ -1062,7 +1070,7 @@ static void kvm_mmu_page_unlink_children(struct kvm *kvm,
 		if (is_shadow_present_pte(ent)) {
 			if (!is_last_spte(ent, sp->role.level)) {
 				ent &= PT64_BASE_ADDR_MASK;
-				mmu_page_remove_parent_pte(page_header(ent),
+				mmu_page_remove_parent_pte(page_header(ent, kvm),
 							   &pt[i]);
 			} else {
 				rmap_remove(kvm, &pt[i]);
@@ -1287,7 +1295,7 @@ struct kvm_mmu_page *kvm_mmu_get_page(struct kvm_vcpu *vcpu,
 		return sp;
 	sp->gfn = gfn;
 	sp->role = role;
-	list_insert_head(bucket, &sp);
+	list_insert_head(bucket, sp);
 	if (!direct) {
 		if (rmap_write_protect(vcpu->kvm, gfn))
 			kvm_flush_remote_tlbs(vcpu->kvm);
@@ -1460,7 +1468,7 @@ static void mmu_sync_children(struct kvm_vcpu *vcpu,
 	struct kvm_mmu_pages pages;
 
 	kvm_mmu_pages_init(parent, &parents, &pages);
-	while (mmu_unsync_walk(parent, &pages)) {
+	while (mmu_unsync_walk(parent, &pages, vcpu->kvm)) {
 		int protected = 0;
 
 		for_each_sp(pages, sp, parents, i)
@@ -1489,7 +1497,7 @@ static void mmu_sync_roots(struct kvm_vcpu *vcpu)
 		return;
 	if (vcpu->arch.mmu.shadow_root_level == PT64_ROOT_LEVEL) {
 		hpa_t root = vcpu->arch.mmu.root_hpa;
-		sp = page_header(root);
+		sp = page_header(root, vcpu->kvm);
 		mmu_sync_children(vcpu, sp);
 		return;
 	}
@@ -1498,7 +1506,7 @@ static void mmu_sync_roots(struct kvm_vcpu *vcpu)
 
 		if (root && VALID_PAGE(root)) {
 			root &= PT64_BASE_ADDR_MASK;
-			sp = page_header(root);
+			sp = page_header(root, vcpu->kvm);
 			mmu_sync_children(vcpu, sp);
 		}
 	}
@@ -2306,7 +2314,7 @@ void kvm_mmu_zap_all(struct kvm *kvm)
 
 	mutex_enter(&kvm->mmu_lock);
 	for (sp = list_head(&kvm->arch.active_mmu_pages); sp;
-	     sp = list_next(&kvm->arch.active_mmu_pages, sp->link)
+	     sp = list_next(&kvm->arch.active_mmu_pages, sp)
 		if (kvm_mmu_zap_page(kvm, sp))
 			/* XXX ?*/
 			node = container_of(kvm->arch.active_mmu_pages.next,
@@ -5401,7 +5409,7 @@ caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn)
 
 void kvm_release_page_dirty(caddr_t page)
 {
-	kvm_release_pfn_dirty(hat_getpfnum(&kas.a_hat, page));
+	kvm_release_pfn_dirty(hat_getpfnum(kas.a_hat, page));
 }
 
 
@@ -6700,7 +6708,7 @@ static void mmu_pte_write_zap_pte(struct kvm_vcpu *vcpu,
 		if (is_last_spte(pte, sp->role.level))
 			rmap_remove(vcpu->kvm, spte);
 		else {
-			child = page_header(pte & PT64_BASE_ADDR_MASK);
+			child = page_header(pte & PT64_BASE_ADDR_MASK, vcpu->kvm);
 			mmu_page_remove_parent_pte(child, spte);
 		}
 	}
@@ -9010,6 +9018,7 @@ int kvm_mmu_load(struct kvm_vcpu *vcpu)
 	mutex_enter(&vcpu->kvm->mmu_lock);
 	kvm_mmu_free_some_pages(vcpu);
 	r = mmu_alloc_roots(vcpu);
+
 	mmu_sync_roots(vcpu);
 	mutex_exit(&vcpu->kvm->mmu_lock);
 	if (r)
@@ -10087,4 +10096,3 @@ kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off,
 {
 	return (ENOTSUP);
 }
-
