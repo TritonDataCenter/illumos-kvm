@@ -18,6 +18,7 @@
 #include <sys/atomic.h>
 #include <sys/spl.h>
 #include <sys/cpuvar.h>
+#include <sys/segments.h>
 
 #include "vmx.h"
 #include "msr-index.h"
@@ -28,7 +29,6 @@
 #include "processor-flags.h"
 #include "hyperv.h"
 #include "apicdef.h"
-#include "segment.h"
 #include "iodev.h"
 #include "kvm.h"
 #include "irq.h"
@@ -1818,7 +1818,8 @@ int kvm_init(void *opaque, unsigned int vcpu_size)
 	/* A kmem cache lets us meet the alignment requirements of fx_save. */
 	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", vcpu_size,
 					   __alignof__(struct kvm_vcpu),
-					   NULL, NULL, NULL, NULL, NULL, 0);
+					   zero_constructor, NULL, NULL,
+					   (void *)vcpu_size, NULL, 0);
 	if (!kvm_vcpu_cache) {
 		r = ENOMEM;
 		goto out_free_5;
@@ -3649,7 +3650,7 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	vmcs_writel(HOST_GS_BASE, 0); /* 22.2.4 */
 #endif
 
-	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 22.2.4 */
+	vmcs_write16(HOST_TR_SELECTOR, KTSS_SEL);  /* 22.2.4 */
 
 	kvm_get_idt(&dt);
 	vmcs_writel(HOST_IDTR_BASE, dt.base);   /* 22.2.4 */
@@ -3722,10 +3723,7 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
  */
 void vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
-	/* XXX - the following assignment assumes vmx contains vcpu */
-	/* at the beginning of the structure */
-
-	struct vcpu_vmx *vmx = (struct vcpu_vmx *)vcpu; 
+	struct vcpu_vmx *vmx = to_vmx(vcpu); 
 	uint64_t phys_addr = (hat_getpfnum(kas.a_hat, (char *)vmx->vmcs)<<PAGESHIFT)|((uint64_t)(vmx->vmcs)&0xfff);
 	uint64_t tsc_this, delta, new_offset;
 	volatile int x;  /* XXX - dtrace return probe missing */
@@ -3847,7 +3845,7 @@ static void reload_tss(void)
 
 	kvm_get_gdt(&gdt);
 	descs = (void *)gdt.base;
-	descs[GDT_ENTRY_TSS].c.b.type = 9; /* available TSS */
+	descs[GDT_KTSS].c.b.type = 9; /* available TSS */
 	load_TR_desc();
 }
 
@@ -3927,7 +3925,7 @@ static void vmx_load_host_state(struct vcpu_vmx *vmx)
 
 void vmx_vcpu_put(struct kvm_vcpu *vcpu)
 {
-	__vmx_load_host_state((struct vcpu_vmx *)vcpu);
+	__vmx_load_host_state(to_vmx(vcpu));
 }
 
 void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
@@ -4265,7 +4263,7 @@ static uint32_t vmx_segment_access_rights(struct kvm_segment *var)
 static void vmx_set_segment(struct kvm_vcpu *vcpu,
 			    struct kvm_segment *var, int seg)
 {
-	struct vcpu_vmx *vmx = (struct vcpu_vmx *)vcpu;
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	struct kvm_vmx_segment_field *sf = &kvm_vmx_segment_fields[seg];
 	uint32_t ar;
 
@@ -5847,8 +5845,8 @@ static int vmx_get_msr(struct kvm_vcpu *vcpu, uint32_t msr_index, uint64_t *pdat
 		data = vmcs_readl(GUEST_GS_BASE);
 		break;
 	case MSR_KERNEL_GS_BASE:
-		vmx_load_host_state((struct vcpu_vmx *)vcpu);
-		data = ((struct vcpu_vmx *)(vcpu))->msr_guest_kernel_gs_base;
+		vmx_load_host_state(to_vmx(vcpu));
+		data = to_vmx(vcpu)->msr_guest_kernel_gs_base;
 		break;
 #endif
 	case MSR_EFER:
@@ -5866,14 +5864,14 @@ static int vmx_get_msr(struct kvm_vcpu *vcpu, uint32_t msr_index, uint64_t *pdat
 		data = vmcs_readl(GUEST_SYSENTER_ESP);
 		break;
 	case MSR_TSC_AUX:
-		if (!((struct vcpu_vmx *)(vcpu))->rdtscp_enabled)
+		if (!to_vmx(vcpu)->rdtscp_enabled)
 			return 1;
 		/* Otherwise falls through */
 	default:
-		vmx_load_host_state((struct vcpu_vmx *)vcpu);
-		msr = find_msr_entry((struct vcpu_vmx *)vcpu, msr_index);
+		vmx_load_host_state(to_vmx(vcpu));
+		msr = find_msr_entry(to_vmx(vcpu), msr_index);
 		if (msr) {
-			vmx_load_host_state((struct vcpu_vmx *)vcpu);
+			vmx_load_host_state(to_vmx(vcpu));
 			data = msr->data;
 			break;
 		}
@@ -5902,7 +5900,7 @@ int kvm_get_msr(struct kvm_vcpu *vcpu, uint32_t msr_index, uint64_t *pdata)
  */
 static int vmx_set_msr(struct kvm_vcpu *vcpu, uint32_t msr_index, uint64_t data)
 {
-	struct vcpu_vmx *vmx = (struct vcpu_vmx *)vcpu;
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	struct shared_msr_entry *msr;
 	uint64_t host_tsc;
 	int ret = 0;
@@ -6217,7 +6215,7 @@ static inline unsigned long native_read_cr0(void)
 
 static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 {
-	struct vcpu_vmx *vmx = (struct vcpu_vmx *)vcpu;
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
 
 	/* Record the guest's net vcpu time for enforced NMI injections. */
 #ifdef XXX
@@ -6356,7 +6354,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		fixup_rmode_irq(vmx);
 #endif /*XXX*/
 
-	asm("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
+	asm("mov %0, %%ds; mov %0, %%es" : : "r"SEL_GDT(GDT_UDATA, SEL_UPL));
 	vmx->launched = 1;
 
 	vmx_complete_interrupts(vmx);
@@ -9168,7 +9166,6 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	if (vcpu->fpu_active)
 		kvm_load_guest_fpu(vcpu);
 #endif /*XXX*/
-	kpreempt_disable();
 
 	BT_CLEAR(&vcpu->requests, KVM_REQ_KICK);
 #ifdef XXX

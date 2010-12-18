@@ -1439,7 +1439,7 @@ struct kvm_vcpu *
 vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 {
 	int err;
-	struct vcpu_vmx *vmx = kmem_zalloc(sizeof (struct vcpu_vmx), KM_SLEEP);
+	struct vcpu_vmx *vmx = kmem_cache_alloc(kvm_vcpu_cache, KM_SLEEP);
 	int cpu;
 
 	if (!vmx)
@@ -1544,7 +1544,7 @@ static void update_exception_bitmap(struct kvm_vcpu *vcpu)
 	    (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP))
 		eb |= 1u << BP_VECTOR;
 #endif /*XXX*/
-	if (((struct vcpu_vmx *)vcpu)->rmode.vm86_active)
+	if (to_vmx(vcpu)->rmode.vm86_active)
 		eb = ~0;
 	if (enable_ept)
 		eb &= ~(1u << PF_VECTOR); /* bypass_guest_pf = 0 */
@@ -1628,7 +1628,7 @@ int is_paging(struct kvm_vcpu *vcpu)
 
 void vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 {
-	unsigned long hw_cr4 = cr4 | (((struct vcpu_vmx *)vcpu)->rmode.vm86_active ?
+	unsigned long hw_cr4 = cr4 | (to_vmx(vcpu)->rmode.vm86_active ?
 				      KVM_RMODE_VM_CR4_ALWAYS_ON : KVM_PMODE_VM_CR4_ALWAYS_ON);
 
 	vcpu->arch.cr4 = cr4;
@@ -1671,47 +1671,6 @@ static void ept_update_paging_mode_cr0(unsigned long *hw_cr0,
 		*hw_cr0 &= ~X86_CR0_WP;
 }
 
-void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
-{
-	struct vcpu_vmx *vmx = (struct vcpu_vmx *)vcpu;
-	unsigned long hw_cr0;
-#ifdef XXX
-	if (enable_unrestricted_guest)
-		hw_cr0 = (cr0 & ~KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST)
-			| KVM_VM_CR0_ALWAYS_ON_UNRESTRICTED_GUEST;
-	else
-#endif /*XXX*/
-		hw_cr0 = (cr0 & ~KVM_GUEST_CR0_MASK) | KVM_VM_CR0_ALWAYS_ON;
-#ifdef XXX
-	if (vmx->rmode.vm86_active && (cr0 & X86_CR0_PE))
-		enter_pmode(vcpu);
-
-	if (!vmx->rmode.vm86_active && !(cr0 & X86_CR0_PE))
-		enter_rmode(vcpu);
-#endif /*XXX*/
-
-#ifdef CONFIG_X86_64
-	if (vcpu->arch.efer & EFER_LME) {
-#ifdef XXX
-		if (!is_paging(vcpu) && (cr0 & X86_CR0_PG))
-			enter_lmode(vcpu);
-		if (is_paging(vcpu) && !(cr0 & X86_CR0_PG))
-			exit_lmode(vcpu);
-#endif /*XXX*/
-	}
-#endif
-
-	if (enable_ept)
-		ept_update_paging_mode_cr0(&hw_cr0, cr0, vcpu);
-
-	if (!vcpu->fpu_active)
-		hw_cr0 |= X86_CR0_TS | X86_CR0_MP;
-
-	vmcs_writel(CR0_READ_SHADOW, cr0);
-	vmcs_writel(GUEST_CR0, hw_cr0);
-	vcpu->arch.cr0 = cr0;
-}
-
 #define VMX_SEGMENT_FIELD(seg)					\
 	[VCPU_SREG_##seg] = {                                   \
 		.selector = GUEST_##seg##_SELECTOR,		\
@@ -1736,23 +1695,58 @@ static struct kvm_vmx_segment_field {
 	VMX_SEGMENT_FIELD(LDTR),
 };
 
-static void seg_setup(int seg)
+static void fix_pmode_dataseg(int seg, struct kvm_save_segment *save)
 {
 	struct kvm_vmx_segment_field *sf = &kvm_vmx_segment_fields[seg];
-	unsigned int ar;
 
-	vmcs_write16(sf->selector, 0);
-	vmcs_writel(sf->base, 0);
-	vmcs_write32(sf->limit, 0xffff);
+	if (vmcs_readl(sf->base) == save->base && (save->base & AR_S_MASK)) {
+		vmcs_write16(sf->selector, save->selector);
+		vmcs_writel(sf->base, save->base);
+		vmcs_write32(sf->limit, save->limit);
+		vmcs_write32(sf->ar_bytes, save->ar);
+	} else {
+		uint32_t dpl = (vmcs_read16(sf->selector) & SELECTOR_RPL_MASK)
+			<< AR_DPL_SHIFT;
+		vmcs_write32(sf->ar_bytes, 0x93 | dpl);
+	}
+}
 
-	if (enable_unrestricted_guest) {
-		ar = 0x93;
-		if (seg == VCPU_SREG_CS)
-			ar |= 0x08; /* code segment */
-	} else
-		ar = 0xf3;
+static void enter_pmode(struct kvm_vcpu *vcpu)
+{
+	unsigned long flags;
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
 
-	vmcs_write32(sf->ar_bytes, ar);
+	vmx->emulation_required = 1;
+	vmx->rmode.vm86_active = 0;
+
+	vmcs_writel(GUEST_TR_BASE, vmx->rmode.tr.base);
+	vmcs_write32(GUEST_TR_LIMIT, vmx->rmode.tr.limit);
+	vmcs_write32(GUEST_TR_AR_BYTES, vmx->rmode.tr.ar);
+
+	flags = vmcs_readl(GUEST_RFLAGS);
+	flags &= RMODE_GUEST_OWNED_EFLAGS_BITS;
+	flags |= vmx->rmode.save_rflags & ~RMODE_GUEST_OWNED_EFLAGS_BITS;
+	vmcs_writel(GUEST_RFLAGS, flags);
+
+	vmcs_writel(GUEST_CR4, (vmcs_readl(GUEST_CR4) & ~X86_CR4_VME) |
+			(vmcs_readl(CR4_READ_SHADOW) & X86_CR4_VME));
+
+	update_exception_bitmap(vcpu);
+
+	if (emulate_invalid_guest_state)
+		return;
+
+	fix_pmode_dataseg(VCPU_SREG_ES, &vmx->rmode.es);
+	fix_pmode_dataseg(VCPU_SREG_DS, &vmx->rmode.ds);
+	fix_pmode_dataseg(VCPU_SREG_GS, &vmx->rmode.gs);
+	fix_pmode_dataseg(VCPU_SREG_FS, &vmx->rmode.fs);
+
+	vmcs_write16(GUEST_SS_SELECTOR, 0);
+	vmcs_write32(GUEST_SS_AR_BYTES, 0x93);
+
+	vmcs_write16(GUEST_CS_SELECTOR,
+		     vmcs_read16(GUEST_CS_SELECTOR) & ~SELECTOR_RPL_MASK);
+	vmcs_write32(GUEST_CS_AR_BYTES, 0x9b);
 }
 
 static gva_t rmode_tss_base(struct kvm *kvm)
@@ -1773,14 +1767,18 @@ static gva_t rmode_tss_base(struct kvm *kvm)
 	return kvm->arch.tss_addr;
 }
 
-extern int kvm_write_guest_page(struct kvm *kvm, gfn_t gfn, const void *data,
-			 int offset, int len);
-
-unsigned long empty_zero_page[PAGESIZE / sizeof(unsigned long)];
-
-int kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len)
+static void fix_rmode_seg(int seg, struct kvm_save_segment *save)
 {
-	return kvm_write_guest_page(kvm, gfn, empty_zero_page, offset, len);
+	struct kvm_vmx_segment_field *sf = &kvm_vmx_segment_fields[seg];
+
+	save->selector = vmcs_read16(sf->selector);
+	save->base = vmcs_readl(sf->base);
+	save->limit = vmcs_read32(sf->limit);
+	save->ar = vmcs_read32(sf->ar_bytes);
+	vmcs_write16(sf->selector, save->base >> 4);
+	vmcs_write32(sf->base, save->base & 0xfffff);
+	vmcs_write32(sf->limit, 0xffff);
+	vmcs_write32(sf->ar_bytes, 0xf3);
 }
 
 static int init_rmode_tss(struct kvm *kvm)
@@ -1814,6 +1812,137 @@ static int init_rmode_tss(struct kvm *kvm)
 	ret = 1;
 out:
 	return ret;
+}
+
+static int init_rmode(struct kvm *kvm)
+{
+	if (!init_rmode_tss(kvm))
+		return 0;
+	if (!init_rmode_identity_map(kvm))
+		return 0;
+	return 1;
+}
+
+
+static void enter_rmode(struct kvm_vcpu *vcpu)
+{
+	unsigned long flags;
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
+
+	if (enable_unrestricted_guest)
+		return;
+
+	vmx->emulation_required = 1;
+	vmx->rmode.vm86_active = 1;
+
+	vmx->rmode.tr.base = vmcs_readl(GUEST_TR_BASE);
+	vmcs_writel(GUEST_TR_BASE, rmode_tss_base(vcpu->kvm));
+
+	vmx->rmode.tr.limit = vmcs_read32(GUEST_TR_LIMIT);
+	vmcs_write32(GUEST_TR_LIMIT, RMODE_TSS_SIZE - 1);
+
+	vmx->rmode.tr.ar = vmcs_read32(GUEST_TR_AR_BYTES);
+	vmcs_write32(GUEST_TR_AR_BYTES, 0x008b);
+
+	flags = vmcs_readl(GUEST_RFLAGS);
+	vmx->rmode.save_rflags = flags;
+
+	flags |= X86_EFLAGS_IOPL | X86_EFLAGS_VM;
+
+	vmcs_writel(GUEST_RFLAGS, flags);
+	vmcs_writel(GUEST_CR4, vmcs_readl(GUEST_CR4) | X86_CR4_VME);
+	update_exception_bitmap(vcpu);
+
+	if (emulate_invalid_guest_state)
+		goto continue_rmode;
+
+	vmcs_write16(GUEST_SS_SELECTOR, vmcs_readl(GUEST_SS_BASE) >> 4);
+	vmcs_write32(GUEST_SS_LIMIT, 0xffff);
+	vmcs_write32(GUEST_SS_AR_BYTES, 0xf3);
+
+	vmcs_write32(GUEST_CS_AR_BYTES, 0xf3);
+	vmcs_write32(GUEST_CS_LIMIT, 0xffff);
+	if (vmcs_readl(GUEST_CS_BASE) == 0xffff0000)
+		vmcs_writel(GUEST_CS_BASE, 0xf0000);
+	vmcs_write16(GUEST_CS_SELECTOR, vmcs_readl(GUEST_CS_BASE) >> 4);
+
+	fix_rmode_seg(VCPU_SREG_ES, &vmx->rmode.es);
+	fix_rmode_seg(VCPU_SREG_DS, &vmx->rmode.ds);
+	fix_rmode_seg(VCPU_SREG_GS, &vmx->rmode.gs);
+	fix_rmode_seg(VCPU_SREG_FS, &vmx->rmode.fs);
+
+continue_rmode:
+	kvm_mmu_reset_context(vcpu);
+	init_rmode(vcpu->kvm);
+}
+
+void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+{
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
+	unsigned long hw_cr0;
+
+	if (enable_unrestricted_guest)
+		hw_cr0 = (cr0 & ~KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST)
+			| KVM_VM_CR0_ALWAYS_ON_UNRESTRICTED_GUEST;
+	else
+		hw_cr0 = (cr0 & ~KVM_GUEST_CR0_MASK) | KVM_VM_CR0_ALWAYS_ON;
+
+	if (vmx->rmode.vm86_active && (cr0 & X86_CR0_PE))
+		enter_pmode(vcpu);
+
+	if (!vmx->rmode.vm86_active && !(cr0 & X86_CR0_PE))
+		enter_rmode(vcpu);
+
+#ifdef CONFIG_X86_64
+	if (vcpu->arch.efer & EFER_LME) {
+#ifdef XXX
+		if (!is_paging(vcpu) && (cr0 & X86_CR0_PG))
+			enter_lmode(vcpu);
+		if (is_paging(vcpu) && !(cr0 & X86_CR0_PG))
+			exit_lmode(vcpu);
+#endif /*XXX*/
+	}
+#endif
+
+	if (enable_ept)
+		ept_update_paging_mode_cr0(&hw_cr0, cr0, vcpu);
+
+	if (!vcpu->fpu_active)
+		hw_cr0 |= X86_CR0_TS | X86_CR0_MP;
+
+	vmcs_writel(CR0_READ_SHADOW, cr0);
+	vmcs_writel(GUEST_CR0, hw_cr0);
+	vcpu->arch.cr0 = cr0;
+}
+
+static void seg_setup(int seg)
+{
+	struct kvm_vmx_segment_field *sf = &kvm_vmx_segment_fields[seg];
+	unsigned int ar;
+
+	vmcs_write16(sf->selector, 0);
+	vmcs_writel(sf->base, 0);
+	vmcs_write32(sf->limit, 0xffff);
+
+	if (enable_unrestricted_guest) {
+		ar = 0x93;
+		if (seg == VCPU_SREG_CS)
+			ar |= 0x08; /* code segment */
+	} else
+		ar = 0xf3;
+
+	vmcs_write32(sf->ar_bytes, ar);
+}
+
+
+extern int kvm_write_guest_page(struct kvm *kvm, gfn_t gfn, const void *data,
+			 int offset, int len);
+
+unsigned long empty_zero_page[PAGESIZE / sizeof(unsigned long)];
+
+int kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len)
+{
+	return kvm_write_guest_page(kvm, gfn, empty_zero_page, offset, len);
 }
 
 static int init_rmode_identity_map(struct kvm *kvm)
@@ -1852,15 +1981,6 @@ out:
 	return ret;
 }
 
-static int init_rmode(struct kvm *kvm)
-{
-	if (!init_rmode_tss(kvm))
-		return 0;
-	if (!init_rmode_identity_map(kvm))
-		return 0;
-	return 1;
-}
-
 extern void vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer);
 extern void kvm_register_write(struct kvm_vcpu *vcpu,
 			       enum kvm_reg reg,
@@ -1870,7 +1990,7 @@ extern void setup_msrs(struct vcpu_vmx *vmx);
 
 int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 {
-	struct vcpu_vmx *vmx = (struct vcpu_vmx *)vcpu;
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	uint64_t msr;
 	int ret, idx;
 

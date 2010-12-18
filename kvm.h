@@ -1157,11 +1157,9 @@ extern unsigned int __invalid_size_argument_for_IOC;
 
 #define _IOC_TYPECHECK(t) (sizeof(t))
 
-#define GDT_ENTRY_TSS 8	/* needs two entries */
-
 static inline void native_load_tr_desc(void)
 {
-	asm volatile("ltr %w0"::"q" (GDT_ENTRY_TSS*8));
+	asm volatile("ltr %w0"::"q" (KTSS_SEL));
 }
 
 #define load_TR_desc() native_load_tr_desc()
