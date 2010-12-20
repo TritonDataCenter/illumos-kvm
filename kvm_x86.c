@@ -693,7 +693,7 @@ inline static int kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
 #define VEC_POS(v) ((v) & (32 - 1))
 #define REG_POS(v) (((v) >> 5) << 4)
 
-static inline void apic_clear_vector(int vec, caddr_t bitmap)
+inline void apic_clear_vector(int vec, caddr_t bitmap)
 {
 	BT_CLEAR((bitmap) + REG_POS(vec), VEC_POS(vec));
 }
@@ -722,7 +722,7 @@ void kvm_inject_nmi(struct kvm_vcpu *vcpu)
 	vcpu->arch.nmi_pending = 1;
 }
 
-static inline void apic_set_vector(int vec, caddr_t bitmap)
+inline void apic_set_vector(int vec, caddr_t bitmap)
 {
 	BT_SET((bitmap) + REG_POS(vec), VEC_POS(vec));
 }
@@ -752,7 +752,7 @@ inline int  apic_sw_enabled(struct kvm_lapic *apic)
 	return apic_get_reg(apic, APIC_SPIV) & APIC_SPIV_APIC_ENABLED;
 }
 
-static inline int apic_enabled(struct kvm_lapic *apic)
+inline int apic_enabled(struct kvm_lapic *apic)
 {
 	return apic_sw_enabled(apic) &&	apic_hw_enabled(apic);
 }
@@ -1222,6 +1222,8 @@ nomem:
 	return -ENOMEM;
 }
 
+extern int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu);
+
 int
 kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 {
@@ -1232,17 +1234,11 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	kvm = vcpu->kvm;
 
 	vcpu->arch.mmu.root_hpa = INVALID_PAGE;
-#ifdef XXX
+
 	if (!irqchip_in_kernel(kvm) || kvm_vcpu_is_bsp(vcpu))
 		vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 	else
 		vcpu->arch.mp_state = KVM_MP_STATE_UNINITIALIZED;
-#else
-	if (!irqchip_in_kernel(kvm) /* || kvm_vcpu_is_bsp(vcpu) */)
-		vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
-	else
-		vcpu->arch.mp_state = KVM_MP_STATE_UNINITIALIZED;
-#endif
 
 	page = kmem_zalloc(PAGESIZE, KM_SLEEP);
 	if (!page) {
@@ -1617,13 +1613,11 @@ void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 		vcpu->arch.cr8 = cr8;
 }
 
+extern inline ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask);
+
 int is_paging(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX	
-	return kvm_getcr0_bits(vcpu, X86_CR0_PG);
-#else
-	return 0;
-#endif /*XXX*/
+	return kvm_read_cr0_bits(vcpu, X86_CR0_PG);
 }
 
 void vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
@@ -1876,6 +1870,37 @@ continue_rmode:
 	init_rmode(vcpu->kvm);
 }
 
+extern void vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer);
+
+#ifdef CONFIG_X86_64
+
+static void enter_lmode(struct kvm_vcpu *vcpu)
+{
+	uint32_t guest_tr_ar;
+
+	guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
+	if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
+		cmn_err(CE_NOTE, "%s: tss fixup for long mode. \n",
+		       __func__);
+		vmcs_write32(GUEST_TR_AR_BYTES,
+			     (guest_tr_ar & ~AR_TYPE_MASK)
+			     | AR_TYPE_BUSY_64_TSS);
+	}
+	vcpu->arch.efer |= EFER_LMA;
+	vmx_set_efer(vcpu, vcpu->arch.efer);
+}
+
+static void exit_lmode(struct kvm_vcpu *vcpu)
+{
+	vcpu->arch.efer &= ~EFER_LMA;
+
+	vmcs_write32(VM_ENTRY_CONTROLS,
+		     vmcs_read32(VM_ENTRY_CONTROLS)
+		     & ~VM_ENTRY_IA32E_MODE);
+}
+
+#endif
+
 void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -1895,12 +1920,10 @@ void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 
 #ifdef CONFIG_X86_64
 	if (vcpu->arch.efer & EFER_LME) {
-#ifdef XXX
 		if (!is_paging(vcpu) && (cr0 & X86_CR0_PG))
 			enter_lmode(vcpu);
 		if (is_paging(vcpu) && !(cr0 & X86_CR0_PG))
 			exit_lmode(vcpu);
-#endif /*XXX*/
 	}
 #endif
 
@@ -1947,12 +1970,15 @@ int kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len)
 
 static int init_rmode_identity_map(struct kvm *kvm)
 {
+#ifdef XXX
 	int i, r, ret;
 	pfn_t identity_map_pfn;
 	uint32_t tmp;
 
 	if (!enable_ept)
+#endif /*XXX*/
 		return 1;
+#ifdef XXX
 	if ((!kvm->arch.ept_identity_pagetable)) {
 		cmn_err(CE_WARN, "EPT: identity-mapping pagetable haven't been allocated!\n");
 		return 0;
@@ -1964,7 +1990,7 @@ static int init_rmode_identity_map(struct kvm *kvm)
 	r = kvm_clear_guest_page(kvm, identity_map_pfn, 0, PAGESIZE);
 	if (r < 0)
 		goto out;
-#ifdef XXX
+
 	/* Set up identity-mapping pagetable for EPT in real mode */
 	for (i = 0; i < PT32_ENT_PER_PAGE; i++) {
 		tmp = (i << 22) + (_PAGE_PRESENT | _PAGE_RW | _PAGE_USER |
@@ -1974,14 +2000,13 @@ static int init_rmode_identity_map(struct kvm *kvm)
 		if (r < 0)
 			goto out;
 	}
-#endif /*XXX*/
 	kvm->arch.ept_identity_pagetable_done = 1;
 	ret = 1;
 out:
 	return ret;
+#endif /*XXX*/
 }
 
-extern void vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer);
 extern void kvm_register_write(struct kvm_vcpu *vcpu,
 			       enum kvm_reg reg,
 			       unsigned long val);
@@ -2018,19 +2043,21 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 
 #ifdef XXX
 	fx_init(&vmx->vcpu);
-#endif /*XXX*/
+#endif
 
 	seg_setup(VCPU_SREG_CS);
 	/*
 	 * GUEST_CS_BASE should really be 0xffff0000, but VT vm86 mode
 	 * insists on having GUEST_CS_BASE == GUEST_CS_SELECTOR << 4.  Sigh.
 	 */
+#ifdef XXX
 #ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	if (kvm_vcpu_is_bsp(&vmx->vcpu)) {
 		vmcs_write16(GUEST_CS_SELECTOR, 0xf000);
 		vmcs_writel(GUEST_CS_BASE, 0x000f0000);
 	} else {
 #endif /*CONFIG_KVM_APIC_ARCHITECTURE*/
+#endif /*XXX*/
 		vmcs_write16(GUEST_CS_SELECTOR, vmx->vcpu.arch.sipi_vector << 8);
 		vmcs_writel(GUEST_CS_BASE, vmx->vcpu.arch.sipi_vector << 12);
 #ifdef XXX
@@ -2061,8 +2088,9 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	if (kvm_vcpu_is_bsp(&vmx->vcpu))
 		kvm_rip_write(vcpu, 0xfff0);
 	else
-		kvm_rip_write(vcpu, 0);
 #endif /*XXX*/
+		kvm_rip_write(vcpu, 0);
+
 	kvm_register_write(vcpu, VCPU_REGS_RSP, 0);
 
 	vmcs_writel(GUEST_DR7, 0x400);
@@ -2624,7 +2652,6 @@ void __set_spte(uint64_t *sptep, uint64_t spte)
 }
 
 extern int tdp_enabled;
-extern inline ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask);
 
 static int is_write_protection(struct kvm_vcpu *vcpu)
 {

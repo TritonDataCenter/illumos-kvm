@@ -84,12 +84,13 @@
 #define KVM_NR_FIXED_MTRR_REGION 88
 #define KVM_NR_VAR_MTRR 8
 
+#ifdef _KERNEL
 extern kmutex_t kvm_lock;
 extern list_t vm_list;
 
 struct kvm_vcpu;
 struct kvm;
-
+#endif /*_KERNEL*/
 
 enum {
 	VCPU_SREG_ES,
@@ -157,6 +158,7 @@ struct kvm_mmu_memory_cache {
 	void *objects[KVM_NR_MEM_OBJS];
 };
 
+#ifdef _KERNEL
 #define NR_PTE_CHAIN_ENTRIES 5
 
 struct kvm_pte_chain {
@@ -222,6 +224,8 @@ struct kvm_mmu_page {
 	unsigned long unsync_child_bitmap[BT_BITOUL(512)];
 };
 
+#endif /*_KERNEL*/
+
 struct kvm_pv_mmu_op_buffer {
 	void *ptr;
 	unsigned len;
@@ -242,6 +246,7 @@ struct kvm_pio_request {
 	int rep;
 };
 
+#ifdef _KERNEL
 /*
  * x86 supports 3 paging modes (4-level 64-bit, 3-level 64-bit, and 2-level
  * 32-bit).  The kvm_mmu structure abstracts the details of the current mmu
@@ -267,6 +272,8 @@ struct kvm_mmu {
 	uint64_t rsvd_bits_mask[2][4];
 };
 
+#endif /*_KERNEL*/
+
 struct kvm_cpuid_entry2 {
 	uint32_t function;
 	uint32_t index;
@@ -277,6 +284,19 @@ struct kvm_cpuid_entry2 {
 	uint32_t edx;
 	uint32_t padding[3];
 };
+
+struct kvm_segment {
+	uint64_t base;
+	uint32_t limit;
+	unsigned short selector;
+	unsigned char  type;
+	unsigned char  present, dpl, db, s, l, g, avl;
+	unsigned char  unusable;
+	unsigned char  padding;
+};
+
+
+#ifdef _KERNEL
 
 struct x86_emulate_ctxt;
 
@@ -539,16 +559,6 @@ struct kvm_guest_debug {
 	uint32_t control;
 	uint32_t pad;
 	struct kvm_guest_debug_arch arch;
-};
-
-struct kvm_segment {
-	uint64_t base;
-	uint32_t limit;
-	unsigned short selector;
-	unsigned char  type;
-	unsigned char  present, dpl, db, s, l, g, avl;
-	unsigned char  unusable;
-	unsigned char  padding;
 };
 
 struct descriptor_table {
@@ -962,4 +972,5 @@ int kvm_cpu_get_interrupt(struct kvm_vcpu *v);
 void kvm_define_shared_msr(unsigned index, uint32_t msr);
 void kvm_set_shared_msr(unsigned index, uint64_t val, uint64_t mask);
 #endif /*XXX*/
+#endif /*_KERNEL*/
 #endif /* _ASM_X86_KVM_HOST_H */

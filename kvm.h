@@ -298,8 +298,9 @@ struct i387_fxsave_struct {
 
 #define KVM_MAX_CPUID_ENTRIES 40
 
+#ifdef _KERNEL
 #include "kvm_emulate.h"
-
+#endif /*_KERNEL*/
 
 /*
  * These structs MUST NOT be changed.
@@ -751,6 +752,10 @@ struct kvm_assigned_dev_kernel {
 
 #define KVM_PAGE_ARRAY_NR 16
 
+/* Avoid include hell */
+#define NMI_VECTOR 0x02
+
+
 struct kvm_mmu_pages {
 	struct mmu_page_and_offset {
 		struct kvm_mmu_page *sp;
@@ -906,10 +911,10 @@ struct kvm {
 	/* the following was a read-copy update mechanism */
 	/* we'll use a reader-writer lock, for now */
 	krwlock_t kvm_rwlock;
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
+  /*#ifdef CONFIG_KVM_APIC_ARCHITECTURE*/
 	uint32_t bsp_vcpu_id;
 	struct kvm_vcpu *bsp_vcpu;
-#endif
+  /*#endif*/
 	struct kvm_vcpu *vcpus[KVM_MAX_VCPUS];
 	volatile int online_vcpus;
 	struct list_node vm_list;

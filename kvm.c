@@ -164,6 +164,20 @@ static void vmx_set_idt(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
 static void vmx_get_gdt(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
 static void vmx_set_gdt(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
 static int vmx_get_cpl(struct kvm_vcpu *vcpu);
+static uint32_t vmx_get_interrupt_shadow(struct kvm_vcpu *vcpu, int mask);
+static void vmx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask);
+static void skip_emulated_instruction(struct kvm_vcpu *vcpu);
+static void vmx_inject_irq(struct kvm_vcpu *vcpu);
+static void vmx_inject_nmi(struct kvm_vcpu *vcpu);
+static void vmx_queue_exception(struct kvm_vcpu *vcpu, unsigned nr,
+				int has_error_code, uint32_t error_code);
+static int vmx_nmi_allowed(struct kvm_vcpu *vcpu);
+static int vmx_get_nmi_mask(struct kvm_vcpu *vcpu);
+static void vmx_set_nmi_mask(struct kvm_vcpu *vcpu, int masked);
+static void enable_nmi_window(struct kvm_vcpu *vcpu);
+static void enable_irq_window(struct kvm_vcpu *vcpu);
+static void vmx_cpuid_update(struct kvm_vcpu *vcpu);
+
 int get_ept_level(void);
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
 
@@ -245,19 +259,19 @@ static struct kvm_x86_ops vmx_x86_ops = {
 
 	.run = vmx_vcpu_run /*vmx_vcpu_run*/,
 	.handle_exit = vmx_handle_exit /*vmx_handle_exit*/,
-	.skip_emulated_instruction = nulldev /*skip_emulated_instruction*/,
-	.set_interrupt_shadow = nulldev /*vmx_set_interrupt_shadow*/,
-	.get_interrupt_shadow = nulldev /*vmx_get_interrupt_shadow*/,
+	.skip_emulated_instruction = skip_emulated_instruction /*skip_emulated_instruction*/,
+	.set_interrupt_shadow = vmx_set_interrupt_shadow /*vmx_set_interrupt_shadow*/,
+	.get_interrupt_shadow = vmx_get_interrupt_shadow /*vmx_get_interrupt_shadow*/,
 	.patch_hypercall = nulldev /*vmx_patch_hypercall*/,
-	.set_irq = nulldev /*vmx_inject_irq*/,
-	.set_nmi = nulldev /*vmx_inject_nmi*/,
-	.queue_exception = nulldev /*vmx_queue_exception*/,
+	.set_irq = vmx_inject_irq /*vmx_inject_irq*/,
+	.set_nmi = vmx_inject_nmi /*vmx_inject_nmi*/,
+	.queue_exception = vmx_queue_exception /*vmx_queue_exception*/,
 	.interrupt_allowed = vmx_interrupt_allowed /*vmx_interrupt_allowed*/,
-	.nmi_allowed = nulldev /*vmx_nmi_allowed*/,
-	.get_nmi_mask = nulldev /*vmx_get_nmi_mask*/,
-	.set_nmi_mask = nulldev /*vmx_set_nmi_mask*/,
-	.enable_nmi_window = nulldev /*enable_nmi_window*/,
-	.enable_irq_window = nulldev /*enable_irq_window*/,
+	.nmi_allowed = vmx_nmi_allowed /*vmx_nmi_allowed*/,
+	.get_nmi_mask = vmx_get_nmi_mask /*vmx_get_nmi_mask*/,
+	.set_nmi_mask = vmx_set_nmi_mask /*vmx_set_nmi_mask*/,
+	.enable_nmi_window = enable_nmi_window /*enable_nmi_window*/,
+	.enable_irq_window = enable_irq_window /*enable_irq_window*/,
 	.update_cr8_intercept = vmx_update_cr8_intercept /*update_cr8_intercept*/,
 
 	.set_tss_addr = vmx_set_tss_addr,
@@ -267,7 +281,7 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.exit_reasons_str = nulldev /*vmx_exit_reasons_str*/,
 	.get_lpage_level = vmx_get_lpage_level /*vmx_get_lpage_level*/,
 
-	.cpuid_update = nulldev /*vmx_cpuid_update*/,
+	.cpuid_update = vmx_cpuid_update /*vmx_cpuid_update*/,
 
 	.rdtscp_supported = vmx_rdtscp_supported /*vmx_rdtscp_supported*/,
 };
@@ -283,6 +297,248 @@ void vmcs_write32(unsigned long field, uint32_t value)
 {
 	vmcs_writel(field, value);
 }
+
+static void vmx_cpuid_update(struct kvm_vcpu *vcpu)
+{
+	struct kvm_cpuid_entry2 *best;
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
+	uint32_t exec_control;
+
+	vmx->rdtscp_enabled = 0;
+#ifdef XXX
+	if (vmx_rdtscp_supported()) {
+		exec_control = vmcs_read32(SECONDARY_VM_EXEC_CONTROL);
+		if (exec_control & SECONDARY_EXEC_RDTSCP) {
+			best = kvm_find_cpuid_entry(vcpu, 0x80000001, 0);
+			if (best && (best->edx & bit(X86_FEATURE_RDTSCP)))
+				vmx->rdtscp_enabled = 1;
+			else {
+				exec_control &= ~SECONDARY_EXEC_RDTSCP;
+				vmcs_write32(SECONDARY_VM_EXEC_CONTROL,
+						exec_control);
+			}
+		}
+	}
+#endif /*XXX*/
+}
+
+static void enable_irq_window(struct kvm_vcpu *vcpu)
+{
+	uint32_t cpu_based_vm_exec_control;
+
+	cpu_based_vm_exec_control = vmcs_read32(CPU_BASED_VM_EXEC_CONTROL);
+	cpu_based_vm_exec_control |= CPU_BASED_VIRTUAL_INTR_PENDING;
+	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL, cpu_based_vm_exec_control);
+}
+
+extern struct vmcs_config vmcs_config;
+
+static inline int cpu_has_virtual_nmis(void)
+{
+	return vmcs_config.pin_based_exec_ctrl & PIN_BASED_VIRTUAL_NMIS;
+}
+
+static void enable_nmi_window(struct kvm_vcpu *vcpu)
+{
+	uint32_t cpu_based_vm_exec_control;
+
+	if (!cpu_has_virtual_nmis()) {
+		enable_irq_window(vcpu);
+		return;
+	}
+
+	cpu_based_vm_exec_control = vmcs_read32(CPU_BASED_VM_EXEC_CONTROL);
+	cpu_based_vm_exec_control |= CPU_BASED_VIRTUAL_NMI_PENDING;
+	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL, cpu_based_vm_exec_control);
+}
+
+static void vmcs_clear_bits(unsigned long field, uint32_t mask)
+{
+	vmcs_writel(field, vmcs_readl(field) & ~mask);
+}
+
+static void vmcs_set_bits(unsigned long field, uint32_t mask)
+{
+	vmcs_writel(field, vmcs_readl(field) | mask);
+}
+
+static void vmx_set_nmi_mask(struct kvm_vcpu *vcpu, int masked)
+{
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
+
+	if (!cpu_has_virtual_nmis()) {
+		if (vmx->soft_vnmi_blocked != masked) {
+			vmx->soft_vnmi_blocked = masked;
+			vmx->vnmi_blocked_time = 0;
+		}
+	} else {
+		if (masked)
+			vmcs_set_bits(GUEST_INTERRUPTIBILITY_INFO,
+				      GUEST_INTR_STATE_NMI);
+		else
+			vmcs_clear_bits(GUEST_INTERRUPTIBILITY_INFO,
+					GUEST_INTR_STATE_NMI);
+	}
+}
+
+static int vmx_get_nmi_mask(struct kvm_vcpu *vcpu)
+{
+	if (!cpu_has_virtual_nmis())
+		return to_vmx(vcpu)->soft_vnmi_blocked;
+	else
+		return !!(vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) &
+			  GUEST_INTR_STATE_NMI);
+}
+
+static int vmx_nmi_allowed(struct kvm_vcpu *vcpu)
+{
+	if (!cpu_has_virtual_nmis() && to_vmx(vcpu)->soft_vnmi_blocked)
+		return 0;
+
+	return	!(vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) &
+			(GUEST_INTR_STATE_MOV_SS | GUEST_INTR_STATE_NMI));
+}
+
+static inline unsigned long kvm_register_read(struct kvm_vcpu *vcpu,
+					      enum kvm_reg reg)
+{
+#ifdef XXX
+	if (!test_bit(reg, (unsigned long *)&vcpu->arch.regs_avail))
+		kvm_x86_ops->cache_reg(vcpu, reg);
+#endif /*XXX*/
+
+	return vcpu->arch.regs[reg];
+}
+
+void kvm_register_write(struct kvm_vcpu *vcpu,
+				      enum kvm_reg reg,
+				      unsigned long val)
+{
+	vcpu->arch.regs[reg] = val;
+	BT_SET((unsigned long *)&vcpu->arch.regs_dirty, reg);
+	BT_SET((unsigned long *)&vcpu->arch.regs_avail, reg);
+}
+
+unsigned long kvm_rip_read(struct kvm_vcpu *vcpu)
+{
+	return kvm_register_read(vcpu, VCPU_REGS_RIP);
+}
+
+void kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val)
+{
+	kvm_register_write(vcpu, VCPU_REGS_RIP, val);
+}
+
+static inline int kvm_exception_is_soft(unsigned int nr)
+{
+	return (nr == BP_VECTOR) || (nr == OF_VECTOR);
+}
+
+static void vmx_queue_exception(struct kvm_vcpu *vcpu, unsigned nr,
+				int has_error_code, uint32_t error_code)
+{
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
+	uint32_t intr_info = nr | INTR_INFO_VALID_MASK;
+
+	if (has_error_code) {
+		vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, error_code);
+		intr_info |= INTR_INFO_DELIVER_CODE_MASK;
+	}
+
+	if (vmx->rmode.vm86_active) {
+		vmx->rmode.irq.pending = 1;
+		vmx->rmode.irq.vector = nr;
+		vmx->rmode.irq.rip = kvm_rip_read(vcpu);
+		if (kvm_exception_is_soft(nr))
+			vmx->rmode.irq.rip +=
+				vmx->vcpu.arch.event_exit_inst_len;
+		intr_info |= INTR_TYPE_SOFT_INTR;
+		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, intr_info);
+		vmcs_write32(VM_ENTRY_INSTRUCTION_LEN, 1);
+		kvm_rip_write(vcpu, vmx->rmode.irq.rip - 1);
+		return;
+	}
+
+	if (kvm_exception_is_soft(nr)) {
+		vmcs_write32(VM_ENTRY_INSTRUCTION_LEN,
+			     vmx->vcpu.arch.event_exit_inst_len);
+		intr_info |= INTR_TYPE_SOFT_EXCEPTION;
+	} else
+		intr_info |= INTR_TYPE_HARD_EXCEPTION;
+
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, intr_info);
+}
+
+static void vmx_inject_nmi(struct kvm_vcpu *vcpu)
+{
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
+
+	if (!cpu_has_virtual_nmis()) {
+		/*
+		 * Tracking the NMI-blocked state in software is built upon
+		 * finding the next open IRQ window. This, in turn, depends on
+		 * well-behaving guests: They have to keep IRQs disabled at
+		 * least as long as the NMI handler runs. Otherwise we may
+		 * cause NMI nesting, maybe breaking the guest. But as this is
+		 * highly unlikely, we can live with the residual risk.
+		 */
+		vmx->soft_vnmi_blocked = 1;
+		vmx->vnmi_blocked_time = 0;
+	}
+
+#ifdef XXX
+	++vcpu->stat.nmi_injections;
+#endif /*XXX*/
+	if (vmx->rmode.vm86_active) {
+		vmx->rmode.irq.pending = 1;
+		vmx->rmode.irq.vector = NMI_VECTOR;
+		vmx->rmode.irq.rip = kvm_rip_read(vcpu);
+		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
+			     NMI_VECTOR | INTR_TYPE_SOFT_INTR |
+			     INTR_INFO_VALID_MASK);
+		vmcs_write32(VM_ENTRY_INSTRUCTION_LEN, 1);
+		kvm_rip_write(vcpu, vmx->rmode.irq.rip - 1);
+		return;
+	}
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
+			INTR_TYPE_NMI_INTR | INTR_INFO_VALID_MASK | NMI_VECTOR);
+}
+
+
+static void vmx_inject_irq(struct kvm_vcpu *vcpu)
+{
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
+	uint32_t intr;
+	int irq = vcpu->arch.interrupt.nr;
+
+#ifdef XXX
+	trace_kvm_inj_virq(irq);
+
+	++vcpu->stat.irq_injections;
+#endif /*XXX*/
+	if (vmx->rmode.vm86_active) {
+		vmx->rmode.irq.pending = 1;
+		vmx->rmode.irq.vector = irq;
+		vmx->rmode.irq.rip = kvm_rip_read(vcpu);
+		if (vcpu->arch.interrupt.soft)
+			vmx->rmode.irq.rip +=
+				vmx->vcpu.arch.event_exit_inst_len;
+		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
+			     irq | INTR_TYPE_SOFT_INTR | INTR_INFO_VALID_MASK);
+		vmcs_write32(VM_ENTRY_INSTRUCTION_LEN, 1);
+		kvm_rip_write(vcpu, vmx->rmode.irq.rip - 1);
+		return;
+	}
+	intr = irq | INTR_INFO_VALID_MASK;
+	if (vcpu->arch.interrupt.soft) {
+		intr |= INTR_TYPE_SOFT_INTR;
+		vmcs_write32(VM_ENTRY_INSTRUCTION_LEN,
+			     vmx->vcpu.arch.event_exit_inst_len);
+	} else
+		intr |= INTR_TYPE_EXT_INTR;
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, intr);
+}
+
 
 static void vmx_get_idt(struct kvm_vcpu *vcpu, struct descriptor_table *dt)
 {
@@ -307,6 +563,48 @@ static void vmx_set_gdt(struct kvm_vcpu *vcpu, struct descriptor_table *dt)
 	vmcs_write32(GUEST_GDTR_LIMIT, dt->limit);
 	vmcs_writel(GUEST_GDTR_BASE, dt->base);
 }
+
+static uint32_t vmx_get_interrupt_shadow(struct kvm_vcpu *vcpu, int mask)
+{
+	uint32_t interruptibility = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
+	int ret = 0;
+
+	if (interruptibility & GUEST_INTR_STATE_STI)
+		ret |= X86_SHADOW_INT_STI;
+	if (interruptibility & GUEST_INTR_STATE_MOV_SS)
+		ret |= X86_SHADOW_INT_MOV_SS;
+
+	return ret & mask;
+}
+
+static void vmx_set_interrupt_shadow(struct kvm_vcpu *vcpu, int mask)
+{
+	uint32_t interruptibility_old = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
+	uint32_t interruptibility = interruptibility_old;
+
+	interruptibility &= ~(GUEST_INTR_STATE_STI | GUEST_INTR_STATE_MOV_SS);
+
+	if (mask & X86_SHADOW_INT_MOV_SS)
+		interruptibility |= GUEST_INTR_STATE_MOV_SS;
+	if (mask & X86_SHADOW_INT_STI)
+		interruptibility |= GUEST_INTR_STATE_STI;
+
+	if ((interruptibility != interruptibility_old))
+		vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, interruptibility);
+}
+
+static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
+{
+	unsigned long rip;
+
+	rip = kvm_rip_read(vcpu);
+	rip += vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
+	kvm_rip_write(vcpu, rip);
+
+	/* skipping an emulated instruction also counts */
+	vmx_set_interrupt_shadow(vcpu, 0);
+}
+
 
 /*
  * In linux, there is a separate vmx kernel module from the kvm driver.
@@ -347,8 +645,6 @@ static int alloc_kvm_area(void){
 	}
 	return 0;
 }
-
-extern struct vmcs_config vmcs_config;
 
 static int adjust_vmx_controls(uint32_t ctl_min, uint32_t ctl_opt,
 				      uint32_t msr, uint32_t *result)
@@ -3399,7 +3695,7 @@ static int kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *cpuid,
 		cpuid->nent = KVM_MAX_CPUID_ENTRIES;
 	r = ENOMEM;
 	allocsize = sizeof(struct kvm_cpuid_entry2)*cpuid->nent;
-	cpuid_entries = kmem_alloc(allocsize, KM_SLEEP);
+	cpuid_entries = kmem_zalloc(allocsize, KM_SLEEP);
 	if (!cpuid_entries)
 		goto out;
 
@@ -3501,7 +3797,7 @@ unsigned long vmcs_readl(unsigned long field)
 {
 	unsigned long value;
 
-	asm volatile (__ex(ASM_VMX_VMREAD_RDX_RAX)
+	asm volatile (ASM_VMX_VMREAD_RDX_RAX
 		      : "=a"(value) : "d"(field) : "cc");
 	return value;
 }
@@ -4114,36 +4410,6 @@ static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
 	default:
 		break;
 	}
-}
-
-static inline unsigned long kvm_register_read(struct kvm_vcpu *vcpu,
-					      enum kvm_reg reg)
-{
-#ifdef XXX
-	if (!test_bit(reg, (unsigned long *)&vcpu->arch.regs_avail))
-		kvm_x86_ops->cache_reg(vcpu, reg);
-#endif /*XXX*/
-
-	return vcpu->arch.regs[reg];
-}
-
-void kvm_register_write(struct kvm_vcpu *vcpu,
-				      enum kvm_reg reg,
-				      unsigned long val)
-{
-	vcpu->arch.regs[reg] = val;
-	BT_SET((unsigned long *)&vcpu->arch.regs_dirty, reg);
-	BT_SET((unsigned long *)&vcpu->arch.regs_avail, reg);
-}
-
-unsigned long kvm_rip_read(struct kvm_vcpu *vcpu)
-{
-	return kvm_register_read(vcpu, VCPU_REGS_RIP);
-}
-
-void kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val)
-{
-	kvm_register_write(vcpu, VCPU_REGS_RIP, val);
 }
 
 unsigned long kvm_get_rflags(struct kvm_vcpu *vcpu)
@@ -4876,12 +5142,10 @@ static inline int is_protmode(struct kvm_vcpu *vcpu)
 }
 
 
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu)
 {
 	return vcpu->kvm->bsp_vcpu_id == vcpu->vcpu_id;
 }
-#endif
 
 void kvm_pic_clear_isr_ack(struct kvm *kvm)
 {
@@ -6007,16 +6271,6 @@ static void kvm_machine_check(void)
 	do_machine_check(&regs, 0);
 #endif
 #endif /*XXX*/
-}
-
-static void vmcs_clear_bits(unsigned long field, uint32_t mask)
-{
-	vmcs_writel(field, vmcs_readl(field) & ~mask);
-}
-
-static void vmcs_set_bits(unsigned long field, uint32_t mask)
-{
-	vmcs_writel(field, vmcs_readl(field) | mask);
 }
 
 #define EXCPT_BENIGN		0
@@ -8847,10 +9101,114 @@ static int handle_pause(struct kvm_vcpu *vcpu)
 
 static int handle_invalid_op(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX	
 	kvm_queue_exception(vcpu, UD_VECTOR);
-#endif /*XXX*/
 	return 1;
+}
+
+inline int apic_find_highest_isr(struct kvm_lapic *apic)
+{
+	int result;
+
+	result = find_highest_vector(apic->regs + APIC_ISR);
+	ASSERT(result == -1 || result >= 16);
+
+	return result;
+}
+
+void apic_update_ppr(struct kvm_lapic *apic)
+{
+	uint32_t tpr, isrv, ppr;
+	int isr;
+
+	tpr = apic_get_reg(apic, APIC_TASKPRI);
+	isr = apic_find_highest_isr(apic);
+	isrv = (isr != -1) ? isr : 0;
+
+	if ((tpr & 0xf0) >= (isrv & 0xf0))
+		ppr = tpr & 0xff;
+	else
+		ppr = isrv & 0xf0;
+
+	apic_set_reg(apic, APIC_PROCPRI, ppr);
+}
+
+extern inline int apic_enabled(struct kvm_lapic *apic);
+
+int kvm_apic_has_interrupt(struct kvm_vcpu *vcpu)
+{
+	struct kvm_lapic *apic = vcpu->arch.apic;
+	int highest_irr;
+
+	if (!apic || !apic_enabled(apic))
+		return -1;
+
+	apic_update_ppr(apic);
+	highest_irr = apic_find_highest_irr(apic);
+	if ((highest_irr == -1) ||
+	    ((highest_irr & 0xF0) <= apic_get_reg(apic, APIC_PROCPRI)))
+		return -1;
+	return highest_irr;
+}
+
+int kvm_apic_accept_pic_intr(struct kvm_vcpu *vcpu)
+{
+	uint32_t lvt0 = apic_get_reg(vcpu->arch.apic, APIC_LVT0);
+	int r = 0;
+
+	if (kvm_vcpu_is_bsp(vcpu)) {
+		if (!apic_hw_enabled(vcpu->arch.apic))
+			r = 1;
+		if ((lvt0 & APIC_LVT_MASKED) == 0 &&
+		    GET_APIC_DELIVERY_MODE(lvt0) == APIC_MODE_EXTINT)
+			r = 1;
+	}
+	return r;
+}
+
+/*
+ * check if there is pending interrupt without
+ * intack.
+ */
+int kvm_cpu_has_interrupt(struct kvm_vcpu *v)
+{
+	struct kvm_pic *s;
+
+	if (!irqchip_in_kernel(v->kvm))
+		return v->arch.interrupt.pending;
+
+	if (kvm_apic_has_interrupt(v) == -1) {	/* LAPIC */
+		if (kvm_apic_accept_pic_intr(v)) {
+			s = pic_irqchip(v->kvm);	/* PIC */
+			return s->output;
+		} else
+			return 0;
+	}
+	return 1;
+}
+
+extern inline void apic_set_vector(int vec, caddr_t bitmap);
+extern inline void apic_clear_vector(int vec, caddr_t bitmap);
+
+static inline void apic_clear_irr(int vec, struct kvm_lapic *apic)
+{
+	apic->irr_pending = 0;
+	apic_clear_vector(vec, apic->regs + APIC_IRR);
+	if (apic_search_irr(apic) != -1)
+		apic->irr_pending = 1;
+}
+
+int kvm_get_apic_interrupt(struct kvm_vcpu *vcpu)
+{
+	int vector = kvm_apic_has_interrupt(vcpu);
+	struct kvm_lapic *apic = vcpu->arch.apic;
+
+	if (vector == -1)
+		return -1;
+
+	apic_set_vector(vector, apic->regs + APIC_ISR);
+	apic_update_ppr(apic);
+	apic_clear_irr(vector, apic);
+	return vector;
 }
 
 static int handle_interrupt_window(struct kvm_vcpu *vcpu)
@@ -9100,6 +9458,256 @@ int kvm_lapic_enabled(struct kvm_vcpu *vcpu)
 	return kvm_apic_present(vcpu) && apic_sw_enabled(vcpu->arch.apic);
 }
 
+void kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin)
+{
+	struct kvm_irq_ack_notifier *kian;
+	struct hlist_node *n;
+	int gsi;
+
+#ifdef XXX
+	trace_kvm_ack_irq(irqchip, pin);
+
+	rcu_read_lock();
+
+	gsi = rcu_dereference(kvm->irq_routing)->chip[irqchip][pin];
+
+	if (gsi != -1)
+		hlist_for_each_entry_rcu(kian, n, &kvm->irq_ack_notifier_list,
+					 link)
+			if (kian->gsi == gsi)
+				kian->irq_acked(kian);
+	rcu_read_unlock();
+#endif /*XXX*/
+}
+
+static void pic_clear_isr(struct kvm_kpic_state *s, int irq)
+{
+	s->isr &= ~(1 << irq);
+	s->isr_ack |= (1 << irq);
+	if (s != &s->pics_state->pics[0])
+		irq += 8;
+	/*
+	 * We are dropping lock while calling ack notifiers since ack
+	 * notifier callbacks for assigned devices call into PIC recursively.
+	 * Other interrupt may be delivered to PIC while lock is dropped but
+	 * it should be safe since PIC state is already updated at this stage.
+	 */
+	mutex_enter(&s->pics_state->lock);
+	kvm_notify_acked_irq(s->pics_state->kvm, SELECT_PIC(irq), irq);
+	mutex_exit(&s->pics_state->lock);
+}
+
+/*
+ * acknowledge interrupt 'irq'
+ */
+static inline void pic_intack(struct kvm_kpic_state *s, int irq)
+{
+	s->isr |= 1 << irq;
+	/*
+	 * We don't clear a level sensitive interrupt here
+	 */
+	if (!(s->elcr & (1 << irq)))
+		s->irr &= ~(1 << irq);
+
+	if (s->auto_eoi) {
+		if (s->rotate_on_auto_eoi)
+			s->priority_add = (irq + 1) & 7;
+		pic_clear_isr(s, irq);
+	}
+
+}
+
+/*
+ * return the highest priority found in mask (highest = smallest
+ * number). Return 8 if no irq
+ */
+static inline int get_priority(struct kvm_kpic_state *s, int mask)
+{
+	int priority;
+	if (mask == 0)
+		return 8;
+	priority = 0;
+	while ((mask & (1 << ((priority + s->priority_add) & 7))) == 0)
+		priority++;
+	return priority;
+}
+
+/*
+ * return the pic wanted interrupt. return -1 if none
+ */
+static int pic_get_irq(struct kvm_kpic_state *s)
+{
+	int mask, cur_priority, priority;
+
+	mask = s->irr & ~s->imr;
+	priority = get_priority(s, mask);
+	if (priority == 8)
+		return -1;
+	/*
+	 * compute current priority. If special fully nested mode on the
+	 * master, the IRQ coming from the slave is not taken into account
+	 * for the priority computation.
+	 */
+	mask = s->isr;
+	if (s->special_fully_nested_mode && s == &s->pics_state->pics[0])
+		mask &= ~(1 << 2);
+	cur_priority = get_priority(s, mask);
+	if (priority < cur_priority)
+		/*
+		 * higher priority found: an irq should be generated
+		 */
+		return (priority + s->priority_add) & 7;
+	else
+		return -1;
+}
+
+/*
+ * set irq level. If an edge is detected, then the IRR is set to 1
+ */
+static inline int pic_set_irq1(struct kvm_kpic_state *s, int irq, int level)
+{
+	int mask, ret = 1;
+	mask = 1 << irq;
+	if (s->elcr & mask)	/* level triggered */
+		if (level) {
+			ret = !(s->irr & mask);
+			s->irr |= mask;
+			s->last_irr |= mask;
+		} else {
+			s->irr &= ~mask;
+			s->last_irr &= ~mask;
+		}
+	else	/* edge triggered */
+		if (level) {
+			if ((s->last_irr & mask) == 0) {
+				ret = !(s->irr & mask);
+				s->irr |= mask;
+			}
+			s->last_irr |= mask;
+		} else
+			s->last_irr &= ~mask;
+
+	return (s->imr & mask) ? -1 : ret;
+}
+
+
+/*
+ * raise irq to CPU if necessary. must be called every time the active
+ * irq may change
+ */
+static void pic_update_irq(struct kvm_pic *s)
+{
+	int irq2, irq;
+
+	irq2 = pic_get_irq(&s->pics[1]);
+	if (irq2 >= 0) {
+		/*
+		 * if irq request by slave pic, signal master PIC
+		 */
+		pic_set_irq1(&s->pics[0], 2, 1);
+		pic_set_irq1(&s->pics[0], 2, 0);
+	}
+	irq = pic_get_irq(&s->pics[0]);
+	if (irq >= 0)
+		s->irq_request(s->irq_request_opaque, 1);
+	else
+		s->irq_request(s->irq_request_opaque, 0);
+}
+
+int kvm_pic_read_irq(struct kvm *kvm)
+{
+	int irq, irq2, intno;
+	struct kvm_pic *s = pic_irqchip(kvm);
+
+	mutex_enter(&s->lock);
+	irq = pic_get_irq(&s->pics[0]);
+	if (irq >= 0) {
+		pic_intack(&s->pics[0], irq);
+		if (irq == 2) {
+			irq2 = pic_get_irq(&s->pics[1]);
+			if (irq2 >= 0)
+				pic_intack(&s->pics[1], irq2);
+			else
+				/*
+				 * spurious IRQ on slave controller
+				 */
+				irq2 = 7;
+			intno = s->pics[1].irq_base + irq2;
+			irq = irq2 + 8;
+		} else
+			intno = s->pics[0].irq_base + irq;
+	} else {
+		/*
+		 * spurious IRQ on host controller
+		 */
+		irq = 7;
+		intno = s->pics[0].irq_base + irq;
+	}
+	pic_update_irq(s);
+	mutex_exit(&s->lock);
+
+	return intno;
+}
+
+
+/*
+ * Read pending interrupt vector and intack.
+ */
+int kvm_cpu_get_interrupt(struct kvm_vcpu *v)
+{
+	struct kvm_pic *s;
+	int vector;
+
+	if (!irqchip_in_kernel(v->kvm))
+		return v->arch.interrupt.nr;
+
+	vector = kvm_get_apic_interrupt(v);	/* APIC */
+	if (vector == -1) {
+		if (kvm_apic_accept_pic_intr(v)) {
+			s = pic_irqchip(v->kvm);
+			s->output = 0;		/* PIC */
+			vector = kvm_pic_read_irq(v->kvm);
+		}
+	}
+	return vector;
+}
+
+static void inject_pending_event(struct kvm_vcpu *vcpu)
+{
+	/* try to reinject previous events if any */
+	if (vcpu->arch.exception.pending) {
+		kvm_x86_ops->queue_exception(vcpu, vcpu->arch.exception.nr,
+					  vcpu->arch.exception.has_error_code,
+					  vcpu->arch.exception.error_code);
+		return;
+	}
+
+	if (vcpu->arch.nmi_injected) {
+		kvm_x86_ops->set_nmi(vcpu);
+		return;
+	}
+
+	if (vcpu->arch.interrupt.pending) {
+		kvm_x86_ops->set_irq(vcpu);
+		return;
+	}
+
+	/* try to inject new event if pending */
+	if (vcpu->arch.nmi_pending) {
+		if (kvm_x86_ops->nmi_allowed(vcpu)) {
+			vcpu->arch.nmi_pending = 0;
+			vcpu->arch.nmi_injected = 1;
+			kvm_x86_ops->set_nmi(vcpu);
+		}
+	} else if (kvm_cpu_has_interrupt(vcpu)) {
+		if (kvm_x86_ops->interrupt_allowed(vcpu)) {
+			kvm_queue_interrupt(vcpu, kvm_cpu_get_interrupt(vcpu),
+					    0);
+			kvm_x86_ops->set_irq(vcpu);
+		}
+	}
+}
+
 static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
 	int r;
@@ -9178,7 +9786,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		r = 1;
 		goto out;
 	}
-#ifdef XXX
+
 	inject_pending_event(vcpu);
 
 	/* enable NMI/IRQ window open exits if needed */
@@ -9186,7 +9794,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		kvm_x86_ops->enable_nmi_window(vcpu);
 	else if (kvm_cpu_has_interrupt(vcpu) || req_int_win)
 		kvm_x86_ops->enable_irq_window(vcpu);
-#endif /*XXX*/
+
 	if (kvm_lapic_enabled(vcpu)) {
 		update_cr8_intercept(vcpu);
 		kvm_lapic_sync_to_vapic(vcpu);
@@ -9320,34 +9928,6 @@ static void vapic_exit(struct kvm_vcpu *vcpu)
 #ifdef XXX
 	srcu_read_unlock(&vcpu->kvm->srcu, idx);
 #endif /*XXX*/
-}
-
-
-inline int apic_find_highest_isr(struct kvm_lapic *apic)
-{
-	int result;
-
-	result = find_highest_vector(apic->regs + APIC_ISR);
-	ASSERT(result == -1 || result >= 16);
-
-	return result;
-}
-
-void apic_update_ppr(struct kvm_lapic *apic)
-{
-	uint32_t tpr, isrv, ppr;
-	int isr;
-
-	tpr = apic_get_reg(apic, APIC_TASKPRI);
-	isr = apic_find_highest_isr(apic);
-	isrv = (isr != -1) ? isr : 0;
-
-	if ((tpr & 0xf0) >= (isrv & 0xf0))
-		ppr = tpr & 0xff;
-	else
-		ppr = isrv & 0xf0;
-
-	apic_set_reg(apic, APIC_PROCPRI, ppr);
 }
 
 void kvm_lapic_reset(struct kvm_vcpu *vcpu)
@@ -9787,8 +10367,11 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		}
 		rval = kvm_dev_ioctl_get_supported_cpuid(&cpuid,
 						      cpuid_arg->entries, mode);
-		if (rval)
+		if (rval) {
+			*rval_p = rval; /* linux user level expects negative errno */
+			rval = 0;
 			break;
+		}
 
 		if (ddi_copyout(&cpuid, cpuid_arg, sizeof (cpuid), mode))
 			rval = EFAULT;
