@@ -177,6 +177,10 @@ static void vmx_set_nmi_mask(struct kvm_vcpu *vcpu, int masked);
 static void enable_nmi_window(struct kvm_vcpu *vcpu);
 static void enable_irq_window(struct kvm_vcpu *vcpu);
 static void vmx_cpuid_update(struct kvm_vcpu *vcpu);
+static void vmx_fpu_activate(struct kvm_vcpu *vcpu);
+static void vmx_fpu_deactivate(struct kvm_vcpu *vcpu);
+static void vmx_decache_cr0_guest_bits(struct kvm_vcpu *vcpu);
+static void vmx_decache_cr4_guest_bits(struct kvm_vcpu *vcpu);
 
 int get_ept_level(void);
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
@@ -239,8 +243,8 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.set_segment = vmx_set_segment /*vmx_set_segment*/,
 	.get_cpl = vmx_get_cpl /*vmx_get_cpl*/,
 	.get_cs_db_l_bits = nulldev /*vmx_get_cs_db_l_bits*/,
-	.decache_cr0_guest_bits = nulldev /*vmx_decache_cr0_guest_bits*/,
-	.decache_cr4_guest_bits = nulldev /*vmx_decache_cr4_guest_bits*/,
+	.decache_cr0_guest_bits = vmx_decache_cr0_guest_bits /*vmx_decache_cr0_guest_bits*/,
+	.decache_cr4_guest_bits = vmx_decache_cr4_guest_bits /*vmx_decache_cr4_guest_bits*/,
 	.set_cr0 = vmx_set_cr0,
 	.set_cr3 = vmx_set_cr3 /*vmx_set_cr3*/,
 	.set_cr4 = vmx_set_cr4,
@@ -252,8 +256,8 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.cache_reg = vmx_cache_reg /*vmx_cache_reg*/,
 	.get_rflags = vmx_get_rflags /*vmx_get_rflags*/,
 	.set_rflags = vmx_set_rflags /*vmx_set_rflags*/,
-	.fpu_activate = nulldev /*vmx_fpu_activate*/,
-	.fpu_deactivate = nulldev /*vmx_fpu_deactivate*/,
+	.fpu_activate = vmx_fpu_activate /*vmx_fpu_activate*/,
+	.fpu_deactivate = vmx_fpu_deactivate /*vmx_fpu_deactivate*/,
 
 	.tlb_flush = nulldev /*vmx_flush_tlb*/,
 
@@ -296,6 +300,70 @@ uint32_t vmcs_read32(unsigned long field)
 void vmcs_write32(unsigned long field, uint32_t value)
 {
 	vmcs_writel(field, value);
+}
+
+static void vmx_decache_cr0_guest_bits(struct kvm_vcpu *vcpu)
+{
+	ulong cr0_guest_owned_bits = vcpu->arch.cr0_guest_owned_bits;
+
+	vcpu->arch.cr0 &= ~cr0_guest_owned_bits;
+	vcpu->arch.cr0 |= vmcs_readl(GUEST_CR0) & cr0_guest_owned_bits;
+}
+
+static void vmx_decache_cr4_guest_bits(struct kvm_vcpu *vcpu)
+{
+	ulong cr4_guest_owned_bits = vcpu->arch.cr4_guest_owned_bits;
+
+	vcpu->arch.cr4 &= ~cr4_guest_owned_bits;
+	vcpu->arch.cr4 |= vmcs_readl(GUEST_CR4) & cr4_guest_owned_bits;
+}
+
+inline ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask)
+{
+	ulong tmask = mask & KVM_POSSIBLE_CR0_GUEST_BITS;
+
+	if (tmask & vcpu->arch.cr0_guest_owned_bits)
+		kvm_x86_ops->decache_cr0_guest_bits(vcpu);
+
+	return vcpu->arch.cr0 & mask;
+}
+
+static void vmcs_clear_bits(unsigned long field, uint32_t mask)
+{
+	vmcs_writel(field, vmcs_readl(field) & ~mask);
+}
+
+static void vmcs_set_bits(unsigned long field, uint32_t mask)
+{
+	vmcs_writel(field, vmcs_readl(field) | mask);
+}
+
+extern void update_exception_bitmap(struct kvm_vcpu *vcpu);
+
+static void vmx_fpu_activate(struct kvm_vcpu *vcpu)
+{
+	ulong cr0;
+
+	if (vcpu->fpu_active)
+		return;
+	vcpu->fpu_active = 1;
+	cr0 = vmcs_readl(GUEST_CR0);
+	cr0 &= ~(X86_CR0_TS | X86_CR0_MP);
+	cr0 |= kvm_read_cr0_bits(vcpu, X86_CR0_TS | X86_CR0_MP);
+	vmcs_writel(GUEST_CR0, cr0);
+	update_exception_bitmap(vcpu);
+	vcpu->arch.cr0_guest_owned_bits = X86_CR0_TS;
+	vmcs_writel(CR0_GUEST_HOST_MASK, ~vcpu->arch.cr0_guest_owned_bits);
+}
+
+static void vmx_fpu_deactivate(struct kvm_vcpu *vcpu)
+{
+	vmx_decache_cr0_guest_bits(vcpu);
+	vmcs_set_bits(GUEST_CR0, X86_CR0_TS | X86_CR0_MP);
+	update_exception_bitmap(vcpu);
+	vcpu->arch.cr0_guest_owned_bits = 0;
+	vmcs_writel(CR0_GUEST_HOST_MASK, ~vcpu->arch.cr0_guest_owned_bits);
+	vmcs_writel(CR0_READ_SHADOW, vcpu->arch.cr0);
 }
 
 static void vmx_cpuid_update(struct kvm_vcpu *vcpu)
@@ -350,16 +418,6 @@ static void enable_nmi_window(struct kvm_vcpu *vcpu)
 	cpu_based_vm_exec_control = vmcs_read32(CPU_BASED_VM_EXEC_CONTROL);
 	cpu_based_vm_exec_control |= CPU_BASED_VIRTUAL_NMI_PENDING;
 	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL, cpu_based_vm_exec_control);
-}
-
-static void vmcs_clear_bits(unsigned long field, uint32_t mask)
-{
-	vmcs_writel(field, vmcs_readl(field) & ~mask);
-}
-
-static void vmcs_set_bits(unsigned long field, uint32_t mask)
-{
-	vmcs_writel(field, vmcs_readl(field) | mask);
 }
 
 static void vmx_set_nmi_mask(struct kvm_vcpu *vcpu, int masked)
@@ -1829,6 +1887,7 @@ int
 zero_constructor(void *buf, void *arg, int tags)
 {
 	bzero(buf, (size_t)arg);
+	return 0;
 }
 
 int kvm_mmu_module_init(void)
@@ -2112,8 +2171,12 @@ int kvm_init(void *opaque, unsigned int vcpu_size)
 		goto out_free_4;
 #endif /*XXX*/
 	/* A kmem cache lets us meet the alignment requirements of fx_save. */
-	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", vcpu_size,
-					   __alignof__(struct kvm_vcpu),
+	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", (size_t)vcpu_size,
+#ifdef XXX
+					   (size_t)__alignof__(struct kvm_vcpu),
+#else
+					   (size_t)PAGESIZE,
+#endif /*XXX*/
 					   zero_constructor, NULL, NULL,
 					   (void *)vcpu_size, NULL, 0);
 	if (!kvm_vcpu_cache) {
@@ -4112,12 +4175,14 @@ void kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
 	if (!vcpu->guest_fpu_loaded)
 		return;
 
-#ifdef XXX
 	vcpu->guest_fpu_loaded = 0;
 	kvm_fx_save(&vcpu->arch.guest_fx_image);
 	kvm_fx_restore(&vcpu->arch.host_fx_image);
+#ifdef XXX
 	++vcpu->stat.fpu_reload;
-	BT_BIT(&vcpu->requests, KVM_REQ_DEACTIVATE_FPU);
+#endif /*XXX*/
+	BT_SET(&vcpu->requests, KVM_REQ_DEACTIVATE_FPU);
+#ifdef XXX
 	trace_kvm_fpu(0);
 #endif /*XXX*/
 }
@@ -4154,18 +4219,13 @@ int is_long_mode(struct kvm_vcpu *vcpu)
 #endif
 }
 
-#define KVM_POSSIBLE_CR0_GUEST_BITS X86_CR0_TS
-#define KVM_POSSIBLE_CR4_GUEST_BITS				  \
-	(X86_CR4_PVI | X86_CR4_DE | X86_CR4_PCE | X86_CR4_OSFXSR  \
-	 | X86_CR4_OSXMMEXCPT | X86_CR4_PGE)
-
 ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask)
 {
 	uint64_t tmask = mask & KVM_POSSIBLE_CR4_GUEST_BITS;
-#ifdef XXX
+
 	if (tmask & vcpu->arch.cr4_guest_owned_bits)
 		kvm_x86_ops->decache_cr4_guest_bits(vcpu);
-#endif /*XXX*/
+
 	return vcpu->arch.cr4 & mask;
 }
 
@@ -4680,17 +4740,6 @@ ulong kvm_read_cr4(struct kvm_vcpu *vcpu)
 {
 	return kvm_read_cr4_bits(vcpu, ~0UL);
 }
-
-inline ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask)
-{
-	ulong tmask = mask & KVM_POSSIBLE_CR0_GUEST_BITS;
-#ifdef XXX
-	if (tmask & vcpu->arch.cr0_guest_owned_bits)
-		kvm_x86_ops->decache_cr0_guest_bits(vcpu);
-#endif /*XXX*/
-	return vcpu->arch.cr0 & mask;
-}
-
 
 ulong kvm_read_cr0(struct kvm_vcpu *vcpu)
 {
@@ -6603,10 +6652,8 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 
 	vmx->idt_vectoring_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
 
-#ifdef XXX
 	if (vmx->rmode.irq.pending)
 		fixup_rmode_irq(vmx);
-#endif /*XXX*/
 
 	asm("mov %0, %%ds; mov %0, %%es" : : "r"SEL_GDT(GDT_UDATA, SEL_UPL));
 	vmx->launched = 1;

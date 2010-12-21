@@ -261,42 +261,13 @@ struct fxsave {
 #endif
 };
 
-struct i387_fxsave_struct {
-	unsigned short			cwd; /* Control Word			*/
-	unsigned short			swd; /* Status Word			*/
-	unsigned short			twd; /* Tag Word			*/
-	unsigned short			fop; /* Last Instruction Opcode		*/
-	union {
-		struct {
-			uint64_t	rip; /* Instruction Pointer		*/
-			uint64_t	rdp; /* Data Pointer			*/
-		}v1;
-		struct {
-			uint32_t	fip; /* FPU IP Offset			*/
-			uint32_t	fcs; /* FPU IP Selector			*/
-			uint32_t	foo; /* FPU Operand Offset		*/
-			uint32_t	fos; /* FPU Operand Selector		*/
-		}v2;
-	}v12;
-	uint32_t			mxcsr;		/* MXCSR Register State */
-	uint32_t			mxcsr_mask;	/* MXCSR Mask		*/
-
-	/* 8*16 bytes for each FP-reg = 128 bytes:			*/
-	uint32_t			st_space[32];
-
-	/* 16*16 bytes for each XMM-reg = 256 bytes:			*/
-	uint32_t			xmm_space[64];
-
-	uint32_t			padding[12];
-
-	union {
-		uint32_t		padding1[12];
-		uint32_t		sw_reserved[12];
-	}v3;
-
-} __attribute__((aligned(16)));
-
 #define KVM_MAX_CPUID_ENTRIES 40
+
+#define KVM_POSSIBLE_CR0_GUEST_BITS X86_CR0_TS
+#define KVM_POSSIBLE_CR4_GUEST_BITS				  \
+	(X86_CR4_PVI | X86_CR4_DE | X86_CR4_PCE | X86_CR4_OSFXSR  \
+	 | X86_CR4_OSXMMEXCPT | X86_CR4_PGE)
+
 
 #ifdef _KERNEL
 #include "kvm_emulate.h"

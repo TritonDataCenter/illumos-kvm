@@ -5,6 +5,7 @@ config-all-devices.*
 config-host.*
 config-target.*
 i386
+kvm
 *-softmmu
 *-darwin-user
 *-linux-user
@@ -44,6 +45,7 @@ qemu-monitor.texi
 *.vr
 *.d
 *.o
+*.i
 .pc
 patches
 pc-bios/bios-pq/status

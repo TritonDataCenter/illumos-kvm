@@ -1528,7 +1528,7 @@ kvm_arch_vcpu_create(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 
 extern int enable_ept;
 
-static void update_exception_bitmap(struct kvm_vcpu *vcpu)
+void update_exception_bitmap(struct kvm_vcpu *vcpu)
 {
 	uint32_t eb;
 
@@ -2013,6 +2013,35 @@ extern void kvm_register_write(struct kvm_vcpu *vcpu,
 extern ulong kvm_read_cr0(struct kvm_vcpu *vcpu);
 extern void setup_msrs(struct vcpu_vmx *vmx);
 
+void fx_init(struct kvm_vcpu *vcpu)
+{
+	unsigned after_mxcsr_mask;
+#ifdef XXX
+	/*
+	 * Touch the fpu the first time in non atomic context as if
+	 * this is the first fpu instruction the exception handler
+	 * will fire before the instruction returns and it'll have to
+	 * allocate ram with GFP_KERNEL.
+	 */
+	if (!used_math())
+		kvm_fx_save(&vcpu->arch.host_fx_image);
+#endif /*XXX*/
+
+	/* Initialize guest FPU by resetting ours and saving into guest's */
+	kpreempt_disable();
+	kvm_fx_save(&vcpu->arch.host_fx_image);
+	kvm_fx_finit();
+	kvm_fx_save(&vcpu->arch.guest_fx_image);
+	kvm_fx_restore(&vcpu->arch.host_fx_image);
+	kpreempt_enable();
+
+	vcpu->arch.cr0 |= X86_CR0_ET;
+	after_mxcsr_mask = offsetof(struct i387_fxsave_struct, st_space);
+	vcpu->arch.guest_fx_image.mxcsr = 0x1f80;
+	memset((void *)&vcpu->arch.guest_fx_image + after_mxcsr_mask,
+	       0, sizeof(struct i387_fxsave_struct) - after_mxcsr_mask);
+}
+
 int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -2035,15 +2064,13 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	vmx->vcpu.arch.regs[VCPU_REGS_RDX] = get_rdx_init_val();
 	kvm_set_cr8(&vmx->vcpu, 0);
 	msr = 0xfee00000 | MSR_IA32_APICBASE_ENABLE;
-#ifdef XXX
+
 	if (kvm_vcpu_is_bsp(&vmx->vcpu))
 		msr |= MSR_IA32_APICBASE_BSP;
-#endif /*XXX*/
+
 	kvm_set_apic_base(&vmx->vcpu, msr);
 
-#ifdef XXX
 	fx_init(&vmx->vcpu);
-#endif
 
 	seg_setup(VCPU_SREG_CS);
 	/*
