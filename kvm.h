@@ -92,7 +92,9 @@
 
 #define KVM_MAX_VCPUS 64
 
+#ifdef _KERNEL
 #define MCG_CTL_P		(1ULL<<8)    /* MCG_CTL register available */
+#endif /*_KERNEL*/
 
 #define KVM_MAX_MCE_BANKS 32
 #define KVM_MCE_CAP_SUPPORTED MCG_CTL_P
@@ -340,7 +342,7 @@ struct kvm_lapic {
 	struct page *regs_page;
 	void *regs;
 	gpa_t vapic_addr;
-	struct page *vapic_page;
+	caddr_t vapic_page;
 };
 
 struct vcpu_vmx;
@@ -585,7 +587,7 @@ struct kvm_sregs {
 	uint64_t cr0, cr2, cr3, cr4, cr8;
 	uint64_t efer;
 	uint64_t apic_base;
-	uint64_t interrupt_bitmap[(KVM_NR_INTERRUPTS + 63) / 64];
+	unsigned long interrupt_bitmap[(KVM_NR_INTERRUPTS + (BT_NBIPUL-1)) / BT_NBIPUL];
 };
 
 struct kvm_sregs_ioc {
@@ -663,6 +665,7 @@ struct kvm_irq_routing {
 
 #define KVM_MAX_MCE_BANKS 32
 #define KVM_MCE_CAP_SUPPORTED MCG_CTL_P
+
 
 struct kvm_vcpu;
 struct kvm;
@@ -1135,7 +1138,7 @@ extern unsigned int __invalid_size_argument_for_IOC;
 
 static inline void native_load_tr_desc(void)
 {
-	asm volatile("ltr %w0"::"q" (KTSS_SEL));
+	__asm__ volatile("ltr %w0"::"q" (KTSS_SEL));
 }
 
 #define load_TR_desc() native_load_tr_desc()
@@ -1143,14 +1146,14 @@ static inline void native_load_tr_desc(void)
 #endif
 
 
-
+#ifdef XXX
 #define _IOR(type,nr,size)	_IOC(_IOC_READ,(type),(nr),(_IOC_TYPECHECK(size)))
 #define _IOW(type,nr,size)	_IOC(_IOC_WRITE,(type),(nr),(_IOC_TYPECHECK(size)))
 #define _IOWR(type,nr,size)	_IOC(_IOC_READ|_IOC_WRITE,(type),(nr),(_IOC_TYPECHECK(size)))
 #define _IOR_BAD(type,nr,size)	_IOC(_IOC_READ,(type),(nr),sizeof(size))
 #define _IOW_BAD(type,nr,size)	_IOC(_IOC_WRITE,(type),(nr),sizeof(size))
 #define _IOWR_BAD(type,nr,size)	_IOC(_IOC_READ|_IOC_WRITE,(type),(nr),sizeof(size))
-
+#endif /*XXX*/
 /* used to decode ioctl numbers.. */
 #define _IOC_DIR(nr)		(((nr) >> _IOC_DIRSHIFT) & _IOC_DIRMASK)
 #define _IOC_TYPE(nr)		(((nr) >> _IOC_TYPESHIFT) & _IOC_TYPEMASK)
@@ -1163,10 +1166,7 @@ static inline void native_load_tr_desc(void)
 #endif /* _ASM_GENERIC_IOCTL_H */
 
 /* ioctl commands */
-/* these need to match user level qemu ioctl calls */
-#undef _IO  /* need to match what qemu passes in */
-            /* probably better to change in qemu, but easier here */
-#define _IO(x, y)	((x<<8)|y)  /* original is in /usr/include/sys/ioccom.h */
+
 #define KVMIO 0xAE
 
 /* for KVM_SET_CPUID2/KVM_GET_CPUID2 */

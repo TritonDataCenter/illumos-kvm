@@ -401,7 +401,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 			}
 		}
 
-		spte = kvm_va2pa(shadow_page->spt)
+		spte = kvm_va2pa((caddr_t)shadow_page->spt)
 			| PT_PRESENT_MASK | PT_ACCESSED_MASK
 			| PT_WRITABLE_MASK | PT_USER_MASK;
 		*sptep = spte;
@@ -495,7 +495,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	kvm_mmu_free_some_pages(vcpu);
 	sptep = FNAME(fetch)(vcpu, addr, &walker, user_fault, write_fault,
 			     level, &write_pt, pfn);
-	cmn_err(CE_NOTE, "%s: shadow pte %p %llx ptwrite %d\n", __func__,
+	cmn_err(CE_NOTE, "%s: shadow pte %p %lx ptwrite %d\n", __func__,
 		 sptep, *sptep, write_pt);
 
 	if (!write_pt)

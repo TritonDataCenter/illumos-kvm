@@ -44,7 +44,7 @@ struct msr_regs_info {
 static inline unsigned long long native_read_tscp(unsigned int *aux)
 {
 	unsigned long low, high;
-	asm volatile(".byte 0x0f,0x01,0xf9"
+	__asm__ volatile(".byte 0x0f,0x01,0xf9"
 		     : "=a" (low), "=d" (high), "=c" (*aux));
 	return low | ((uint64_t)high << 32);
 }
@@ -71,7 +71,7 @@ static inline unsigned long long native_read_msr(unsigned int msr)
 {
 	DECLARE_ARGS(val, low, high);
 
-	asm volatile("rdmsr" : EAX_EDX_RET(val, low, high) : "c" (msr));
+	__asm__ volatile("rdmsr" : EAX_EDX_RET(val, low, high) : "c" (msr));
 	return EAX_EDX_VAL(val, low, high);
 }
 
@@ -85,7 +85,7 @@ extern int native_write_msr_safe(unsigned int msr,
 static inline void native_write_msr(unsigned int msr,
 				    unsigned low, unsigned high)
 {
-	asm volatile("wrmsr" : : "c" (msr), "a"(low), "d" (high) : "memory");
+	__asm__ volatile("wrmsr" : : "c" (msr), "a"(low), "d" (high) : "memory");
 }
 
 
@@ -98,7 +98,7 @@ static inline unsigned long long __native_read_tsc(void)
 {
 	DECLARE_ARGS(val, low, high);
 
-	asm volatile("rdtsc" : EAX_EDX_RET(val, low, high));
+	__asm__ volatile("rdtsc" : EAX_EDX_RET(val, low, high));
 
 	return EAX_EDX_VAL(val, low, high);
 }
@@ -107,7 +107,7 @@ static inline unsigned long long native_read_pmc(int counter)
 {
 	DECLARE_ARGS(val, low, high);
 
-	asm volatile("rdpmc" : EAX_EDX_RET(val, low, high) : "c" (counter));
+	__asm__ volatile("rdpmc" : EAX_EDX_RET(val, low, high) : "c" (counter));
 	return EAX_EDX_VAL(val, low, high);
 }
 

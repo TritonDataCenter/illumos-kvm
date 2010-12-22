@@ -39,6 +39,7 @@ struct kvm_io_device_ops {
 
 
 struct kvm_io_device {
+	struct kvm_lapic *lapic;
 	const struct kvm_io_device_ops *ops;
 };
 

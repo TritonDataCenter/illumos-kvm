@@ -267,7 +267,7 @@ vmx_hardware_enable(void *garbage)
 		       FEATURE_CONTROL_LOCKED |
 		       FEATURE_CONTROL_VMXON_ENABLED);
 	setcr4(getcr4() | X86_CR4_VMXE); /* FIXME: not cpu hotplug safe */
-	asm volatile (ASM_VMX_VMXON_RAX
+	__asm__ volatile (ASM_VMX_VMXON_RAX
 		      : : "a"(&phys_addr), "m"(phys_addr)
 		      : "memory", "cc");
 
@@ -574,7 +574,11 @@ static uint32_t __apic_read(struct kvm_lapic *apic, unsigned int offset)
 
 static inline struct kvm_lapic *to_lapic(struct kvm_io_device *dev)
 {
+#ifdef XXX
 	return container_of(dev, struct kvm_lapic, dev);
+#else
+	return dev->lapic;
+#endif /*XXX*/
 }
 
 static int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
@@ -1214,6 +1218,7 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
 
 	kvm_lapic_reset(vcpu);
 	kvm_iodevice_init(&apic->dev, &apic_mmio_ops);
+	apic->dev.lapic = apic;
 
 	return 0;
 nomem_free_apic:
@@ -1367,7 +1372,7 @@ static void vmcs_write64(unsigned long field, uint64_t value)
 {
 	vmcs_writel(field, value);
 #ifndef CONFIG_X86_64
-	asm volatile ("");
+	__asm__ volatile ("");
 	vmcs_writel(field+1, value >> 32);
 #endif
 }
@@ -1513,8 +1518,8 @@ uninit_vcpu:
 	kvm_vcpu_uninit(&vmx->vcpu);
 free_vcpu:
 	kmem_cache_free(kvm_vcpu_cache, vmx);
-	return NULL;
 #endif /*XXX*/
+	return NULL;
 }
 
 struct kvm_vcpu *
@@ -1808,6 +1813,45 @@ out:
 	return ret;
 }
 
+static int init_rmode_identity_map(struct kvm *kvm)
+{
+#ifdef XXX
+	int i, r, ret;
+	pfn_t identity_map_pfn;
+	uint32_t tmp;
+
+	if (!enable_ept)
+#endif /*XXX*/
+		return 1;
+#ifdef XXX
+	if ((!kvm->arch.ept_identity_pagetable)) {
+		cmn_err(CE_WARN, "EPT: identity-mapping pagetable haven't been allocated!\n");
+		return 0;
+	}
+	if ((kvm->arch.ept_identity_pagetable_done))
+		return 1;
+	ret = 0;
+	identity_map_pfn = kvm->arch.ept_identity_map_addr >> PAGESHIFT;
+	r = kvm_clear_guest_page(kvm, identity_map_pfn, 0, PAGESIZE);
+	if (r < 0)
+		goto out;
+
+	/* Set up identity-mapping pagetable for EPT in real mode */
+	for (i = 0; i < PT32_ENT_PER_PAGE; i++) {
+		tmp = (i << 22) + (_PAGE_PRESENT | _PAGE_RW | _PAGE_USER |
+			_PAGE_ACCESSED | _PAGE_DIRTY | _PAGE_PSE);
+		r = kvm_write_guest_page(kvm, identity_map_pfn,
+				&tmp, i * sizeof(tmp), sizeof(tmp));
+		if (r < 0)
+			goto out;
+	}
+	kvm->arch.ept_identity_pagetable_done = 1;
+	ret = 1;
+out:
+	return ret;
+#endif /*XXX*/
+}
+
 static int init_rmode(struct kvm *kvm)
 {
 	if (!init_rmode_tss(kvm))
@@ -1966,45 +2010,6 @@ unsigned long empty_zero_page[PAGESIZE / sizeof(unsigned long)];
 int kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len)
 {
 	return kvm_write_guest_page(kvm, gfn, empty_zero_page, offset, len);
-}
-
-static int init_rmode_identity_map(struct kvm *kvm)
-{
-#ifdef XXX
-	int i, r, ret;
-	pfn_t identity_map_pfn;
-	uint32_t tmp;
-
-	if (!enable_ept)
-#endif /*XXX*/
-		return 1;
-#ifdef XXX
-	if ((!kvm->arch.ept_identity_pagetable)) {
-		cmn_err(CE_WARN, "EPT: identity-mapping pagetable haven't been allocated!\n");
-		return 0;
-	}
-	if ((kvm->arch.ept_identity_pagetable_done))
-		return 1;
-	ret = 0;
-	identity_map_pfn = kvm->arch.ept_identity_map_addr >> PAGESHIFT;
-	r = kvm_clear_guest_page(kvm, identity_map_pfn, 0, PAGESIZE);
-	if (r < 0)
-		goto out;
-
-	/* Set up identity-mapping pagetable for EPT in real mode */
-	for (i = 0; i < PT32_ENT_PER_PAGE; i++) {
-		tmp = (i << 22) + (_PAGE_PRESENT | _PAGE_RW | _PAGE_USER |
-			_PAGE_ACCESSED | _PAGE_DIRTY | _PAGE_PSE);
-		r = kvm_write_guest_page(kvm, identity_map_pfn,
-				&tmp, i * sizeof(tmp), sizeof(tmp));
-		if (r < 0)
-			goto out;
-	}
-	kvm->arch.ept_identity_pagetable_done = 1;
-	ret = 1;
-out:
-	return ret;
-#endif /*XXX*/
 }
 
 extern void kvm_register_write(struct kvm_vcpu *vcpu,
@@ -2380,7 +2385,7 @@ static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 	} else
 		pfn = page_to_pfn(page[0]);
 #else
-	pfn = hat_getpfnum(curthread, addr);
+	pfn = hat_getpfnum(kas.a_hat, (caddr_t)addr);
 #endif /*XXX*/
 
 	return pfn;
@@ -2518,7 +2523,7 @@ void rmap_remove(struct kvm *kvm, uint64_t *spte)
 
 	if (!is_rmap_spte(*spte))
 		return;
-	sp = page_header(kvm_va2pa(spte), kvm);
+	sp = page_header(kvm_va2pa((caddr_t)spte), kvm);
 	pfn = spte_to_pfn(*spte);
 	if (*spte & shadow_accessed_mask)
 		kvm_set_pfn_accessed(pfn);
@@ -2526,11 +2531,11 @@ void rmap_remove(struct kvm *kvm, uint64_t *spte)
 		kvm_set_pfn_dirty(pfn);
 	rmapp = gfn_to_rmap(kvm, sp->gfns[spte - sp->spt], sp->role.level);
 	if (!*rmapp) {
-		cmn_err(CE_WARN, "rmap_remove: %p %llx 0->BUG\n", spte, *spte);
+		cmn_err(CE_WARN, "rmap_remove: %p %lx 0->BUG\n", spte, *spte);
 	} else if (!(*rmapp & 1)) {
-		cmn_err(CE_NOTE, "rmap_remove:  %p %llx 1->0\n", spte, *spte);
+		cmn_err(CE_NOTE, "rmap_remove:  %p %lx 1->0\n", spte, *spte);
 		if ((uint64_t *)*rmapp != spte) {
-			cmn_err(CE_WARN, "rmap_remove:  %p %llx 1->BUG\n",
+			cmn_err(CE_WARN, "rmap_remove:  %p %lx 1->BUG\n",
 			       spte, *spte);
 		}
 		*rmapp = 0;
@@ -2590,7 +2595,7 @@ static int rmap_add(struct kvm_vcpu *vcpu, uint64_t *spte, gfn_t gfn)
 	if (!is_rmap_spte(*spte))
 		return count;
 	gfn = unalias_gfn(vcpu->kvm, gfn);
-	sp = page_header(kvm_va2pa(spte), vcpu->kvm);
+	sp = page_header(kvm_va2pa((caddr_t)spte), vcpu->kvm);
 	sp->gfns[spte - sp->spt] = gfn;
 	rmapp = gfn_to_rmap(vcpu->kvm, gfn, sp->role.level);
 	if (!*rmapp) {
@@ -3695,7 +3700,7 @@ vcpu_destroy:
 
 extern int largepages_enabled;
 
-extern caddr_t smmap32(caddr32_t addr, size32_t len, int prot, int flags, int fd, off32_t pos);
+extern caddr_t smmap64(caddr_t addr, size_t len, int prot, int flags, int fd, off_t pos);
 
 int kvm_arch_prepare_memory_region(struct kvm *kvm,
 				struct kvm_memory_slot *memslot,
@@ -3727,11 +3732,11 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 			{
 				int rval;
 				caddr_t userspace_addr = NULL;
-				userspace_addr = smmap32(NULL, npages*PAGESIZE,
+				userspace_addr = smmap64(NULL, npages*PAGESIZE,
 							 PROT_READ|PROT_WRITE,
 							 MAP_PRIVATE|MAP_ANON,
 							 -1, 0);
-				cmn_err(CE_NOTE, "kvm_arch_prepare_memory_region: mmap at %lx\n", userspace_addr);
+				cmn_err(CE_NOTE, "kvm_arch_prepare_memory_region: mmap at %p\n", userspace_addr);
 				memslot->userspace_addr = (unsigned long) userspace_addr;
 			}
 #endif /*XXX*/
@@ -3776,7 +3781,11 @@ int kvm_vm_ioctl_set_memory_region(struct kvm *kvm,
 
 static inline struct kvm_coalesced_mmio_dev *to_mmio(struct kvm_io_device *dev)
 {
+#ifdef XXX
 	return container_of(dev, struct kvm_coalesced_mmio_dev, dev);
+#else
+	return (struct kvm_coalesced_mmio_dev *)dev;
+#endif /*XXX*/
 }
 
 static int coalesced_mmio_in_range(struct kvm_coalesced_mmio_dev *dev,
@@ -3834,6 +3843,8 @@ int kvm_io_bus_register_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 #ifdef XXX
 	rcu_assign_pointer(kvm->buses[bus_idx], new_bus);
 	synchronize_srcu_expedited(&kvm->srcu);
+#else
+	kvm->buses[bus_idx] = new_bus;
 #endif /*XXX*/
 	kmem_free(bus, sizeof(struct kvm_io_bus));
 

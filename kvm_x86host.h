@@ -599,6 +599,8 @@ struct descriptor_table {
 	unsigned long base;
 } __attribute__((packed));
 
+struct kvm_vcpu_ioc;
+
 struct kvm_x86_ops {
 	int (*cpu_has_kvm_support)(void);          /* __init */
 	int (*disabled_by_bios)(void);             /* __init */
@@ -611,7 +613,8 @@ struct kvm_x86_ops {
 	void (*cpuid_update)(struct kvm_vcpu *vcpu);
 
 	/* Create, but do not attach this VCPU */
-	struct kvm_vcpu *(*vcpu_create)(struct kvm *kvm, unsigned id);
+	struct kvm_vcpu *(*vcpu_create)(struct kvm *kvm,
+					struct kvm_vcpu_ioc *arg, unsigned id);
 	void (*vcpu_free)(struct kvm_vcpu *vcpu);
 	int (*vcpu_reset)(struct kvm_vcpu *vcpu);
 
@@ -668,13 +671,14 @@ struct kvm_x86_ops {
 	void (*enable_nmi_window)(struct kvm_vcpu *vcpu);
 	void (*enable_irq_window)(struct kvm_vcpu *vcpu);
 	void (*update_cr8_intercept)(struct kvm_vcpu *vcpu, int tpr, int irr);
-	int (*set_tss_addr)(struct kvm *kvm, unsigned int addr);
+	int (*set_tss_addr)(struct kvm *kvm, uintptr_t addr);
 	int (*get_tdp_level)(void);
 	uint64_t (*get_mt_mask)(struct kvm_vcpu *vcpu, gfn_t gfn, int is_mmio);
 	int (*get_lpage_level)(void);
 	int (*rdtscp_supported)(void);
-
+#ifdef XXX
 	const struct trace_print_flags *exit_reasons_str;
+#endif /*XXX*/
 };
 
 extern struct kvm_x86_ops *kvm_x86_ops;
@@ -828,48 +832,48 @@ static inline struct kvm_mmu_page *page_header(hpa_t shadow_page)
 static inline unsigned short kvm_read_fs(void)
 {
 	unsigned short seg;
-	asm("mov %%fs, %0" : "=g"(seg));
+	__asm__("mov %%fs, %0" : "=g"(seg));
 	return seg;
 }
 
 static inline unsigned short kvm_read_gs(void)
 {
 	unsigned short seg;
-	asm("mov %%gs, %0" : "=g"(seg));
+	__asm__("mov %%gs, %0" : "=g"(seg));
 	return seg;
 }
 
 static inline unsigned short kvm_read_ldt(void)
 {
 	unsigned short ldt;
-	asm("sldt %0" : "=g"(ldt));
+	__asm__("sldt %0" : "=g"(ldt));
 	return ldt;
 }
 
 static inline void kvm_load_fs(unsigned short sel)
 {
-	asm("mov %0, %%fs" : : "rm"(sel));
+	__asm__("mov %0, %%fs" : : "rm"(sel));
 }
 
 static inline void kvm_load_gs(unsigned short sel)
 {
-	asm("mov %0, %%gs" : : "rm"(sel));
+	__asm__("mov %0, %%gs" : : "rm"(sel));
 }
 
 static inline void kvm_load_ldt(unsigned short sel)
 {
-	asm("lldt %0" : : "rm"(sel));
+	__asm__("lldt %0" : : "rm"(sel));
 }
 
 
 static inline void kvm_get_idt(struct descriptor_table *table)
 {
-	asm("sidt %0" : "=m"(*table));
+	__asm__("sidt %0" : "=m"(*table));
 }
 
 static inline void kvm_get_gdt(struct descriptor_table *table)
 {
-	asm("sgdt %0" : "=m"(*table));
+	__asm__("sgdt %0" : "=m"(*table));
 }
 
 /*
@@ -905,7 +909,7 @@ extern unsigned long segment_base(uint16_t selector);
 static inline unsigned long kvm_read_tr_base(void)
 {
 	unsigned short tr;
-	asm("str %0" : "=g"(tr));
+	__asm__("str %0" : "=g"(tr));
 	return segment_base(tr);
 }
 
@@ -921,17 +925,17 @@ static inline unsigned long read_msr(unsigned long msr)
 
 static inline void kvm_fx_save(struct i387_fxsave_struct *image)
 {
-	asm("fxsave (%0)":: "r" (image));
+	__asm__("fxsave (%0)":: "r" (image));
 }
 
 static inline void kvm_fx_restore(struct i387_fxsave_struct *image)
 {
-	asm("fxrstor (%0)":: "r" (image));
+	__asm__("fxrstor (%0)":: "r" (image));
 }
 
 static inline void kvm_fx_finit(void)
 {
-	asm("finit");
+	__asm__("finit");
 }
 
 static inline uint32_t get_rdx_init_val(void)

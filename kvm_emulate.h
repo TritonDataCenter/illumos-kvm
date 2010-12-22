@@ -12,7 +12,7 @@
 #define _ASM_X86_KVM_X86_EMULATE_H
 
 struct x86_emulate_ctxt;
-
+#ifdef _KERNEL
 /*
  * x86_emulate_ops:
  *
@@ -110,6 +110,7 @@ struct x86_emulate_ops {
 				struct kvm_vcpu *vcpu);
 
 };
+#endif /*_KERNEL*/
 
 /* Type, address-of, and value of an instruction's operand. */
 struct operand {
@@ -190,9 +191,10 @@ struct x86_emulate_ctxt {
 #define X86EMUL_MODE_HOST X86EMUL_MODE_PROT64
 #endif
 
+#ifdef _KERNEL
 int x86_decode_insn(struct x86_emulate_ctxt *ctxt,
 		    struct x86_emulate_ops *ops);
 int x86_emulate_insn(struct x86_emulate_ctxt *ctxt,
 		     struct x86_emulate_ops *ops);
-
+#endif /*_KERNEL*/
 #endif /* _ASM_X86_KVM_X86_EMULATE_H */
