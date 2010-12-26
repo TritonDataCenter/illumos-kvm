@@ -30,10 +30,8 @@
 
 #include "kvm_types.h"
 
-#ifdef XXX
 #define KVM_PIO_PAGE_OFFSET 1
 #define KVM_COALESCED_MMIO_PAGE_OFFSET 2
-#endif /*XXX*/
 
 #define CR3_PAE_RESERVED_BITS ((X86_CR3_PWT | X86_CR3_PCD) - 1)
 #define CR3_NONPAE_RESERVED_BITS ((PAGESIZE-1) & ~(X86_CR3_PWT | X86_CR3_PCD))
@@ -976,12 +974,11 @@ enum {
  * Trap the fault and ignore the instruction if that happens.
  */
 
-#ifdef XXX
 #include "linkage.h"
 
-asmlinkage void kvm_handle_fault_on_reboot(void);
+#include <ia32/sys/asm_linkage.h>
 
-#endif
+/*asmlinkage*/ void kvm_handle_fault_on_reboot(void);
 
 
 #define __kvm_handle_fault_on_reboot(insn) \

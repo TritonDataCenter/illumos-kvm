@@ -1955,8 +1955,9 @@ void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long val,
 	}
 }
 
-int
-x86_emulate_insn(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
+int kvm_emulate_pio(struct kvm_vcpu *vcpu, int in, int size, unsigned port);
+
+int x86_emulate_insn(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 {
 	unsigned long memop = 0;
 	uint64_t msr_data;
@@ -2486,16 +2487,13 @@ special_insn:
 			kvm_inject_gp(ctxt->vcpu, 0);
 			goto done;
 		}
-#ifdef XXX
 		if (kvm_emulate_pio(ctxt->vcpu, io_dir_in,
 				   (c->d & ByteOp) ? 1 : c->op_bytes,
 				   port) != 0) {
 			c->eip = saved_eip;
 			goto cannot_emulate;
 		}
-#else
 		goto cannot_emulate;
-#endif /*XXX*/
 		break;
 	case 0xf4:              /* hlt */
 		ctxt->vcpu->arch.halt_request = 1;

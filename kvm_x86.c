@@ -581,7 +581,7 @@ static inline struct kvm_lapic *to_lapic(struct kvm_io_device *dev)
 #endif /*XXX*/
 }
 
-static int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
+int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
 		void *data)
 {
 	unsigned char alignment = offset & 0xf;
@@ -915,7 +915,7 @@ static void update_divide_count(struct kvm_lapic *apic)
 	apic->divide_count = 0x1 << (tmp2 & 0x7);
 }
 
-static void apic_set_tpr(struct kvm_lapic *apic, uint32_t tpr)
+void apic_set_tpr(struct kvm_lapic *apic, uint32_t tpr)
 {
 	apic_set_reg(apic, APIC_TASKPRI, tpr);
 	apic_update_ppr(apic);
@@ -1026,7 +1026,7 @@ static void apic_set_eoi(struct kvm_lapic *apic)
 		kvm_ioapic_update_eoi(apic->vcpu->kvm, vector, trigger_mode);
 }
 
-static int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
+int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 {
 	int ret = 0;
 
@@ -2416,14 +2416,6 @@ int is_nx(struct kvm_vcpu *vcpu)
 	return vcpu->arch.efer & EFER_NX;
 }
 
-struct kvm_shadow_walk_iterator {
-	uint64_t addr;
-	hpa_t shadow_addr;
-	int level;
-	uint64_t *sptep;
-	unsigned index;
-};
-
 extern struct kvm_mmu_page * page_header(hpa_t shadow_page, struct kvm *kvm);
 
 pfn_t spte_to_pfn(uint64_t pte)
@@ -3210,7 +3202,7 @@ extern caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn);
 #define PT32_INDEX(address, level)\
 	(((address) >> PT32_LEVEL_SHIFT(level)) & ((1 << PT32_LEVEL_BITS) - 1))
 
-static void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
+void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
 			     struct kvm_vcpu *vcpu, uint64_t addr)
 {
 	iterator->addr = addr;
@@ -3226,7 +3218,7 @@ static void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
 	}
 }
 
-static int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator)
+int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator)
 {
 	if (iterator->level < PT_PAGE_TABLE_LEVEL)
 		return 0;
@@ -3240,16 +3232,11 @@ static int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator)
 	return 1;
 }
 
-static void shadow_walk_next(struct kvm_shadow_walk_iterator *iterator)
+void shadow_walk_next(struct kvm_shadow_walk_iterator *iterator)
 {
 	iterator->shadow_addr = *iterator->sptep & PT64_BASE_ADDR_MASK;
 	--iterator->level;
 }
-
-#define for_each_shadow_entry(_vcpu, _addr, _walker)    \
-	for (shadow_walk_init(&(_walker), _vcpu, _addr);	\
-	     shadow_walk_okay(&(_walker));			\
-	     shadow_walk_next(&(_walker)))
 
 int kvm_read_guest_atomic(struct kvm *kvm, gpa_t gpa, void *data,
 			  unsigned long len)
