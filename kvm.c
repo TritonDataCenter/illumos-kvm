@@ -1690,8 +1690,7 @@ static void kvm_mmu_page_unlink_children(struct kvm *kvm,
 	}
 }
 
-int 
-kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
+int kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 {
 	int ret;
 
@@ -3162,10 +3161,10 @@ kvm_create_vm(void)
 
 	kvmp->mm = p->p_as;  /* XXX note that the as struct does not contain */
 	                    /* a refcnt, may have to go lower */
-	mutex_init(&kvmp->mmu_lock, NULL, MUTEX_SPIN,
-		   (void *)ipltospl(DISP_LEVEL));  /* could be adaptive ?? */
-	mutex_init(&kvmp->requests_lock, NULL, MUTEX_SPIN,
-		   (void *)ipltospl(DISP_LEVEL));
+	mutex_init(&kvmp->mmu_lock, NULL, MUTEX_DRIVER,
+		   NULL);  /* could be adaptive ?? */
+	mutex_init(&kvmp->requests_lock, NULL, MUTEX_DRIVER,
+		   NULL);
 #ifdef XXX
 	kvm_eventfd_init(kvmp);
 #endif /*XXX*/
@@ -3262,7 +3261,7 @@ void kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages)
 
 	/* for the time being, assume that address space will only grow */
 	/* larger.  The following code will be added later. */
-#ifdef XXX
+
 	/*
 	 * If we set the number of mmu pages to be smaller be than the
 	 * number of actived pages , we must to free some mmu pages before we
@@ -3274,8 +3273,13 @@ void kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages)
 			!list_is_empty(&kvm->arch.active_mmu_pages)) {
 			struct kvm_mmu_page *page;
 
+#ifdef XXX
 			page = container_of(kvm->arch.active_mmu_pages.prev,
 					    struct kvm_mmu_page, link);
+#else
+			page = (struct kvm_mmu_page *)list_head(&kvm->arch.active_mmu_pages);
+#endif /*XXX*/
+			/* page removed by kvm_mmu_zap_page */
 			used_pages -= kvm_mmu_zap_page(kvm, page);
 			used_pages--;
 		}
@@ -3283,7 +3287,6 @@ void kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages)
 		kvm->arch.n_free_mmu_pages = 0;
 	}
 	else
-#endif /*XXX*/
 		kvm->arch.n_free_mmu_pages += kvm_nr_mmu_pages
 					 - kvm->arch.n_alloc_mmu_pages;
 

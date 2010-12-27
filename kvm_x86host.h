@@ -31,7 +31,9 @@
 #include "kvm_types.h"
 
 #define KVM_PIO_PAGE_OFFSET 1
+#ifdef XXX
 #define KVM_COALESCED_MMIO_PAGE_OFFSET 2
+#endif
 
 #define CR3_PAE_RESERVED_BITS ((X86_CR3_PWT | X86_CR3_PCD) - 1)
 #define CR3_NONPAE_RESERVED_BITS ((PAGESIZE-1) & ~(X86_CR3_PWT | X86_CR3_PCD))
@@ -768,10 +770,10 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data);
 unsigned long kvm_get_rflags(struct kvm_vcpu *vcpu);
 void kvm_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags);
 
-#ifdef XXX
 void kvm_queue_exception(struct kvm_vcpu *vcpu, unsigned nr);
-void kvm_queue_exception_e(struct kvm_vcpu *vcpu, unsigned nr, uint32_t error_code);
 #endif /*XXX*/
+extern void kvm_queue_exception_e(struct kvm_vcpu *vcpu, unsigned nr, uint32_t error_code);
+#ifdef XXX
 void kvm_inject_page_fault(struct kvm_vcpu *vcpu, unsigned long cr2,
 			   uint32_t error_code);
 int kvm_require_cpl(struct kvm_vcpu *vcpu, int required_cpl);
@@ -943,9 +945,7 @@ static inline uint32_t get_rdx_init_val(void)
 
 static inline void kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code)
 {
-#ifdef XXX
 	kvm_queue_exception_e(vcpu, GP_VECTOR, error_code);
-#endif /*XXX*/
 }
 
 #define TSS_IOPB_BASE_OFFSET 0x66

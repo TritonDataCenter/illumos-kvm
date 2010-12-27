@@ -1604,17 +1604,26 @@ void kvm_set_apic_base(struct kvm_vcpu *vcpu, uint64_t data)
 		vcpu->arch.apic_base = data;
 }
 
+void kvm_lapic_set_tpr(struct kvm_vcpu *vcpu, unsigned long cr8)
+{
+	struct kvm_lapic *apic = vcpu->arch.apic;
+
+	if (!apic)
+		return;
+	apic_set_tpr(apic, ((cr8 & 0x0f) << 4)
+		     | (apic_get_reg(apic, APIC_TASKPRI) & 4));
+}
+
 void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 {
 	if (cr8 & CR8_RESERVED_BITS) {
 		kvm_inject_gp(vcpu, 0);
 		return;
 	}
-#ifdef XXX
+
 	if (irqchip_in_kernel(vcpu->kvm))
 		kvm_lapic_set_tpr(vcpu, cr8);
 	else
-#endif /*XXX*/
 		vcpu->arch.cr8 = cr8;
 }
 
@@ -2944,12 +2953,31 @@ static int __direct_map(struct kvm_vcpu *vcpu, gpa_t v, int write,
 	return pt_write;
 }
 
+extern int kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp);
+
+void __kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
+{
+	while (vcpu->kvm->arch.n_free_mmu_pages < KVM_REFILL_PAGES &&
+	       !list_is_empty(&vcpu->kvm->arch.active_mmu_pages)) {
+		struct kvm_mmu_page *sp;
+
+#ifdef XXX
+		sp = container_of(vcpu->kvm->arch.active_mmu_pages.prev,
+				  struct kvm_mmu_page, link);
+#else
+		sp = list_head(&vcpu->kvm->arch.active_mmu_pages);
+#endif /*XXX*/
+		kvm_mmu_zap_page(vcpu->kvm, sp);
+#ifdef XXX
+		++vcpu->kvm->stat.mmu_recycled;
+#endif
+	}
+}
+
 inline void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX
-	if (unlikely(vcpu->kvm->arch.n_free_mmu_pages < KVM_MIN_FREE_MMU_PAGES))
+	if (vcpu->kvm->arch.n_free_mmu_pages < KVM_MIN_FREE_MMU_PAGES)
 		__kvm_mmu_free_some_pages(vcpu);
-#endif /*XXX*/
 }
 
 static int tdp_page_fault(struct kvm_vcpu *vcpu, gva_t gpa,
