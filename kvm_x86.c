@@ -2091,19 +2091,18 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	 * GUEST_CS_BASE should really be 0xffff0000, but VT vm86 mode
 	 * insists on having GUEST_CS_BASE == GUEST_CS_SELECTOR << 4.  Sigh.
 	 */
-#ifdef XXX
 #ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	if (kvm_vcpu_is_bsp(&vmx->vcpu)) {
 		vmcs_write16(GUEST_CS_SELECTOR, 0xf000);
 		vmcs_writel(GUEST_CS_BASE, 0x000f0000);
 	} else {
 #endif /*CONFIG_KVM_APIC_ARCHITECTURE*/
-#endif /*XXX*/
 		vmcs_write16(GUEST_CS_SELECTOR, vmx->vcpu.arch.sipi_vector << 8);
 		vmcs_writel(GUEST_CS_BASE, vmx->vcpu.arch.sipi_vector << 12);
-#ifdef XXX
+#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	}
-#endif /*XXX*/
+#endif /*CONFIG_KVM_APIC_ARCHITECTURE*/
+
 	seg_setup(VCPU_SREG_DS);
 	seg_setup(VCPU_SREG_ES);
 	seg_setup(VCPU_SREG_FS);

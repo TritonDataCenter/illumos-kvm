@@ -3946,11 +3946,15 @@ static void vcpu_clear(struct vcpu_vmx *vmx)
 }
 
 
+uint16_t vmcs_read16(unsigned long field)
+{
+	return vmcs_readl(field);
+}
 
 static void vmwrite_error(unsigned long field, unsigned long value)
 {
 	cmn_err(CE_WARN, "vmwrite error: reg %lx value %lx (err %d)\n",
-	       field, value, vmcs_read32(VM_INSTRUCTION_ERROR));
+	       field, value, vmcs_read16(VM_INSTRUCTION_ERROR)&0xff);
 }
 
 static inline void __vmwrite(unsigned long field, unsigned long value)
@@ -3995,10 +3999,6 @@ uint64_t vmcs_read64(unsigned long field)
 #endif
 }
 
-uint16_t vmcs_read16(unsigned long field)
-{
-	return vmcs_readl(field);
-}
 
 void vmcs_write64(unsigned long field, uint64_t value)
 {
@@ -4668,10 +4668,9 @@ void vmx_get_segment(struct kvm_vcpu *vcpu,
 	var->limit = vmcs_read32(sf->limit);
 	var->selector = vmcs_read16(sf->selector);
 	ar = vmcs_read32(sf->ar_bytes);
-#ifdef XXX
+
 	if ((ar & AR_UNUSABLE_MASK) && !emulate_invalid_guest_state)
 		ar = 0;
-#endif /*XXX*/
 	var->type = ar & 15;
 	var->s = (ar >> 4) & 1;
 	var->dpl = (ar >> 5) & 3;
@@ -6808,9 +6807,17 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 
 		/* Enter guest mode */
 		"jne .Llaunched \n\t"
+#ifdef XXX
 		__ex(ASM_VMX_VMLAUNCH) "\n\t"
+#else
+		ASM_VMX_VMLAUNCH "\n\t"
+#endif /*XXX*/
 		"jmp .Lkvm_vmx_return \n\t"
+#ifdef XXX
 		".Llaunched: " __ex(ASM_VMX_VMRESUME) "\n\t"
+#else
+		".Llaunched: " ASM_VMX_VMRESUME "\n\t"
+#endif /*XXX*/
 		".Lkvm_vmx_return: "
 		/* Save guest registers, load host registers, keep flags */
 		"xchg %0,     (%%"R"sp) \n\t"
@@ -9973,7 +9980,7 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	if (vmx->fail) {
 		vcpu->run->exit_reason = KVM_EXIT_FAIL_ENTRY;
 		vcpu->run->fail_entry.hardware_entry_failure_reason
-			= vmcs_read32(VM_INSTRUCTION_ERROR);
+			= vmcs_read16(VM_INSTRUCTION_ERROR)&0xff;
 		return 0;
 	}
 
