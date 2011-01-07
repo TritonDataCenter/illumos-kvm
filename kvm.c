@@ -1160,26 +1160,35 @@ static int vmx_hardware_setup(void)
 	if (!cpu_has_vmx_vpid())
 		enable_vpid = 0;
 
+#ifdef XXX
 	if (!cpu_has_vmx_ept()) {
+#endif /*XXX*/
 		enable_ept = 0;
 		enable_unrestricted_guest = 0;
+#ifdef XXX
 	}
 
 	if (!cpu_has_vmx_unrestricted_guest())
+#endif /*XXX*/
 		enable_unrestricted_guest = 0;
-
+#ifdef XXX
 	if (!cpu_has_vmx_flexpriority())
+#endif /*XXX*/
 		flexpriority_enabled = 0;
 
+#ifdef XXX
 	if (!cpu_has_vmx_tpr_shadow())
+#endif /*XXX*/
 		kvm_x86_ops->update_cr8_intercept = NULL;
 
 	if (enable_ept && !cpu_has_vmx_ept_2m_page())
 		kvm_disable_largepages();
+
 #ifdef XXX
 	if (!cpu_has_vmx_ple())
 		ple_gap = 0;
-#endif
+#endif /*XXX*/
+
 
 	return alloc_kvm_area();
 }
@@ -3959,19 +3968,27 @@ static void vmwrite_error(unsigned long field, unsigned long value)
 
 static inline void __vmwrite(unsigned long field, unsigned long value)
 {
-    __asm__ volatile ( ASM_VMX_VMWRITE_RAX_RDX
+	uint8_t err = 0;
+	__asm__ volatile ( ASM_VMX_VMWRITE_RAX_RDX "\n\t" "setna %0"
                    /* CF==1 or ZF==1 --> crash (ud2) */
-		       /*"ja 1f ; ud2 ; 1:\n"*/
-                   : 
-                   : "a" (field) , "c" (value)
-                   : "memory");
+		   /* "ja 1f ; ud2 ; 1:\n" */
+			   : "=q"(err) : "a" (value), "d" (field)
+			   : "cc", "memory");
+	/* XXX the following should be ifdef debug...*/
+#ifdef XXX
+	if (err) {
+		vmcs_read32(VM_INSTRUCTION_ERROR);
+		cmn_err(CE_WARN, "_vmwrite: error writing %lx to %lx: error number = %d\n",
+			value, field, err&0xff);
+	}
+#endif /*XXX*/
+			
 }
 
 void vmcs_writel(unsigned long field, unsigned long value)
 {
-#ifndef XXX
-	unsigned char error;
-
+	unsigned char error = 0;
+#ifdef XXX
 	__asm__ volatile (ASM_VMX_VMWRITE_RAX_RDX "\n\tsetna %0"
 		       : "=q"(error) : "a"(value), "d"(field) : "cc");
 	if ((error))
@@ -3987,6 +4004,12 @@ unsigned long vmcs_readl(unsigned long field)
 
 	__asm__ volatile (ASM_VMX_VMREAD_RDX_RAX
 		      : "=a"(value) : "d"(field) : "cc");
+#ifdef XXX
+	if (field != VM_INSTRUCTION_ERROR) {
+		cmn_err(CE_WARN, "vmcs_readl field = %lx: value = %lx\n",
+			field, value);
+	}
+#endif /*XXX*/
 	return value;
 }
 
@@ -4041,6 +4064,26 @@ static inline int vm_need_tpr_shadow(struct kvm *kvm)
 }
 
 /*
+ * Volatile isn't enough to prevent the compiler from reordering the
+ * read/write functions for the control registers and messing everything up.
+ * A memory clobber would solve the problem, but would prevent reordering of
+ * all loads stores around it, which can hurt performance. Solution is to
+ * use a variable and mimic reads and writes to it to enforce serialization
+ */
+static unsigned long __force_order;
+
+static inline unsigned long native_read_cr0(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr0,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return val;
+}
+
+#define read_cr0()	(native_read_cr0())
+
+ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
+
+/*
  * Sets up the vmcs for emulated real mode.
  */
 int vmx_vcpu_setup(struct vcpu_vmx *vmx)
@@ -4048,7 +4091,7 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	uint32_t host_sysenter_cs, msr_low, msr_high;
 	uint32_t junk;
 	uint64_t host_pat, tsc_this, tsc_base;
-	unsigned long a;
+	volatile uint64_t a;
 	struct descriptor_table dt;
 	int i;
 	unsigned long kvm_vmx_return;
@@ -4108,25 +4151,26 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 		vmcs_write32(PLE_WINDOW, ple_window);
 	}
 #endif /*XXX*/
-
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, !!bypass_guest_pf);
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, !!bypass_guest_pf);
 	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 22.2.1 */
 
-	vmcs_writel(HOST_CR0, getcr0());  /* 22.2.3 */
-	vmcs_writel(HOST_CR4, getcr4());  /* 22.2.3, 22.2.5 */
-	vmcs_writel(HOST_CR3, getcr3());  /* 22.2.3  FIXME: shadow tables */
+	vmcs_writel(HOST_CR0, read_cr0());  /* 22.2.3 */
+	vmcs_writel(HOST_CR4, kvm_read_cr4(&vmx->vcpu));  /* 22.2.3, 22.2.5 */
+	vmcs_writel(HOST_CR3, getcr3(vmx->vcpu));  /* 22.2.3  FIXME: shadow tables */
 
-	vmcs_write16(HOST_CS_SELECTOR, GDT_KCODE);  /* 22.2.4 */
-	vmcs_write16(HOST_DS_SELECTOR, GDT_KDATA);  /* 22.2.4 */
-	vmcs_write16(HOST_ES_SELECTOR, GDT_KDATA);  /* 22.2.4 */
+	vmcs_write16(HOST_CS_SELECTOR, KCS_SEL);  /* 22.2.4 */
+	vmcs_write16(HOST_DS_SELECTOR, KDS_SEL);  /* 22.2.4 */
+	vmcs_write16(HOST_ES_SELECTOR, KDS_SEL);  /* 22.2.4 */
 	vmcs_write16(HOST_FS_SELECTOR, kvm_read_fs());    /* 22.2.4 */
 	vmcs_write16(HOST_GS_SELECTOR, kvm_read_gs());    /* 22.2.4 */
-	vmcs_write16(HOST_SS_SELECTOR, GDT_KDATA);  /* 22.2.4 */
+	vmcs_write16(HOST_SS_SELECTOR, KDS_SEL);  /* 22.2.4 */
 #ifdef CONFIG_X86_64
 	rdmsrl(MSR_FS_BASE, a);
+	cmn_err(CE_NOTE, "rdmsrl MSR_FS_BASE = %lx\n", a);
 	vmcs_writel(HOST_FS_BASE, a); /* 22.2.4 */
 	rdmsrl(MSR_GS_BASE, a);
+	cmn_err(CE_NOTE, "rdmsrl MSR_GS_BASE = %lx\n", a);
 	vmcs_writel(HOST_GS_BASE, a); /* 22.2.4 */
 #else
 	vmcs_writel(HOST_FS_BASE, 0); /* 22.2.4 */
@@ -4534,10 +4578,6 @@ static int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu,
 	r = E2BIG;
 	if (cpuid->nent > KVM_MAX_CPUID_ENTRIES)
 		goto out;
-	r = EFAULT;
-	if (ddi_copyin(entries, &vcpu->arch.cpuid_entries, 
-		       cpuid->nent * sizeof(struct kvm_cpuid_entry2), mode))
-		goto out;
 	vcpu_load(vcpu);
 	vcpu->arch.cpuid_nent = cpuid->nent;
 	kvm_apic_set_version(vcpu);
@@ -4558,10 +4598,6 @@ static int kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu,
 
 	r = E2BIG;
 	if (cpuid->nent < vcpu->arch.cpuid_nent)
-		goto out;
-	r = EFAULT;
-	if (ddi_copyin(&vcpu->arch.cpuid_entries, entries, 
-		       vcpu->arch.cpuid_nent * sizeof(struct kvm_cpuid_entry2), mode))
 		goto out;
 	return 0;
 
@@ -6693,23 +6729,6 @@ static void vmx_complete_interrupts(struct vcpu_vmx *vmx)
 #define Q "l"
 #endif
 
-/*
- * Volatile isn't enough to prevent the compiler from reordering the
- * read/write functions for the control registers and messing everything up.
- * A memory clobber would solve the problem, but would prevent reordering of
- * all loads stores around it, which can hurt performance. Solution is to
- * use a variable and mimic reads and writes to it to enforce serialization
- */
-static unsigned long __force_order;
-
-static inline unsigned long native_read_cr0(void)
-{
-	unsigned long val;
-	__asm__ volatile("mov %%cr0,%0\n\t" : "=r" (val), "=m" (__force_order));
-	return val;
-}
-
-#define read_cr0()	(native_read_cr0())
 
 /*
  * Failure to inject an interrupt should give us the information
@@ -6872,6 +6891,12 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 #endif
 	      );
 
+	if ((vmcs_read32(VM_INSTRUCTION_ERROR)&0xff) == 5)
+		/* launched failed, is there #define for error?*/
+		vmx->launched = 0;
+	else
+		vmx->launched = 1;
+
 	vcpu->arch.regs_avail = ~((1 << VCPU_REGS_RIP) | (1 << VCPU_REGS_RSP)
 				  | (1 << VCPU_EXREG_PDPTR));
 	vcpu->arch.regs_dirty = 0;
@@ -6882,7 +6907,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		fixup_rmode_irq(vmx);
 
 	__asm__("mov %0, %%ds; mov %0, %%es" : : "r"SEL_GDT(GDT_UDATA, SEL_UPL));
-	vmx->launched = 1;
+
 
 	vmx_complete_interrupts(vmx);
 }
@@ -10829,6 +10854,24 @@ out:
 	return r;
 }
 
+int kvm_arch_vcpu_ioctl_get_mpstate(struct kvm_vcpu *vcpu,
+				    struct kvm_mp_state *mp_state)
+{
+	vcpu_load(vcpu);
+	mp_state->mp_state = vcpu->arch.mp_state;
+	vcpu_put(vcpu);
+	return 0;
+}
+
+int kvm_arch_vcpu_ioctl_set_mpstate(struct kvm_vcpu *vcpu,
+				    struct kvm_mp_state *mp_state)
+{
+	vcpu_load(vcpu);
+	vcpu->arch.mp_state = mp_state->mp_state;
+	vcpu_put(vcpu);
+	return 0;
+}
+
 static int
 kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_p)
 {
@@ -10915,6 +10958,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 		
+#ifdef XXX
 		size = sizeof(struct kvm_msr_entry) * kvm_msrs.nmsrs;
 		entries = (struct kvm_msr_entry *) kmem_alloc(size, KM_SLEEP);
 		if (!entries) {
@@ -10927,17 +10971,16 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			rval = EFAULT;
 			break;
 		}
+#endif /*XXX*/
 
-		rval = n = __msr_io(vcpu, &kvm_msrs, entries, kvm_get_msr);
+		rval = n = __msr_io(vcpu, &kvm_msrs, kvm_msrs.entries, kvm_get_msr);
 
 		if (rval < 0) {
-			kmem_free(entries, size);
 			rval = EINVAL;
 			break;
 		}
 
-		rval = ddi_copyout(entries, (caddr_t)(((uint64_t)kvm_msrs_ioc.kvm_msrs)+(sizeof (struct kvm_msrs))), size, mode);
-		kmem_free(entries, size);
+		rval = ddi_copyout(entries, (caddr_t)(((uint64_t)kvm_msrs.entries)), size, mode);
 		
 		*rval_p = n;
 
@@ -10978,6 +11021,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
+#ifdef XXX
 		size = sizeof(struct kvm_msr_entry) * kvm_msrs.nmsrs;
 		entries = (struct kvm_msr_entry *)kmem_alloc(size, KM_SLEEP);
 		if (!entries) {
@@ -10990,16 +11034,74 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			rval = EFAULT;
 			break;
 		}
+#endif /*XXX*/
 
-		rval = n = __msr_io(vcpu, &kvm_msrs, entries, do_set_msr);
+		rval = n = __msr_io(vcpu, &kvm_msrs, kvm_msrs.entries, do_set_msr);
 
 		if (rval < 0) {
-			kmem_free(entries, size);
 			rval = EINVAL;
 			break;
 		}
-		kmem_free(entries, size);
 		*rval_p = n;
+		break;
+	}
+
+	case KVM_GET_MP_STATE: {
+		struct kvm_mp_state mp_state;
+		struct kvm_mp_state_ioc kvm_mp_state_ioc;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+
+		if (ddi_copyin((struct kvm_mp_state_ioc *)arg, &kvm_mp_state_ioc, sizeof(kvm_mp_state_ioc), mode)) {
+		  rval = EFAULT;
+		  break;
+		}
+		kvmp = find_kvm_id(kvm_mp_state_ioc.kvm_kvmid);
+		if (kvmp == NULL)
+			break;
+		if (!kvmp || kvm_mp_state_ioc.kvm_cpu_index >= kvmp->online_vcpus)
+			break;
+
+		vcpu = kvmp->vcpus[kvm_mp_state_ioc.kvm_cpu_index];
+		
+		rval = kvm_arch_vcpu_ioctl_get_mpstate(vcpu, &mp_state);
+		if (rval)
+			break;
+		rval = EFAULT;
+		if (ddi_copyout(&mp_state, kvm_mp_state_ioc.mp_state, sizeof mp_state, mode))
+			break;
+		rval = 0;
+		*rval_p = 0;
+		break;
+	}
+	case KVM_SET_MP_STATE: {
+		struct kvm_mp_state mp_state;
+		struct kvm_mp_state_ioc kvm_mp_state_ioc;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+
+		if (ddi_copyin((struct kvm_mp_state_ioc *)arg, &kvm_mp_state_ioc, sizeof(kvm_mp_state_ioc), mode)) {
+		  rval = EFAULT;
+		  break;
+		}
+		kvmp = find_kvm_id(kvm_mp_state_ioc.kvm_kvmid);
+		if (kvmp == NULL)
+			break;
+		if (!kvmp || kvm_mp_state_ioc.kvm_cpu_index >= kvmp->online_vcpus)
+			break;
+
+		vcpu = kvmp->vcpus[kvm_mp_state_ioc.kvm_cpu_index];
+
+		rval = EFAULT;
+
+		if (ddi_copyin(kvm_mp_state_ioc.mp_state, &mp_state, sizeof mp_state, mode))
+			break;
+
+		rval = kvm_arch_vcpu_ioctl_set_mpstate(vcpu, &mp_state);
+		if (rval)
+			break;
+		*rval_p = 0;
+		rval = 0;
 		break;
 	}
 
@@ -11055,13 +11157,15 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	}
 	case KVM_GET_SUPPORTED_CPUID: {
 		struct kvm_cpuid2 *cpuid_arg = (struct kvm_cpuid2 *)arg;
-		struct kvm_cpuid2 cpuid;
+		struct kvm_cpuid2 *cpuid;
 
-		if (ddi_copyin(cpuid_arg, &cpuid, sizeof (cpuid), mode)) {
+		cpuid = kmem_alloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
+
+		if (ddi_copyin(cpuid_arg, cpuid, sizeof (cpuid), mode)) {
 			rval = EFAULT;
 			break;
 		}
-		rval = kvm_dev_ioctl_get_supported_cpuid(&cpuid,
+		rval = kvm_dev_ioctl_get_supported_cpuid(cpuid,
 						      cpuid_arg->entries, mode);
 		if (rval) {
 			*rval_p = rval; /* linux user level expects negative errno */
@@ -11270,27 +11374,36 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	}	
 	case KVM_SET_CPUID2: {
 		struct kvm_cpuid2_ioc cpuid_ioc;
-		struct kvm_cpuid2 cpuid_data;
+		struct kvm_cpuid2 *cpuid_data;
 		struct kvm_vcpu *vcpu;
 
+
+		cpuid_data = kmem_alloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
+
 		if (ddi_copyin((const char *)arg, &cpuid_ioc, sizeof cpuid_ioc, mode)) {
+			kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 			rval = EFAULT;
 			break;
 		}
 		if (cpuid_ioc.kvm_vcpu_addr == NULL) {
+			kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 			rval = EINVAL;
 			break;
 		}
 
 		vcpu = (struct kvm_vcpu *)(cpuid_ioc.kvm_vcpu_addr);
 
-		if (ddi_copyin((const char *)(cpuid_ioc.cpuid_data), (char *)&cpuid_data,
-			       sizeof(cpuid_data), mode)) {
+		if (ddi_copyin((const char *)(cpuid_ioc.cpuid_data), (char *)cpuid_data,
+			       sizeof(struct kvm_cpuid2), mode)) {
+			kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 			rval = EFAULT;
 			break;
 		}
-		rval = kvm_vcpu_ioctl_set_cpuid2(vcpu, &cpuid_data,
-						 cpuid_data.entries, mode);
+		rval = kvm_vcpu_ioctl_set_cpuid2(vcpu, cpuid_data,
+						 cpuid_data->entries, mode);
+
+		kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
+		
 		if (rval)
 			rval = EINVAL;
 		break;
@@ -11298,15 +11411,19 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 
 	case KVM_GET_CPUID2: {
 		struct kvm_cpuid2_ioc cpuid_ioc;
-		struct kvm_cpuid2 cpuid_data;
+		struct kvm_cpuid2 *cpuid_data;
 		struct kvm_vcpu *vcpu;
 
+		cpuid_data = kmem_alloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
+
 		if (ddi_copyin((const char *)arg, &cpuid_ioc, sizeof cpuid_ioc, mode)) {
+			kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 			rval = EFAULT;
 			break;
 		}
 
 		if (cpuid_ioc.kvm_vcpu_addr == NULL) {
+			kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 			rval = EINVAL;
 			break;
 		}
@@ -11315,19 +11432,25 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 
 		if (ddi_copyin((const char *)(cpuid_ioc.cpuid_data), (char *)&cpuid_data,
 			       sizeof(cpuid_data), mode)) {
+			kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 			rval = EFAULT;
 			break;
 		}
 
-		rval = kvm_vcpu_ioctl_get_cpuid2(vcpu, &cpuid_data,
-						 cpuid_data.entries, mode);
+		rval = kvm_vcpu_ioctl_get_cpuid2(vcpu, cpuid_data,
+						 cpuid_data->entries, mode);
 		if (rval) {
+			kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 			rval = EINVAL;
 			break;
 		}
 
-		if (ddi_copyout(&cpuid_ioc, (char *)arg, sizeof cpuid_ioc, mode))
+		if (ddi_copyout(&cpuid_ioc, (char *)arg, sizeof cpuid_ioc, mode)) {
+			kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 			rval = EFAULT;
+			break;
+		}
+		kmem_free(cpuid_data, sizeof(struct kvm_cpuid2));
 		break;
 	}
 

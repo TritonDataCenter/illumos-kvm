@@ -561,6 +561,16 @@ struct kvm_regs_ioc {
 	int kvm_kvmid;
 };
 
+struct kvm_mp_state {
+	uint32_t mp_state;
+};
+
+struct kvm_mp_state_ioc {
+	struct kvm_mp_state *mp_state;
+	int kvm_cpu_index;
+	int kvm_kvmid;
+};
+
 /* for KVM_GET_LAPIC and KVM_SET_LAPIC */
 #define KVM_APIC_REG_SIZE 0x400
 struct kvm_lapic_state {
@@ -853,7 +863,7 @@ struct kvm_debug_exit_arch {
 struct kvm_cpuid2 {
 	uint32_t nent;
 	uint32_t padding;
-	struct kvm_cpuid_entry2 entries[1];
+	struct kvm_cpuid_entry2 entries[100];
 };
 
 
@@ -1189,7 +1199,7 @@ static inline void native_load_tr_desc(void)
 
 /* for KVM_SET_CPUID2/KVM_GET_CPUID2 */
 struct kvm_cpuid2_ioc {
-	struct cpuid_data *cpuid_data;
+	struct kvm_cpuid2 *cpuid_data;
 	uint64_t kvm_vcpu_addr;
 	int kvm_cpu_index;
 };
@@ -1213,8 +1223,8 @@ struct kvm_run_ioc {
 #define KVM_SET_FPU               _IOW(KVMIO,  0x8d, struct kvm_fpu_ioc)
 #define KVM_GET_MSRS              _IOWR(KVMIO, 0x88, struct kvm_msrs_ioc)
 #define KVM_SET_MSRS              _IOW(KVMIO,  0x89, struct kvm_msrs_ioc)
-#define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state)
-#define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state)
+#define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state_ioc)
+#define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state_ioc)
 /* Available with KVM_CAP_VCPU_EVENTS */
 #define KVM_GET_VCPU_EVENTS       _IOR(KVMIO,  0x9f, struct kvm_vcpu_events)
 #define KVM_SET_VCPU_EVENTS       _IOW(KVMIO,  0xa0, struct kvm_vcpu_events)
@@ -1329,10 +1339,6 @@ struct kvm_coalesced_mmio_ring {
 #define KVM_MP_STATE_INIT_RECEIVED     2
 #define KVM_MP_STATE_HALTED            3
 #define KVM_MP_STATE_SIPI_RECEIVED     4
-
-struct kvm_mp_state {
-	uint32_t mp_state;
-};
 
 #define KVM_SET_CPUID2            _IOW(KVMIO,  0x90, struct kvm_cpuid2_ioc)
 #define KVM_GET_CPUID2            _IOWR(KVMIO, 0x91, struct kvm_cpuid2_ioc)
