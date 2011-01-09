@@ -183,10 +183,10 @@ static void vmx_set_nmi_mask(struct kvm_vcpu *vcpu, int masked);
 static void enable_nmi_window(struct kvm_vcpu *vcpu);
 static void enable_irq_window(struct kvm_vcpu *vcpu);
 static void vmx_cpuid_update(struct kvm_vcpu *vcpu);
-static void vmx_fpu_activate(struct kvm_vcpu *vcpu);
 static void vmx_fpu_deactivate(struct kvm_vcpu *vcpu);
 static void vmx_decache_cr0_guest_bits(struct kvm_vcpu *vcpu);
 static void vmx_decache_cr4_guest_bits(struct kvm_vcpu *vcpu);
+void vmx_fpu_activate(struct kvm_vcpu *vcpu);
 
 int get_ept_level(void);
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
@@ -209,7 +209,7 @@ static inline void __invvpid(int ext, uint16_t vpid, gva_t gva)
 		  : : "a"(&operand), "c"(ext) : "cc", "memory");
 }
 
-static inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx)
+inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx)
 {
 	if (vmx->vpid == 0)
 		return;
@@ -249,8 +249,12 @@ static void vmx_set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 	vmcs_writel(GUEST_CR3, guest_cr3);
 }
 
-#ifdef XXX
 #define _ER(x) { EXIT_REASON_##x, #x }
+
+struct trace_print_flags {
+	unsigned long		mask;
+	const char		*name;
+};
 
 static const struct trace_print_flags vmx_exit_reasons_str[] = {
 	_ER(EXCEPTION_NMI),
@@ -292,7 +296,164 @@ static const struct trace_print_flags vmx_exit_reasons_str[] = {
 };
 
 #undef _ER
+
+/*
+ * The function is based on mtrr_type_lookup() in
+ * arch/x86/kernel/cpu/mtrr/generic.c
+ */
+
+/*  These are the region types  */
+#define MTRR_TYPE_UNCACHABLE 0
+#define MTRR_TYPE_WRCOMB     1
+/*#define MTRR_TYPE_         2*/
+/*#define MTRR_TYPE_         3*/
+#define MTRR_TYPE_WRTHROUGH  4
+#define MTRR_TYPE_WRPROT     5
+#define MTRR_TYPE_WRBACK     6
+#define MTRR_NUM_TYPES       7
+
+static int get_mtrr_type(struct mtrr_state_type *mtrr_state,
+			 uint64_t start, uint64_t end)
+{
+	int i;
+	uint64_t base, mask;
+	uint8_t prev_match, curr_match;
+	int num_var_ranges = KVM_NR_VAR_MTRR;
+
+	if (!mtrr_state->enabled)
+		return 0xFF;
+
+	/* Make end inclusive end, instead of exclusive */
+	end--;
+
+	/* Look in fixed ranges. Just return the type as per start */
+	if (mtrr_state->have_fixed && (start < 0x100000)) {
+		int idx;
+
+		if (start < 0x80000) {
+			idx = 0;
+			idx += (start >> 16);
+			return mtrr_state->fixed_ranges[idx];
+		} else if (start < 0xC0000) {
+			idx = 1 * 8;
+			idx += ((start - 0x80000) >> 14);
+			return mtrr_state->fixed_ranges[idx];
+		} else if (start < 0x1000000) {
+			idx = 3 * 8;
+			idx += ((start - 0xC0000) >> 12);
+			return mtrr_state->fixed_ranges[idx];
+		}
+	}
+
+	/*
+	 * Look in variable ranges
+	 * Look of multiple ranges matching this address and pick type
+	 * as per MTRR precedence
+	 */
+	if (!(mtrr_state->enabled & 2))
+		return mtrr_state->def_type;
+
+	prev_match = 0xFF;
+	for (i = 0; i < num_var_ranges; ++i) {
+		unsigned short start_state, end_state;
+
+		if (!(mtrr_state->var_ranges[i].mask_lo & (1 << 11)))
+			continue;
+
+		base = (((uint64_t)mtrr_state->var_ranges[i].base_hi) << 32) +
+		       (mtrr_state->var_ranges[i].base_lo & PAGEMASK);
+		mask = (((uint64_t)mtrr_state->var_ranges[i].mask_hi) << 32) +
+		       (mtrr_state->var_ranges[i].mask_lo & PAGEMASK);
+
+		start_state = ((start & mask) == (base & mask));
+		end_state = ((end & mask) == (base & mask));
+		if (start_state != end_state)
+			return 0xFE;
+
+		if ((start & mask) != (base & mask))
+			continue;
+
+		curr_match = mtrr_state->var_ranges[i].base_lo & 0xff;
+		if (prev_match == 0xFF) {
+			prev_match = curr_match;
+			continue;
+		}
+
+		if (prev_match == MTRR_TYPE_UNCACHABLE ||
+		    curr_match == MTRR_TYPE_UNCACHABLE)
+			return MTRR_TYPE_UNCACHABLE;
+
+		if ((prev_match == MTRR_TYPE_WRBACK &&
+		     curr_match == MTRR_TYPE_WRTHROUGH) ||
+		    (prev_match == MTRR_TYPE_WRTHROUGH &&
+		     curr_match == MTRR_TYPE_WRBACK)) {
+			prev_match = MTRR_TYPE_WRTHROUGH;
+			curr_match = MTRR_TYPE_WRTHROUGH;
+		}
+
+		if (prev_match != curr_match)
+			return MTRR_TYPE_UNCACHABLE;
+	}
+
+	if (prev_match != 0xFF)
+		return prev_match;
+
+	return mtrr_state->def_type;
+}
+
+uint8_t kvm_get_guest_memory_type(struct kvm_vcpu *vcpu, gfn_t gfn)
+{
+	uint8_t mtrr;
+
+	mtrr = get_mtrr_type(&vcpu->arch.mtrr_state, gfn << PAGESHIFT,
+			     (gfn << PAGESHIFT) + PAGESIZE);
+	if (mtrr == 0xfe || mtrr == 0xff)
+		mtrr = MTRR_TYPE_WRBACK;
+	return mtrr;
+}
+
+static uint64_t vmx_get_mt_mask(struct kvm_vcpu *vcpu, gfn_t gfn, int is_mmio)
+{
+	uint64_t ret;
+#ifdef XXX
+	/* For VT-d and EPT combination
+	 * 1. MMIO: always map as UC
+	 * 2. EPT with VT-d:
+	 *   a. VT-d without snooping control feature: can't guarantee the
+	 *	result, try to trust guest.
+	 *   b. VT-d with snooping control feature: snooping control feature of
+	 *	VT-d engine can guarantee the cache correctness. Just set it
+	 *	to WB to keep consistent with host. So the same as item 3.
+	 * 3. EPT without VT-d: always map as WB and set IPAT=1 to keep
+	 *    consistent with host MTRR
+	 */
+	if (is_mmio)
+		ret = MTRR_TYPE_UNCACHABLE << VMX_EPT_MT_EPTE_SHIFT;
+	else if (vcpu->kvm->arch.iommu_domain &&
+		!(vcpu->kvm->arch.iommu_flags & KVM_IOMMU_CACHE_COHERENCY))
 #endif /*XXX*/
+		ret = kvm_get_guest_memory_type(vcpu, gfn) <<
+		      VMX_EPT_MT_EPTE_SHIFT;
+#ifdef XXX
+	else
+		ret = (MTRR_TYPE_WRBACK << VMX_EPT_MT_EPTE_SHIFT)
+			| VMX_EPT_IPAT_BIT;
+#endif /*XXX*/
+	return ret;
+}
+
+static void
+vmx_patch_hypercall(struct kvm_vcpu *vcpu, unsigned char *hypercall)
+{
+	/*
+	 * Patch in the VMCALL instruction:
+	 */
+	hypercall[0] = 0x0f;
+	hypercall[1] = 0x01;
+	hypercall[2] = 0xc1;
+}
+
+static void vmx_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l);
 
 static struct kvm_x86_ops vmx_x86_ops = {
 	.cpu_has_kvm_support = nulldev/*cpu_has_kvm_support*/,
@@ -318,7 +479,7 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.get_segment = vmx_get_segment /*vmx_get_segment*/,
 	.set_segment = vmx_set_segment /*vmx_set_segment*/,
 	.get_cpl = vmx_get_cpl /*vmx_get_cpl*/,
-	.get_cs_db_l_bits = (void(*)(struct kvm_vcpu *, int *, int *))nulldev /*vmx_get_cs_db_l_bits*/,
+	.get_cs_db_l_bits = vmx_get_cs_db_l_bits /*vmx_get_cs_db_l_bits*/,
 	.decache_cr0_guest_bits = vmx_decache_cr0_guest_bits /*vmx_decache_cr0_guest_bits*/,
 	.decache_cr4_guest_bits = vmx_decache_cr4_guest_bits /*vmx_decache_cr4_guest_bits*/,
 	.set_cr0 = vmx_set_cr0,
@@ -342,7 +503,7 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.skip_emulated_instruction = skip_emulated_instruction /*skip_emulated_instruction*/,
 	.set_interrupt_shadow = vmx_set_interrupt_shadow /*vmx_set_interrupt_shadow*/,
 	.get_interrupt_shadow = vmx_get_interrupt_shadow /*vmx_get_interrupt_shadow*/,
-	.patch_hypercall = (void(*)(struct kvm_vcpu *, unsigned char *))nulldev /*vmx_patch_hypercall*/,
+	.patch_hypercall = vmx_patch_hypercall /*vmx_patch_hypercall*/,
 	.set_irq = vmx_inject_irq /*vmx_inject_irq*/,
 	.set_nmi = vmx_inject_nmi /*vmx_inject_nmi*/,
 	.queue_exception = vmx_queue_exception /*vmx_queue_exception*/,
@@ -356,11 +517,10 @@ static struct kvm_x86_ops vmx_x86_ops = {
 
 	.set_tss_addr = vmx_set_tss_addr,
 	.get_tdp_level = get_ept_level /*get_ept_level*/,
-	.get_mt_mask = (uint64_t(*)(struct kvm_vcpu *, gfn_t, int))nulldev /*vmx_get_mt_mask*/,
+	.get_mt_mask = vmx_get_mt_mask /*vmx_get_mt_mask*/,
 
-#ifdef XXX
 	.exit_reasons_str = vmx_exit_reasons_str,
-#endif /*XXX*/
+
 	.get_lpage_level = vmx_get_lpage_level /*vmx_get_lpage_level*/,
 
 	.cpuid_update = vmx_cpuid_update /*vmx_cpuid_update*/,
@@ -374,6 +534,15 @@ uint32_t vmcs_read32(unsigned long field)
 {
 	return vmcs_readl(field);
 }
+
+static void vmx_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l)
+{
+	uint32_t ar = vmcs_read32(GUEST_CS_AR_BYTES);
+
+	*db = (ar >> 14) & 1;
+	*l = (ar >> 13) & 1;
+}
+
 
 void vmcs_write32(unsigned long field, uint32_t value)
 {
@@ -418,7 +587,7 @@ static void vmcs_set_bits(unsigned long field, uint32_t mask)
 
 extern void update_exception_bitmap(struct kvm_vcpu *vcpu);
 
-static void vmx_fpu_activate(struct kvm_vcpu *vcpu)
+void vmx_fpu_activate(struct kvm_vcpu *vcpu)
 {
 	ulong cr0;
 
@@ -10872,6 +11041,65 @@ int kvm_arch_vcpu_ioctl_set_mpstate(struct kvm_vcpu *vcpu,
 	return 0;
 }
 
+static void kvm_vcpu_ioctl_x86_get_vcpu_events(struct kvm_vcpu *vcpu,
+					       struct kvm_vcpu_events *events)
+{
+	vcpu_load(vcpu);
+
+	events->exception.injected = vcpu->arch.exception.pending;
+	events->exception.nr = vcpu->arch.exception.nr;
+	events->exception.has_error_code = vcpu->arch.exception.has_error_code;
+	events->exception.error_code = vcpu->arch.exception.error_code;
+
+	events->interrupt.injected = vcpu->arch.interrupt.pending;
+	events->interrupt.nr = vcpu->arch.interrupt.nr;
+	events->interrupt.soft = vcpu->arch.interrupt.soft;
+
+	events->nmi.injected = vcpu->arch.nmi_injected;
+	events->nmi.pending = vcpu->arch.nmi_pending;
+	events->nmi.masked = kvm_x86_ops->get_nmi_mask(vcpu);
+
+	events->sipi_vector = vcpu->arch.sipi_vector;
+
+	events->flags = (KVM_VCPUEVENT_VALID_NMI_PENDING
+			 | KVM_VCPUEVENT_VALID_SIPI_VECTOR);
+
+	vcpu_put(vcpu);
+}
+
+static int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
+					      struct kvm_vcpu_events *events)
+{
+	if (events->flags & ~(KVM_VCPUEVENT_VALID_NMI_PENDING
+			      | KVM_VCPUEVENT_VALID_SIPI_VECTOR))
+		return -EINVAL;
+
+	vcpu_load(vcpu);
+
+	vcpu->arch.exception.pending = events->exception.injected;
+	vcpu->arch.exception.nr = events->exception.nr;
+	vcpu->arch.exception.has_error_code = events->exception.has_error_code;
+	vcpu->arch.exception.error_code = events->exception.error_code;
+
+	vcpu->arch.interrupt.pending = events->interrupt.injected;
+	vcpu->arch.interrupt.nr = events->interrupt.nr;
+	vcpu->arch.interrupt.soft = events->interrupt.soft;
+	if (vcpu->arch.interrupt.pending && irqchip_in_kernel(vcpu->kvm))
+		kvm_pic_clear_isr_ack(vcpu->kvm);
+
+	vcpu->arch.nmi_injected = events->nmi.injected;
+	if (events->flags & KVM_VCPUEVENT_VALID_NMI_PENDING)
+		vcpu->arch.nmi_pending = events->nmi.pending;
+	kvm_x86_ops->set_nmi_mask(vcpu, events->nmi.masked);
+
+	if (events->flags & KVM_VCPUEVENT_VALID_SIPI_VECTOR)
+		vcpu->arch.sipi_vector = events->sipi_vector;
+
+	vcpu_put(vcpu);
+
+	return 0;
+}
+
 static int
 kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_p)
 {
@@ -10958,21 +11186,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 		
-#ifdef XXX
-		size = sizeof(struct kvm_msr_entry) * kvm_msrs.nmsrs;
-		entries = (struct kvm_msr_entry *) kmem_alloc(size, KM_SLEEP);
-		if (!entries) {
-			rval = ENOMEM;
-			break;
-		}
-
-		if (ddi_copyin((caddr_t)(((uint64_t)kvm_msrs_ioc.kvm_msrs)+(sizeof (struct kvm_msrs))), entries, size, mode)) {
-			kmem_free(entries, size);
-			rval = EFAULT;
-			break;
-		}
-#endif /*XXX*/
-
 		rval = n = __msr_io(vcpu, &kvm_msrs, kvm_msrs.entries, kvm_get_msr);
 
 		if (rval < 0) {
@@ -11020,21 +11233,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			rval = E2BIG;
 			break;
 		}
-
-#ifdef XXX
-		size = sizeof(struct kvm_msr_entry) * kvm_msrs.nmsrs;
-		entries = (struct kvm_msr_entry *)kmem_alloc(size, KM_SLEEP);
-		if (!entries) {
-			rval = ENOMEM;
-			break;
-		}
-
-		if (ddi_copyin((caddr_t)(((uint64_t)kvm_msrs_ioc.kvm_msrs)+(sizeof (struct kvm_msrs))), entries, size, mode)) {
-			kmem_free(entries, size);
-			rval = EFAULT;
-			break;
-		}
-#endif /*XXX*/
 
 		rval = n = __msr_io(vcpu, &kvm_msrs, kvm_msrs.entries, do_set_msr);
 
@@ -11157,19 +11355,15 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	}
 	case KVM_GET_SUPPORTED_CPUID: {
 		struct kvm_cpuid2 *cpuid_arg = (struct kvm_cpuid2 *)arg;
-		struct kvm_cpuid2 *cpuid;
+		struct kvm_cpuid2 cpuid;
 
-		cpuid = kmem_alloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
-
-		if (ddi_copyin(cpuid_arg, cpuid, sizeof (cpuid), mode)) {
+		if (ddi_copyin(cpuid_arg, &cpuid, sizeof (cpuid), mode)) {
 			rval = EFAULT;
 			break;
 		}
-		rval = kvm_dev_ioctl_get_supported_cpuid(cpuid,
+		rval = kvm_dev_ioctl_get_supported_cpuid(&cpuid,
 						      cpuid_arg->entries, mode);
 		if (rval) {
-			*rval_p = rval; /* linux user level expects negative errno */
-			rval = 0;
 			break;
 		}
 
@@ -11454,6 +11648,68 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		break;
 	}
 
+	case KVM_GET_VCPU_EVENTS: {
+		struct kvm_vcpu_events events;
+		struct kvm_vcpu_events_ioc events_ioc;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+
+		if (ddi_copyin((const char *)arg, &events_ioc, sizeof events_ioc, mode)) {
+			rval = EFAULT;
+			break;
+		}
+
+		kvmp = find_kvm_id(events_ioc.kvm_kvmid);
+		if (!kvmp || events_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
+			rval = EINVAL;
+			break;
+		}
+
+		vcpu = kvmp->vcpus[events_ioc.kvm_cpu_index];
+		
+		if (ddi_copyin((const char *)(events_ioc.events), (char *)&events,
+			       sizeof(events), mode)) {
+			rval = EFAULT;
+			break;
+		}
+
+		kvm_vcpu_ioctl_x86_get_vcpu_events(vcpu, &events);
+
+		rval = EFAULT;
+		if (ddi_copyout(&events, events_ioc.events, sizeof(struct kvm_vcpu_events), mode))
+			break;
+		rval = 0;
+		*rval_p = 0;
+		break;
+	}
+	case KVM_SET_VCPU_EVENTS: {
+		struct kvm_vcpu_events events;
+		struct kvm_vcpu_events_ioc events_ioc;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+
+		if (ddi_copyin((const char *)arg, &events_ioc, sizeof events_ioc, mode)) {
+			rval = EFAULT;
+			break;
+		}
+
+		kvmp = find_kvm_id(events_ioc.kvm_kvmid);
+		if (!kvmp || events_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
+			rval = EINVAL;
+			break;
+		}
+
+		vcpu = kvmp->vcpus[events_ioc.kvm_cpu_index];
+
+		if (ddi_copyin((const char *)(events_ioc.events), (char *)&events,
+			       sizeof(events), mode)) {
+			rval = EFAULT;
+			break;
+		}
+
+		rval = kvm_vcpu_ioctl_x86_set_vcpu_events(vcpu, &events);
+		break;
+	}
 	case KVM_GET_VCPU_MMAP_SIZE:
 		if (arg != NULL) {
 			rval = EINVAL;

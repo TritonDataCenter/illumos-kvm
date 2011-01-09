@@ -636,6 +636,12 @@ struct kvm_vcpu_events {
 	uint32_t reserved[10];
 };
 
+struct kvm_vcpu_events_ioc {
+	struct kvm_vcpu_events *events;
+	int kvm_cpu_index;
+	int kvm_kvmid;
+};
+
 #ifdef KVM_CAP_IRQ_ROUTING
 struct kvm_irq_routing_irqchip {
 	uint32_t irqchip;
@@ -1226,8 +1232,8 @@ struct kvm_run_ioc {
 #define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state_ioc)
 #define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state_ioc)
 /* Available with KVM_CAP_VCPU_EVENTS */
-#define KVM_GET_VCPU_EVENTS       _IOR(KVMIO,  0x9f, struct kvm_vcpu_events)
-#define KVM_SET_VCPU_EVENTS       _IOW(KVMIO,  0xa0, struct kvm_vcpu_events)
+#define KVM_GET_VCPU_EVENTS       _IOR(KVMIO,  0x9f, struct kvm_vcpu_events_ioc)
+#define KVM_SET_VCPU_EVENTS       _IOW(KVMIO,  0xa0, struct kvm_vcpu_events_ioc)
 
 
 /*

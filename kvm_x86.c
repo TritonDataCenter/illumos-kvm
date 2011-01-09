@@ -244,7 +244,6 @@ vmx_hardware_enable(void *garbage)
 	uint64_t phys_addr = kvtop(per_cpu(vmxarea, cpu));
 #else
 	uint64_t phys_addr;
-	volatile int x;  /* XXX - dtrace return probe missing */
 	pfn = hat_getpfnum(kas.a_hat, (caddr_t)vmxarea[cpu]);
 	phys_addr = ((uint64_t)pfn << PAGESHIFT)|((uint64_t)vmxarea[cpu] & PAGEOFFSET);
 #endif
@@ -275,7 +274,6 @@ vmx_hardware_enable(void *garbage)
 	ept_sync_global();
 #endif /*XXX*/
 
-	x = 10; /*XXX*/
 	return 0;
 }
 
@@ -2056,6 +2054,10 @@ void fx_init(struct kvm_vcpu *vcpu)
 	       0, sizeof(struct i387_fxsave_struct) - after_mxcsr_mask);
 }
 
+
+extern inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx);
+extern void vmx_fpu_activate(struct kvm_vcpu *vcpu);
+
 int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -2173,13 +2175,10 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	vmx_set_cr0(&vmx->vcpu, kvm_read_cr0(vcpu)); /* enter rmode */
 	vmx_set_cr4(&vmx->vcpu, 0);
 	vmx_set_efer(&vmx->vcpu, 0);
-#ifdef XXX
+
 	vmx_fpu_activate(&vmx->vcpu);
-#endif /*XXX*/
 	update_exception_bitmap(&vmx->vcpu);
-#ifdef XXX
 	vpid_sync_vcpu_all(vmx);
-#endif /*XXX*/
 
 	ret = 0;
 

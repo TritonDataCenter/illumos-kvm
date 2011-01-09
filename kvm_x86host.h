@@ -676,9 +676,7 @@ struct kvm_x86_ops {
 	uint64_t (*get_mt_mask)(struct kvm_vcpu *vcpu, gfn_t gfn, int is_mmio);
 	int (*get_lpage_level)(void);
 	int (*rdtscp_supported)(void);
-#ifdef XXX
 	const struct trace_print_flags *exit_reasons_str;
-#endif /*XXX*/
 };
 
 extern struct kvm_x86_ops *kvm_x86_ops;
