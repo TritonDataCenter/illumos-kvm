@@ -1477,11 +1477,10 @@ vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 
 	vmcs_clear(vmx->vmcs);
 
-	err = vmx_vcpu_setup(vmx);
-
 	vmx_vcpu_load(&vmx->vcpu, cpu);
-
+	err = vmx_vcpu_setup(vmx);
 	vmx_vcpu_put(&vmx->vcpu);
+
 	kpreempt_enable();
 	if (err)
 		vmx->vmcs = NULL;

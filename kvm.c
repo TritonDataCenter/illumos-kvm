@@ -4252,6 +4252,162 @@ static inline unsigned long native_read_cr0(void)
 
 ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
 
+#include "vmcs_dump.h"
+
+struct vmcs_dump_area dumparea;
+
+void
+kvm_vmcs_dump(void)
+{
+	dumparea.virtual_processor_id = vmcs_read16(VIRTUAL_PROCESSOR_ID);
+	dumparea.guest_es_selector = vmcs_read16(GUEST_ES_SELECTOR);
+	dumparea.guest_cs_selector = vmcs_read16(GUEST_CS_SELECTOR);
+	dumparea.guest_ss_selector = vmcs_read16(GUEST_SS_SELECTOR);
+	dumparea.guest_ds_selector = vmcs_read16(GUEST_DS_SELECTOR);
+	dumparea.guest_fs_selector = vmcs_read16(GUEST_FS_SELECTOR);
+	dumparea.guest_gs_selector = vmcs_read16(GUEST_GS_SELECTOR);
+	dumparea.guest_ldtr_selector = vmcs_read16(GUEST_LDTR_SELECTOR);
+	dumparea.guest_tr_selector = vmcs_read16(GUEST_TR_SELECTOR);
+	dumparea.host_es_selector = vmcs_read16(HOST_ES_SELECTOR);
+	dumparea.host_cs_selector = vmcs_read16(HOST_CS_SELECTOR);
+	dumparea.host_ss_selector = vmcs_read16(HOST_SS_SELECTOR);
+	dumparea.host_ds_selector = vmcs_read16(HOST_DS_SELECTOR);
+	dumparea.host_fs_selector = vmcs_read16(HOST_FS_SELECTOR);
+	dumparea.host_gs_selector = vmcs_read16(HOST_GS_SELECTOR);
+	dumparea.host_tr_selector = vmcs_read16(HOST_TR_SELECTOR);
+
+	dumparea.io_bitmap_a = vmcs_read64(IO_BITMAP_A);
+	dumparea.io_bitmap_a_high = vmcs_read64(IO_BITMAP_A_HIGH);
+	dumparea.io_bitmap_b = vmcs_read64(IO_BITMAP_B);
+	dumparea.io_bitmap_b_high = vmcs_read64(IO_BITMAP_B_HIGH);
+	dumparea.msr_bitmap = vmcs_read64(MSR_BITMAP);
+	dumparea.msr_bitmap_high = vmcs_read64(MSR_BITMAP_HIGH);
+	dumparea.vm_exit_msr_store_addr = vmcs_read64(VM_EXIT_MSR_STORE_ADDR);
+	dumparea.vm_exit_msr_store_addr_high = vmcs_read64(VM_EXIT_MSR_STORE_ADDR_HIGH);
+	dumparea.vm_exit_msr_load_addr = vmcs_read64(VM_EXIT_MSR_LOAD_ADDR);
+	dumparea.vm_exit_msr_load_addr_high = vmcs_read64(VM_EXIT_MSR_LOAD_ADDR_HIGH);
+	dumparea.vm_entry_msr_load_addr = vmcs_read64(VM_ENTRY_MSR_LOAD_ADDR);
+	dumparea.vm_entry_msr_load_addr_high = vmcs_read64(VM_ENTRY_MSR_LOAD_ADDR_HIGH);
+	dumparea.tsc_offset = vmcs_read64(TSC_OFFSET);
+	dumparea.tsc_offset_high = vmcs_read64(TSC_OFFSET_HIGH);
+	dumparea.virtual_apic_page_addr = vmcs_read64(VIRTUAL_APIC_PAGE_ADDR);
+	dumparea.virtual_apic_page_addr_high = vmcs_read64(VIRTUAL_APIC_PAGE_ADDR_HIGH);
+	dumparea.apic_access_addr = vmcs_read64(APIC_ACCESS_ADDR);
+	dumparea.apic_access_addr_high = vmcs_read64(APIC_ACCESS_ADDR_HIGH);
+	dumparea.ept_pointer = vmcs_read64(EPT_POINTER);
+	dumparea.ept_pointer_high = vmcs_read64(EPT_POINTER_HIGH);
+	dumparea.guest_physical_address = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
+	dumparea.guest_physical_address_high = vmcs_read64(GUEST_PHYSICAL_ADDRESS_HIGH);
+	dumparea.vmcs_link_pointer = vmcs_read64(VMCS_LINK_POINTER);
+	dumparea.vmcs_link_pointer_high = vmcs_read64(VMCS_LINK_POINTER_HIGH);
+	dumparea.guest_ia32_debugctl = vmcs_read64(GUEST_IA32_DEBUGCTL);
+	dumparea.guest_ia32_debugctl_high = vmcs_read64(GUEST_IA32_DEBUGCTL_HIGH);
+	dumparea.guest_ia32_pat = vmcs_read64(GUEST_IA32_PAT);
+	dumparea.guest_ia32_pat_high = vmcs_read64(GUEST_IA32_PAT_HIGH);
+	dumparea.guest_pdptr0 = vmcs_read64(GUEST_PDPTR0);
+	dumparea.guest_pdptr0_high = vmcs_read64(GUEST_PDPTR0_HIGH);
+	dumparea.guest_pdptr1 = vmcs_read64(GUEST_PDPTR1);
+	dumparea.guest_pdptr1_high = vmcs_read64(GUEST_PDPTR1_HIGH);
+	dumparea.guest_pdptr2 = vmcs_read64(GUEST_PDPTR2);
+	dumparea.guest_pdptr2_high = vmcs_read64(GUEST_PDPTR2_HIGH);
+	dumparea.guest_pdptr3 = vmcs_read64(GUEST_PDPTR3);
+	dumparea.guest_pdptr3_high = vmcs_read64(GUEST_PDPTR3_HIGH);
+	dumparea.host_ia32_pat = vmcs_read64(HOST_IA32_PAT);
+	dumparea.host_ia32_pat_high = vmcs_read64(HOST_IA32_PAT_HIGH);
+
+	dumparea.pin_based_vm_exec_control = vmcs_read32(PIN_BASED_VM_EXEC_CONTROL);
+	dumparea.cpu_based_vm_exec_control = vmcs_read32(CPU_BASED_VM_EXEC_CONTROL);
+	dumparea.exception_bitmap = vmcs_read32(EXCEPTION_BITMAP);
+	dumparea.page_fault_error_code_mask = vmcs_read32(PAGE_FAULT_ERROR_CODE_MASK);
+	dumparea.page_fault_error_code_match = vmcs_read32(PAGE_FAULT_ERROR_CODE_MATCH);
+	dumparea.cr3_target_count = vmcs_read32(CR3_TARGET_COUNT);
+	dumparea.vm_exit_controls = vmcs_read32(VM_EXIT_CONTROLS);
+	dumparea.vm_exit_msr_store_count = vmcs_read32(VM_EXIT_MSR_STORE_COUNT);
+	dumparea.vm_exit_msr_load_count = vmcs_read32(VM_EXIT_MSR_LOAD_COUNT);
+	dumparea.vm_entry_controls = vmcs_read32(VM_ENTRY_CONTROLS);
+	dumparea.vm_entry_msr_load_count = vmcs_read32(VM_ENTRY_MSR_LOAD_COUNT);
+	dumparea.vm_entry_intr_info_field = vmcs_read32(VM_ENTRY_INTR_INFO_FIELD);
+	dumparea.vm_entry_exception_error_code = vmcs_read32(VM_ENTRY_EXCEPTION_ERROR_CODE);
+	dumparea.vm_entry_instruction_len = vmcs_read32(VM_ENTRY_INSTRUCTION_LEN);
+	dumparea.tpr_threshold = vmcs_read32(TPR_THRESHOLD);
+	dumparea.secondary_vm_exec_control = vmcs_read32(SECONDARY_VM_EXEC_CONTROL);
+	dumparea.ple_gap = vmcs_read32(PLE_GAP);
+	dumparea.ple_window = vmcs_read32(PLE_WINDOW);
+	dumparea.vm_instruction_error = vmcs_read32(VM_INSTRUCTION_ERROR);
+	dumparea.vm_exit_reason = vmcs_read32(VM_EXIT_REASON);
+	dumparea.vm_exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+	dumparea.vm_exit_intr_error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
+	dumparea.idt_vectoring_info_field = vmcs_read32(IDT_VECTORING_INFO_FIELD);
+	dumparea.idt_vectoring_error_code = vmcs_read32(IDT_VECTORING_ERROR_CODE);
+	dumparea.vm_exit_instruction_len = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
+	dumparea.vmx_instruction_info = vmcs_read32(VMX_INSTRUCTION_INFO);
+	dumparea.guest_es_limit = vmcs_read32(GUEST_ES_LIMIT);
+	dumparea.guest_cs_limit = vmcs_read32(GUEST_CS_LIMIT);
+	dumparea.guest_ss_limit = vmcs_read32(GUEST_SS_LIMIT);
+	dumparea.guest_ds_limit = vmcs_read32(GUEST_DS_LIMIT);
+	dumparea.guest_fs_limit = vmcs_read32(GUEST_FS_LIMIT);
+	dumparea.guest_gs_limit = vmcs_read32(GUEST_GS_LIMIT);
+	dumparea.guest_ldtr_limit = vmcs_read32(GUEST_LDTR_LIMIT);
+	dumparea.guest_tr_limit = vmcs_read32(GUEST_TR_LIMIT);
+	dumparea.guest_gdtr_limit = vmcs_read32(GUEST_GDTR_LIMIT);
+	dumparea.guest_idtr_limit = vmcs_read32(GUEST_IDTR_LIMIT);
+	dumparea.guest_es_ar_bytes = vmcs_read32(GUEST_ES_AR_BYTES);
+	dumparea.guest_cs_ar_bytes = vmcs_read32(GUEST_CS_AR_BYTES);
+	dumparea.guest_ss_ar_bytes = vmcs_read32(GUEST_SS_AR_BYTES);
+	dumparea.guest_ds_ar_bytes = vmcs_read32(GUEST_DS_AR_BYTES);
+	dumparea.guest_fs_ar_bytes = vmcs_read32(GUEST_FS_AR_BYTES);
+	dumparea.guest_gs_ar_bytes = vmcs_read32(GUEST_GS_AR_BYTES);
+	dumparea.guest_ldtr_ar_bytes = vmcs_read32(GUEST_LDTR_AR_BYTES);
+	dumparea.guest_tr_ar_bytes = vmcs_read32(GUEST_TR_AR_BYTES);
+	dumparea.guest_interruptibilty_info = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
+	dumparea.guest_activity_state = vmcs_read32(GUEST_ACTIVITY_STATE);
+	dumparea.guest_sysenter_cs = vmcs_read32(GUEST_SYSENTER_CS);
+	dumparea.host_ia32_sysenter_cs = vmcs_read32(HOST_IA32_SYSENTER_CS);
+
+	dumparea.cr0_guest_host_mask = vmcs_readl(CR0_GUEST_HOST_MASK);
+	dumparea.cr4_guest_host_mask = vmcs_readl(CR4_GUEST_HOST_MASK);
+	dumparea.cr0_read_shadow = vmcs_readl(CR0_READ_SHADOW);
+	dumparea.cr4_read_shadow = vmcs_readl(CR4_READ_SHADOW);
+	dumparea.cr3_target_value0 = vmcs_readl(CR3_TARGET_VALUE0);
+	dumparea.cr3_target_value1 = vmcs_readl(CR3_TARGET_VALUE1);
+	dumparea.cr3_target_value2 = vmcs_readl(CR3_TARGET_VALUE2);
+	dumparea.cr3_target_value3 = vmcs_readl(CR3_TARGET_VALUE3);
+	dumparea.exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+	dumparea.guest_linear_address = vmcs_readl(GUEST_LINEAR_ADDRESS);
+	dumparea.guest_cr0 = vmcs_readl(GUEST_CR0);
+	dumparea.guest_cr3 = vmcs_readl(GUEST_CR3);
+	dumparea.guest_cr4 = vmcs_readl(GUEST_CR4);
+	dumparea.guest_es_base = vmcs_readl(GUEST_ES_BASE);
+	dumparea.guest_cs_base = vmcs_readl(GUEST_CS_BASE);
+	dumparea.guest_ss_base = vmcs_readl(GUEST_SS_BASE);
+	dumparea.guest_ds_base = vmcs_readl(GUEST_DS_BASE);
+	dumparea.guest_fs_base = vmcs_readl(GUEST_FS_BASE);
+	dumparea.guest_gs_base = vmcs_readl(GUEST_GS_BASE);
+	dumparea.guest_ldtr_base = vmcs_readl(GUEST_LDTR_BASE);
+	dumparea.guest_tr_base = vmcs_readl(GUEST_TR_BASE);
+	dumparea.guest_gdtr_base = vmcs_readl(GUEST_GDTR_BASE);
+	dumparea.guest_idtr_base = vmcs_readl(GUEST_IDTR_BASE);
+	dumparea.guest_dr7 = vmcs_readl(GUEST_DR7);
+	dumparea.guest_rsp = vmcs_readl(GUEST_RSP);
+	dumparea.guest_rip = vmcs_readl(GUEST_RIP);
+	dumparea.guest_rflags = vmcs_readl(GUEST_RFLAGS);
+	dumparea.guest_pending_dbg_exceptions = vmcs_readl(GUEST_PENDING_DBG_EXCEPTIONS);
+	dumparea.guest_sysenter_esp = vmcs_readl(GUEST_SYSENTER_ESP);
+	dumparea.guest_sysenter_eip = vmcs_readl(GUEST_SYSENTER_EIP);
+	dumparea.host_cr0 = vmcs_readl(HOST_CR0);
+	dumparea.host_cr3 = vmcs_readl(HOST_CR3);
+	dumparea.host_cr4 = vmcs_readl(HOST_CR4);
+	dumparea.host_fs_base = vmcs_readl(HOST_FS_BASE);
+	dumparea.host_gs_base = vmcs_readl(HOST_GS_BASE);
+	dumparea.host_tr_base = vmcs_readl(HOST_TR_BASE);
+	dumparea.host_gdtr_base = vmcs_readl(HOST_GDTR_BASE);
+	dumparea.host_idtr_base = vmcs_readl(HOST_IDTR_BASE);
+	dumparea.host_ia32_sysenter_esp = vmcs_readl(HOST_IA32_SYSENTER_ESP);
+	dumparea.host_ia32_sysenter_eip = vmcs_readl(HOST_IA32_SYSENTER_EIP);
+	dumparea.host_rsp = vmcs_readl(HOST_RSP);
+	dumparea.host_rip = vmcs_readl(HOST_RIP);
+}
+
 /*
  * Sets up the vmcs for emulated real mode.
  */
@@ -4410,6 +4566,10 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 		tsc_base = tsc_this;
 
 	guest_write_tsc(0, tsc_base);
+	
+	/*XXX - debugging */
+	kvm_vmcs_dump();
+
 	return 0;
 }
 
@@ -6956,6 +7116,9 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	 */
 	vmcs_writel(HOST_CR0, read_cr0());
 
+	/*XXX - debugging */
+	kvm_vmcs_dump();
+
 	__asm__(
 		/* Store host registers */
 		"push %%"R"dx; push %%"R"bp;"
@@ -7060,11 +7223,9 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 #endif
 	      );
 
-	if ((vmcs_read32(VM_INSTRUCTION_ERROR)&0xff) == 5)
-		/* launched failed, is there #define for error?*/
-		vmx->launched = 0;
-	else
-		vmx->launched = 1;
+	/*XXX - debugging */
+	dumparea.launch_resume_error =  vmcs_read32(VM_INSTRUCTION_ERROR);
+	
 
 	vcpu->arch.regs_avail = ~((1 << VCPU_REGS_RIP) | (1 << VCPU_REGS_RSP)
 				  | (1 << VCPU_EXREG_PDPTR));
