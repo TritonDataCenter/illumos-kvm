@@ -20,6 +20,7 @@
 #include <vm/hat_i86.h>
 #include <sys/segments.h>
 #include <sys/mman.h>
+#include <sys/mach_mmu.h>
 
 #include "msr-index.h"
 #include "msr.h"
@@ -233,6 +234,7 @@ extern uint64_t shadow_dirty_mask;
 
 extern pfn_t hat_getpfnum(hat_t *hat, caddr_t addr);
 struct vmcs_config vmcs_config;
+extern inline void ept_sync_global(void);
 
 int
 vmx_hardware_enable(void *garbage)
@@ -270,9 +272,7 @@ vmx_hardware_enable(void *garbage)
 		      : : "a"(&phys_addr), "m"(phys_addr)
 		      : "memory", "cc");
 
-#ifdef XXX
 	ept_sync_global();
-#endif /*XXX*/
 
 	return 0;
 }
@@ -375,12 +375,8 @@ kvm_dev_ioctl_check_extension(long ext, int *rval_p)
 		break;
 #endif/*KVM_COALESCED_MMIO_PAGE_OFFSET*/
 	case KVM_CAP_VAPIC:
-#ifdef XXX
 		*rval_p = !kvm_x86_ops->cpu_has_accelerated_tpr();
 		r = DDI_SUCCESS;
-#else
-		r = EINVAL;
-#endif /*XXX*/
 		break;
 	case KVM_CAP_NR_VCPUS:
 		*rval_p = KVM_MAX_VCPUS;
@@ -1407,7 +1403,8 @@ static void allocate_vpid(struct vcpu_vmx *vmx)
 	mutex_exit(&vmx_vpid_lock);
 }
 
-#ifdef XXX
+extern caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn);
+
 static int alloc_identity_pagetable(struct kvm *kvm)
 {
 	struct kvm_userspace_memory_region kvm_userspace_mem;
@@ -1431,8 +1428,6 @@ out:
 	mutex_exit(&kvm->slots_lock);
 	return r;
 }
-
-#endif /*XXX*/
 
 struct kvm_vcpu *
 vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
@@ -1490,10 +1485,6 @@ vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 #endif /*XXX*/
 			goto free_vmcs;
 
-#ifdef XXX
-	/*
-	 * XXX For right now, we don't implement ept
-	 */
 	if (enable_ept) {
 		if (!kvm->arch.ept_identity_map_addr)
 			kvm->arch.ept_identity_map_addr =
@@ -1501,7 +1492,6 @@ vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 		if (alloc_identity_pagetable(kvm) != 0)
 			goto free_vmcs;
 	}
-#endif /*XXX*/
 
 	return &vmx->vcpu;
 
@@ -1527,8 +1517,6 @@ kvm_arch_vcpu_create(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 	/* to call architecture dependent routine */
 	return vmx_create_vcpu(kvm, arg, id);
 }
-
-extern int enable_ept;
 
 void update_exception_bitmap(struct kvm_vcpu *vcpu)
 {
@@ -1821,15 +1809,12 @@ out:
 
 static int init_rmode_identity_map(struct kvm *kvm)
 {
-#ifdef XXX
 	int i, r, ret;
 	pfn_t identity_map_pfn;
 	uint32_t tmp;
 
 	if (!enable_ept)
-#endif /*XXX*/
 		return 1;
-#ifdef XXX
 	if ((!kvm->arch.ept_identity_pagetable)) {
 		cmn_err(CE_WARN, "EPT: identity-mapping pagetable haven't been allocated!\n");
 		return 0;
@@ -1844,8 +1829,8 @@ static int init_rmode_identity_map(struct kvm *kvm)
 
 	/* Set up identity-mapping pagetable for EPT in real mode */
 	for (i = 0; i < PT32_ENT_PER_PAGE; i++) {
-		tmp = (i << 22) + (_PAGE_PRESENT | _PAGE_RW | _PAGE_USER |
-			_PAGE_ACCESSED | _PAGE_DIRTY | _PAGE_PSE);
+		tmp = (i << 22) + (PT_VALID | PT_WRITABLE | PT_USER |
+				   PT_REF | PT_MOD /*XXX | _PAGE_PSE*/);
 		r = kvm_write_guest_page(kvm, identity_map_pfn,
 				&tmp, i * sizeof(tmp), sizeof(tmp));
 		if (r < 0)
@@ -1855,7 +1840,6 @@ static int init_rmode_identity_map(struct kvm *kvm)
 	ret = 1;
 out:
 	return ret;
-#endif /*XXX*/
 }
 
 static int init_rmode(struct kvm *kvm)
@@ -2056,6 +2040,8 @@ void fx_init(struct kvm_vcpu *vcpu)
 
 extern inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx);
 extern void vmx_fpu_activate(struct kvm_vcpu *vcpu);
+extern inline int vm_need_tpr_shadow(struct kvm *kvm);
+extern inline int cpu_has_vmx_tpr_shadow(void);
 
 int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 {
@@ -2153,19 +2139,18 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 22.2.1 */
 
-#ifdef XXX
 	if (cpu_has_vmx_tpr_shadow()) {
 		vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, 0);
 		if (vm_need_tpr_shadow(vmx->vcpu.kvm))
 			vmcs_write64(VIRTUAL_APIC_PAGE_ADDR,
-				page_to_phys(vmx->vcpu.arch.apic->regs_page));
+				     kvm_va2pa((caddr_t)vmx->vcpu.arch.apic->regs_page));
 		vmcs_write32(TPR_THRESHOLD, 0);
 	}
 
+
 	if (vm_need_virtualize_apic_accesses(vmx->vcpu.kvm))
 		vmcs_write64(APIC_ACCESS_ADDR,
-			     page_to_phys(vmx->vcpu.kvm->arch.apic_access_page));
-#endif /*XXX*/
+			     kvm_va2pa((caddr_t)vmx->vcpu.kvm->arch.apic_access_page));
 
 	if (vmx->vpid != 0)
 		vmcs_write16(VIRTUAL_PROCESSOR_ID, vmx->vpid);
@@ -3184,7 +3169,6 @@ caddr_t pfn_to_page(pfn_t pfn)
 }
 
 	
-extern caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn);
 
 #define PT64_LEVEL_BITS 9
 
@@ -3729,6 +3713,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 		if (npages && !old.rmap) {
 #ifdef XXX
 			unsigned long userspace_addr;
+
 			down_write(&current->mm->mmap_sem);
 			userspace_addr = do_mmap(NULL, 0,
 						 npages * PAGESIZE,

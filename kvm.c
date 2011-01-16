@@ -217,13 +217,88 @@ inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx)
 	__invvpid(VMX_VPID_EXTENT_SINGLE_CONTEXT, vmx->vpid, 0);
 }
 
+static inline void __invept(int ext, uint64_t eptp, gpa_t gpa)
+{
+	struct {
+		uint64_t eptp, gpa;
+	} operand = {eptp, gpa};
+
+	__asm__ volatile (ASM_VMX_INVEPT
+			/* CF==1 or ZF==1 --> rc = -1 */
+			"; ja 1f ; ud2 ; 1:\n"
+			: : "a" (&operand), "c" (ext) : "cc", "memory");
+}
+
+static inline int cpu_has_vmx_invept_context(void)
+{
+	return !!(vmx_capability.ept & VMX_EPT_EXTENT_CONTEXT_BIT);
+}
+
+static inline int cpu_has_vmx_invept_global(void)
+{
+	return !!(vmx_capability.ept & VMX_EPT_EXTENT_GLOBAL_BIT);
+}
+
+inline void ept_sync_global(void)
+{
+	if (cpu_has_vmx_invept_global())
+		__invept(VMX_EPT_EXTENT_GLOBAL, 0, 0);
+}
+
+int enable_ept = 1;  
+
+static inline void ept_sync_context(uint64_t eptp)
+{
+	if (enable_ept) {
+		if (cpu_has_vmx_invept_context())
+			__invept(VMX_EPT_EXTENT_CONTEXT, eptp, 0);
+		else
+			ept_sync_global();
+	}
+}
+
+static uint64_t construct_eptp(unsigned long root_hpa)
+{
+	uint64_t eptp;
+
+	/* TODO write the value reading from MSR */
+	eptp = VMX_EPT_DEFAULT_MT |
+		VMX_EPT_DEFAULT_GAW << VMX_EPT_GAW_EPTP_SHIFT;
+	eptp |= (root_hpa & PAGEMASK);
+
+	return eptp;
+}
+
+
 static void vmx_flush_tlb(struct kvm_vcpu *vcpu)
 {
 	vpid_sync_vcpu_all(to_vmx(vcpu));
-#ifdef XXX
 	if (enable_ept)
 		ept_sync_context(construct_eptp(vcpu->arch.mmu.root_hpa));
+}
+
+void vmcs_write64(unsigned long field, uint64_t value)
+{
+	vmcs_writel(field, value);
+#ifndef CONFIG_X86_64
+	__asm__ volatile ("");
+	vmcs_writel(field+1, value >> 32);
 #endif
+}
+
+inline int is_pae(struct kvm_vcpu *vcpu);
+
+static void ept_load_pdptrs(struct kvm_vcpu *vcpu)
+{
+	if (!(BT_SET((unsigned long *)&vcpu->arch.regs_dirty, VCPU_EXREG_PDPTR)))
+		return;
+
+	if (is_paging(vcpu) && is_pae(vcpu) && !is_long_mode(vcpu)) {
+		vmcs_write64(GUEST_PDPTR0, vcpu->arch.pdptrs[0]);
+		vmcs_write64(GUEST_PDPTR1, vcpu->arch.pdptrs[1]);
+		vmcs_write64(GUEST_PDPTR2, vcpu->arch.pdptrs[2]);
+		vmcs_write64(GUEST_PDPTR3, vcpu->arch.pdptrs[3]);
+	}
 }
 
 static void vmx_set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
@@ -232,18 +307,14 @@ static void vmx_set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 	uint64_t eptp;
 
 	guest_cr3 = cr3;
-#ifdef XXX
+
 	if (enable_ept) {
-		/*
-		 * ept not implemented right now...
-		 */
 		eptp = construct_eptp(cr3);
 		vmcs_write64(EPT_POINTER, eptp);
 		guest_cr3 = is_paging(vcpu) ? vcpu->arch.cr3 :
 			vcpu->kvm->arch.ept_identity_map_addr;
 		ept_load_pdptrs(vcpu);
 	}
-#endif /*XXX*/
 
 	vmx_flush_tlb(vcpu);
 	vmcs_writel(GUEST_CR3, guest_cr3);
@@ -296,6 +367,13 @@ static const struct trace_print_flags vmx_exit_reasons_str[] = {
 };
 
 #undef _ER
+
+static int flexpriority_enabled = 1;
+
+static inline int report_flexpriority(void)
+{
+	return flexpriority_enabled;
+}
 
 /*
  * The function is based on mtrr_type_lookup() in
@@ -415,7 +493,7 @@ uint8_t kvm_get_guest_memory_type(struct kvm_vcpu *vcpu, gfn_t gfn)
 static uint64_t vmx_get_mt_mask(struct kvm_vcpu *vcpu, gfn_t gfn, int is_mmio)
 {
 	uint64_t ret;
-#ifdef XXX
+
 	/* For VT-d and EPT combination
 	 * 1. MMIO: always map as UC
 	 * 2. EPT with VT-d:
@@ -429,16 +507,15 @@ static uint64_t vmx_get_mt_mask(struct kvm_vcpu *vcpu, gfn_t gfn, int is_mmio)
 	 */
 	if (is_mmio)
 		ret = MTRR_TYPE_UNCACHABLE << VMX_EPT_MT_EPTE_SHIFT;
+#ifdef XXX
 	else if (vcpu->kvm->arch.iommu_domain &&
 		!(vcpu->kvm->arch.iommu_flags & KVM_IOMMU_CACHE_COHERENCY))
-#endif /*XXX*/
 		ret = kvm_get_guest_memory_type(vcpu, gfn) <<
 		      VMX_EPT_MT_EPTE_SHIFT;
-#ifdef XXX
+#endif /*XXX*/
 	else
 		ret = (MTRR_TYPE_WRBACK << VMX_EPT_MT_EPTE_SHIFT)
 			| VMX_EPT_IPAT_BIT;
-#endif /*XXX*/
 	return ret;
 }
 
@@ -463,7 +540,7 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.check_processor_compatibility = (void(*)(void *))nulldev /*vmx_check_processor_compat*/,
 	.hardware_setup = vmx_hardware_setup /*hardware_setup*/,
 	.hardware_unsetup = (void(*)(void))nulldev /*hardware_unsetup*/,
-	.cpu_has_accelerated_tpr = (int(*)(void))nulldev /*report_flexpriority*/,
+	.cpu_has_accelerated_tpr = report_flexpriority /*report_flexpriority*/,
 	.vcpu_create = vmx_create_vcpu,
 	.vcpu_free = (void(*)(struct kvm_vcpu *))nulldev /*vmx_free_vcpu*/,
 	.vcpu_reset = vmx_vcpu_reset,
@@ -1173,7 +1250,7 @@ static int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 		opt2 = SECONDARY_EXEC_VIRTUALIZE_APIC_ACCESSES |
 			SECONDARY_EXEC_WBINVD_EXITING |
 			SECONDARY_EXEC_ENABLE_VPID |
-			SECONDARY_EXEC_ENABLE_EPT |
+		    	SECONDARY_EXEC_ENABLE_EPT |
 			SECONDARY_EXEC_UNRESTRICTED_GUEST |
 			SECONDARY_EXEC_PAUSE_LOOP_EXITING |
 			SECONDARY_EXEC_RDTSCP;
@@ -1253,8 +1330,6 @@ static uint64_t efer_reserved_bits = 0xfffffffffffffffeULL;
 
 static int bypass_guest_pf = 1;
 int enable_vpid = 1;
-static int flexpriority_enabled = 1;
-int enable_ept = 0;  
 int enable_unrestricted_guest = 1;
 int emulate_invalid_guest_state = 0;
 
@@ -1280,7 +1355,7 @@ static inline int cpu_has_vmx_unrestricted_guest(void)
 		SECONDARY_EXEC_UNRESTRICTED_GUEST;
 }
 
-static inline int cpu_has_vmx_tpr_shadow(void)
+inline int cpu_has_vmx_tpr_shadow(void)
 {
 	return vmcs_config.cpu_based_exec_ctrl & CPU_BASED_TPR_SHADOW;
 }
@@ -1313,6 +1388,22 @@ static inline int cpu_has_vmx_ple(void)
 		SECONDARY_EXEC_PAUSE_LOOP_EXITING;
 }
 
+/*
+ * These 2 parameters are used to config the controls for Pause-Loop Exiting:
+ * ple_gap:    upper bound on the amount of time between two successive
+ *             executions of PAUSE in a loop. Also indicate if ple enabled.
+ *             According to test, this time is usually small than 41 cycles.
+ * ple_window: upper bound on the amount of time a guest is allowed to execute
+ *             in a PAUSE loop. Tests indicate that most spinlocks are held for
+ *             less than 2^12 cycles
+ * Time is measured based on a counter that runs at the same rate as the TSC,
+ * refer SDM volume 3b section 21.6.13 & 22.1.3.
+ */
+#define KVM_VMX_DEFAULT_PLE_GAP    41
+#define KVM_VMX_DEFAULT_PLE_WINDOW 4096
+static int ple_gap = KVM_VMX_DEFAULT_PLE_GAP;
+static int ple_window = KVM_VMX_DEFAULT_PLE_WINDOW;
+
 static int vmx_hardware_setup(void)
 {
 
@@ -1320,43 +1411,31 @@ static int vmx_hardware_setup(void)
 		return EIO;
 #ifdef XXX
 	if (boot_cpu_has(X86_FEATURE_NX))
-#endif /*XXX*/
-		/* XXX assume cpu we run on has this */
 		kvm_enable_efer_bits(EFER_NX);
-
+#endif /*XXX*/
 
 
 	if (!cpu_has_vmx_vpid())
 		enable_vpid = 0;
 
-#ifdef XXX
 	if (!cpu_has_vmx_ept()) {
-#endif /*XXX*/
 		enable_ept = 0;
 		enable_unrestricted_guest = 0;
-#ifdef XXX
 	}
 
 	if (!cpu_has_vmx_unrestricted_guest())
-#endif /*XXX*/
 		enable_unrestricted_guest = 0;
-#ifdef XXX
 	if (!cpu_has_vmx_flexpriority())
-#endif /*XXX*/
 		flexpriority_enabled = 0;
 
-#ifdef XXX
 	if (!cpu_has_vmx_tpr_shadow())
-#endif /*XXX*/
 		kvm_x86_ops->update_cr8_intercept = NULL;
 
 	if (enable_ept && !cpu_has_vmx_ept_2m_page())
 		kvm_disable_largepages();
 
-#ifdef XXX
 	if (!cpu_has_vmx_ple())
 		ple_gap = 0;
-#endif /*XXX*/
 
 
 	return alloc_kvm_area();
@@ -2780,7 +2859,7 @@ static int vmx_init(void)
 	if (!vmx_msr_bitmap_longmode) {
 		r = ENOMEM;		goto out2;
 	}
-#endif
+#endif /*XXX*/
 	/*
 	 * Allow direct access to the PC debug port (it is often used for I/O
 	 * delays, but the vmexits simply slow things down).
@@ -3471,6 +3550,27 @@ void kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages)
 	kvm->arch.n_alloc_mmu_pages = kvm_nr_mmu_pages;
 }
 
+void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot)
+{
+	struct kvm_mmu_page *sp;
+
+	for (sp = list_head(&kvm->arch.active_mmu_pages);
+	     sp; sp = list_next(&kvm->arch.active_mmu_pages, sp)) {
+		int i;
+		uint64_t *pt;
+
+		if (!(BT_TEST(sp->slot_bitmap, slot)))
+			continue;
+
+		pt = sp->spt;
+		for (i = 0; i < PT64_ENT_PER_PAGE; ++i)
+			/* avoid RMW */
+			if (pt[i] & PT_WRITABLE_MASK)
+				pt[i] &= ~PT_WRITABLE_MASK;
+	}
+	kvm_flush_remote_tlbs(kvm);
+}
+
 void kvm_arch_commit_memory_region(struct kvm *kvm,
 				struct kvm_userspace_memory_region *mem,
 				struct kvm_memory_slot old,
@@ -3478,29 +3578,30 @@ void kvm_arch_commit_memory_region(struct kvm *kvm,
 {
 
 	int npages = mem->memory_size >> PAGESHIFT;
-#ifdef XXX
+
 	if (!user_alloc && !old.user_alloc && old.rmap && !npages) {
 		int ret;
 
+#ifdef XXX
 		down_write(&current->mm->mmap_sem);
-		ret = do_munmap(current->mm, old.userspace_addr,
+#endif /*XXX*/
+		ret = munmap(old.userspace_addr,
 				old.npages * PAGESIZE);
+#ifdef XXX
 		up_write(&current->mm->mmap_sem);
+#endif /*XXX*/
 		if (ret < 0)
 			cmn_err(CE_WARN,
-			       "kvm_vm_ioctl_set_memory_region: "
-			       "failed to munmap memory\n");
+			       "kvm_vm_ioctl_set_memory_region: failed to munmap memory\n");
 	}
-#endif
+
 	mutex_enter(&kvm->mmu_lock);
 	if (!kvm->arch.n_requested_mmu_pages) {
 		unsigned int nr_mmu_pages = kvm_mmu_calculate_mmu_pages(kvm);
 		kvm_mmu_change_mmu_pages(kvm, nr_mmu_pages);
 	}
 
-#ifdef XXX
 	kvm_mmu_slot_remove_write_access(kvm, mem->slot);
-#endif /*XXX*/
 	mutex_exit(&kvm->mmu_lock);
 }
 
@@ -4110,7 +4211,9 @@ static void __vcpu_clear(void *arg)
 		per_cpu(current_vmcs, cpu) = NULL;
 	rdtscll(vmx->vcpu.arch.host_tsc);
 	list_del(&vmx->local_vcpus_link);
-#endif
+#else
+	rdtscll(vmx->vcpu.arch.host_tsc);
+#endif /*XXX*/
 	vmx->vcpu.cpu = -1;
 	vmx->launched = 0;
 }
@@ -4131,8 +4234,8 @@ uint16_t vmcs_read16(unsigned long field)
 
 static void vmwrite_error(unsigned long field, unsigned long value)
 {
-	cmn_err(CE_WARN, "vmwrite error: reg %lx value %lx (err %d)\n",
-	       field, value, vmcs_read16(VM_INSTRUCTION_ERROR)&0xff);
+	cmn_err(CE_WARN, "vmwrite error: reg %lx value %lx (err %x)\n",
+	       field, value, vmcs_read32(VM_INSTRUCTION_ERROR));
 }
 
 static inline void __vmwrite(unsigned long field, unsigned long value)
@@ -4157,14 +4260,14 @@ static inline void __vmwrite(unsigned long field, unsigned long value)
 void vmcs_writel(unsigned long field, unsigned long value)
 {
 	unsigned char error = 0;
-#ifdef XXX
+#ifndef XXX
 	__asm__ volatile (ASM_VMX_VMWRITE_RAX_RDX "\n\tsetna %0"
 		       : "=q"(error) : "a"(value), "d"(field) : "cc");
 	if ((error))
 		vmwrite_error(field, value);
 #else
 	__vmwrite(field, value);
-#endif
+#endif /*XXX*/
 }
 
 unsigned long vmcs_readl(unsigned long field)
@@ -4191,17 +4294,6 @@ uint64_t vmcs_read64(unsigned long field)
 #endif
 }
 
-
-void vmcs_write64(unsigned long field, uint64_t value)
-{
-	vmcs_writel(field, value);
-#ifndef CONFIG_X86_64
-	__asm__ volatile ("");
-	vmcs_writel(field+1, value >> 32);
-#endif
-}
-
-
 void vmcs_write16(unsigned long field, uint16_t value)
 {
 	vmcs_writel(field, value);
@@ -4227,7 +4319,7 @@ int vm_need_virtualize_apic_accesses(struct kvm *kvm)
 	return flexpriority_enabled && irqchip_in_kernel(kvm);
 }
 
-static inline int vm_need_tpr_shadow(struct kvm *kvm)
+inline int vm_need_tpr_shadow(struct kvm *kvm)
 {
 	return (cpu_has_vmx_tpr_shadow()) && (irqchip_in_kernel(kvm));
 }
@@ -4250,163 +4342,183 @@ static inline unsigned long native_read_cr0(void)
 
 #define read_cr0()	(native_read_cr0())
 
-ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
+static inline unsigned long native_read_cr4(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr4,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return val;
+}
+
+#define read_cr4()	(native_read_cr4())
+
+static inline unsigned long native_read_cr3(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr3,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return val;
+}
+
+#define read_cr3()	(native_read_cr3())
+
+inline ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
 
 #include "vmcs_dump.h"
 
-struct vmcs_dump_area dumparea;
+struct vmcs_dump_area dumparea[10];
+int vmcs_dump_idx = 0;
 
 void
 kvm_vmcs_dump(void)
 {
-	dumparea.virtual_processor_id = vmcs_read16(VIRTUAL_PROCESSOR_ID);
-	dumparea.guest_es_selector = vmcs_read16(GUEST_ES_SELECTOR);
-	dumparea.guest_cs_selector = vmcs_read16(GUEST_CS_SELECTOR);
-	dumparea.guest_ss_selector = vmcs_read16(GUEST_SS_SELECTOR);
-	dumparea.guest_ds_selector = vmcs_read16(GUEST_DS_SELECTOR);
-	dumparea.guest_fs_selector = vmcs_read16(GUEST_FS_SELECTOR);
-	dumparea.guest_gs_selector = vmcs_read16(GUEST_GS_SELECTOR);
-	dumparea.guest_ldtr_selector = vmcs_read16(GUEST_LDTR_SELECTOR);
-	dumparea.guest_tr_selector = vmcs_read16(GUEST_TR_SELECTOR);
-	dumparea.host_es_selector = vmcs_read16(HOST_ES_SELECTOR);
-	dumparea.host_cs_selector = vmcs_read16(HOST_CS_SELECTOR);
-	dumparea.host_ss_selector = vmcs_read16(HOST_SS_SELECTOR);
-	dumparea.host_ds_selector = vmcs_read16(HOST_DS_SELECTOR);
-	dumparea.host_fs_selector = vmcs_read16(HOST_FS_SELECTOR);
-	dumparea.host_gs_selector = vmcs_read16(HOST_GS_SELECTOR);
-	dumparea.host_tr_selector = vmcs_read16(HOST_TR_SELECTOR);
+	dumparea[vmcs_dump_idx].virtual_processor_id = vmcs_read16(VIRTUAL_PROCESSOR_ID);
+	dumparea[vmcs_dump_idx].guest_es_selector = vmcs_read16(GUEST_ES_SELECTOR);
+	dumparea[vmcs_dump_idx].guest_cs_selector = vmcs_read16(GUEST_CS_SELECTOR);
+	dumparea[vmcs_dump_idx].guest_ss_selector = vmcs_read16(GUEST_SS_SELECTOR);
+	dumparea[vmcs_dump_idx].guest_ds_selector = vmcs_read16(GUEST_DS_SELECTOR);
+	dumparea[vmcs_dump_idx].guest_fs_selector = vmcs_read16(GUEST_FS_SELECTOR);
+	dumparea[vmcs_dump_idx].guest_gs_selector = vmcs_read16(GUEST_GS_SELECTOR);
+	dumparea[vmcs_dump_idx].guest_ldtr_selector = vmcs_read16(GUEST_LDTR_SELECTOR);
+	dumparea[vmcs_dump_idx].guest_tr_selector = vmcs_read16(GUEST_TR_SELECTOR);
+	dumparea[vmcs_dump_idx].host_es_selector = vmcs_read16(HOST_ES_SELECTOR);
+	dumparea[vmcs_dump_idx].host_cs_selector = vmcs_read16(HOST_CS_SELECTOR);
+	dumparea[vmcs_dump_idx].host_ss_selector = vmcs_read16(HOST_SS_SELECTOR);
+	dumparea[vmcs_dump_idx].host_ds_selector = vmcs_read16(HOST_DS_SELECTOR);
+	dumparea[vmcs_dump_idx].host_fs_selector = vmcs_read16(HOST_FS_SELECTOR);
+	dumparea[vmcs_dump_idx].host_gs_selector = vmcs_read16(HOST_GS_SELECTOR);
+	dumparea[vmcs_dump_idx].host_tr_selector = vmcs_read16(HOST_TR_SELECTOR);
 
-	dumparea.io_bitmap_a = vmcs_read64(IO_BITMAP_A);
-	dumparea.io_bitmap_a_high = vmcs_read64(IO_BITMAP_A_HIGH);
-	dumparea.io_bitmap_b = vmcs_read64(IO_BITMAP_B);
-	dumparea.io_bitmap_b_high = vmcs_read64(IO_BITMAP_B_HIGH);
-	dumparea.msr_bitmap = vmcs_read64(MSR_BITMAP);
-	dumparea.msr_bitmap_high = vmcs_read64(MSR_BITMAP_HIGH);
-	dumparea.vm_exit_msr_store_addr = vmcs_read64(VM_EXIT_MSR_STORE_ADDR);
-	dumparea.vm_exit_msr_store_addr_high = vmcs_read64(VM_EXIT_MSR_STORE_ADDR_HIGH);
-	dumparea.vm_exit_msr_load_addr = vmcs_read64(VM_EXIT_MSR_LOAD_ADDR);
-	dumparea.vm_exit_msr_load_addr_high = vmcs_read64(VM_EXIT_MSR_LOAD_ADDR_HIGH);
-	dumparea.vm_entry_msr_load_addr = vmcs_read64(VM_ENTRY_MSR_LOAD_ADDR);
-	dumparea.vm_entry_msr_load_addr_high = vmcs_read64(VM_ENTRY_MSR_LOAD_ADDR_HIGH);
-	dumparea.tsc_offset = vmcs_read64(TSC_OFFSET);
-	dumparea.tsc_offset_high = vmcs_read64(TSC_OFFSET_HIGH);
-	dumparea.virtual_apic_page_addr = vmcs_read64(VIRTUAL_APIC_PAGE_ADDR);
-	dumparea.virtual_apic_page_addr_high = vmcs_read64(VIRTUAL_APIC_PAGE_ADDR_HIGH);
-	dumparea.apic_access_addr = vmcs_read64(APIC_ACCESS_ADDR);
-	dumparea.apic_access_addr_high = vmcs_read64(APIC_ACCESS_ADDR_HIGH);
-	dumparea.ept_pointer = vmcs_read64(EPT_POINTER);
-	dumparea.ept_pointer_high = vmcs_read64(EPT_POINTER_HIGH);
-	dumparea.guest_physical_address = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
-	dumparea.guest_physical_address_high = vmcs_read64(GUEST_PHYSICAL_ADDRESS_HIGH);
-	dumparea.vmcs_link_pointer = vmcs_read64(VMCS_LINK_POINTER);
-	dumparea.vmcs_link_pointer_high = vmcs_read64(VMCS_LINK_POINTER_HIGH);
-	dumparea.guest_ia32_debugctl = vmcs_read64(GUEST_IA32_DEBUGCTL);
-	dumparea.guest_ia32_debugctl_high = vmcs_read64(GUEST_IA32_DEBUGCTL_HIGH);
-	dumparea.guest_ia32_pat = vmcs_read64(GUEST_IA32_PAT);
-	dumparea.guest_ia32_pat_high = vmcs_read64(GUEST_IA32_PAT_HIGH);
-	dumparea.guest_pdptr0 = vmcs_read64(GUEST_PDPTR0);
-	dumparea.guest_pdptr0_high = vmcs_read64(GUEST_PDPTR0_HIGH);
-	dumparea.guest_pdptr1 = vmcs_read64(GUEST_PDPTR1);
-	dumparea.guest_pdptr1_high = vmcs_read64(GUEST_PDPTR1_HIGH);
-	dumparea.guest_pdptr2 = vmcs_read64(GUEST_PDPTR2);
-	dumparea.guest_pdptr2_high = vmcs_read64(GUEST_PDPTR2_HIGH);
-	dumparea.guest_pdptr3 = vmcs_read64(GUEST_PDPTR3);
-	dumparea.guest_pdptr3_high = vmcs_read64(GUEST_PDPTR3_HIGH);
-	dumparea.host_ia32_pat = vmcs_read64(HOST_IA32_PAT);
-	dumparea.host_ia32_pat_high = vmcs_read64(HOST_IA32_PAT_HIGH);
+	dumparea[vmcs_dump_idx].io_bitmap_a = vmcs_read64(IO_BITMAP_A);
+	dumparea[vmcs_dump_idx].io_bitmap_a_high = vmcs_read64(IO_BITMAP_A_HIGH);
+	dumparea[vmcs_dump_idx].io_bitmap_b = vmcs_read64(IO_BITMAP_B);
+	dumparea[vmcs_dump_idx].io_bitmap_b_high = vmcs_read64(IO_BITMAP_B_HIGH);
+	dumparea[vmcs_dump_idx].msr_bitmap = vmcs_read64(MSR_BITMAP);
+	dumparea[vmcs_dump_idx].msr_bitmap_high = vmcs_read64(MSR_BITMAP_HIGH);
+	dumparea[vmcs_dump_idx].vm_exit_msr_store_addr = vmcs_read64(VM_EXIT_MSR_STORE_ADDR);
+	dumparea[vmcs_dump_idx].vm_exit_msr_store_addr_high = vmcs_read64(VM_EXIT_MSR_STORE_ADDR_HIGH);
+	dumparea[vmcs_dump_idx].vm_exit_msr_load_addr = vmcs_read64(VM_EXIT_MSR_LOAD_ADDR);
+	dumparea[vmcs_dump_idx].vm_exit_msr_load_addr_high = vmcs_read64(VM_EXIT_MSR_LOAD_ADDR_HIGH);
+	dumparea[vmcs_dump_idx].vm_entry_msr_load_addr = vmcs_read64(VM_ENTRY_MSR_LOAD_ADDR);
+	dumparea[vmcs_dump_idx].vm_entry_msr_load_addr_high = vmcs_read64(VM_ENTRY_MSR_LOAD_ADDR_HIGH);
+	dumparea[vmcs_dump_idx].tsc_offset = vmcs_read64(TSC_OFFSET);
+	dumparea[vmcs_dump_idx].tsc_offset_high = vmcs_read64(TSC_OFFSET_HIGH);
+	dumparea[vmcs_dump_idx].virtual_apic_page_addr = vmcs_read64(VIRTUAL_APIC_PAGE_ADDR);
+	dumparea[vmcs_dump_idx].virtual_apic_page_addr_high = vmcs_read64(VIRTUAL_APIC_PAGE_ADDR_HIGH);
+	dumparea[vmcs_dump_idx].apic_access_addr = vmcs_read64(APIC_ACCESS_ADDR);
+	dumparea[vmcs_dump_idx].apic_access_addr_high = vmcs_read64(APIC_ACCESS_ADDR_HIGH);
+	dumparea[vmcs_dump_idx].ept_pointer = vmcs_read64(EPT_POINTER);
+	dumparea[vmcs_dump_idx].ept_pointer_high = vmcs_read64(EPT_POINTER_HIGH);
+	dumparea[vmcs_dump_idx].guest_physical_address = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
+	dumparea[vmcs_dump_idx].guest_physical_address_high = vmcs_read64(GUEST_PHYSICAL_ADDRESS_HIGH);
+	dumparea[vmcs_dump_idx].vmcs_link_pointer = vmcs_read64(VMCS_LINK_POINTER);
+	dumparea[vmcs_dump_idx].vmcs_link_pointer_high = vmcs_read64(VMCS_LINK_POINTER_HIGH);
+	dumparea[vmcs_dump_idx].guest_ia32_debugctl = vmcs_read64(GUEST_IA32_DEBUGCTL);
+	dumparea[vmcs_dump_idx].guest_ia32_debugctl_high = vmcs_read64(GUEST_IA32_DEBUGCTL_HIGH);
+	dumparea[vmcs_dump_idx].guest_ia32_pat = vmcs_read64(GUEST_IA32_PAT);
+	dumparea[vmcs_dump_idx].guest_ia32_pat_high = vmcs_read64(GUEST_IA32_PAT_HIGH);
+	dumparea[vmcs_dump_idx].guest_pdptr0 = vmcs_read64(GUEST_PDPTR0);
+	dumparea[vmcs_dump_idx].guest_pdptr0_high = vmcs_read64(GUEST_PDPTR0_HIGH);
+	dumparea[vmcs_dump_idx].guest_pdptr1 = vmcs_read64(GUEST_PDPTR1);
+	dumparea[vmcs_dump_idx].guest_pdptr1_high = vmcs_read64(GUEST_PDPTR1_HIGH);
+	dumparea[vmcs_dump_idx].guest_pdptr2 = vmcs_read64(GUEST_PDPTR2);
+	dumparea[vmcs_dump_idx].guest_pdptr2_high = vmcs_read64(GUEST_PDPTR2_HIGH);
+	dumparea[vmcs_dump_idx].guest_pdptr3 = vmcs_read64(GUEST_PDPTR3);
+	dumparea[vmcs_dump_idx].guest_pdptr3_high = vmcs_read64(GUEST_PDPTR3_HIGH);
+	dumparea[vmcs_dump_idx].host_ia32_pat = vmcs_read64(HOST_IA32_PAT);
+	dumparea[vmcs_dump_idx].host_ia32_pat_high = vmcs_read64(HOST_IA32_PAT_HIGH);
 
-	dumparea.pin_based_vm_exec_control = vmcs_read32(PIN_BASED_VM_EXEC_CONTROL);
-	dumparea.cpu_based_vm_exec_control = vmcs_read32(CPU_BASED_VM_EXEC_CONTROL);
-	dumparea.exception_bitmap = vmcs_read32(EXCEPTION_BITMAP);
-	dumparea.page_fault_error_code_mask = vmcs_read32(PAGE_FAULT_ERROR_CODE_MASK);
-	dumparea.page_fault_error_code_match = vmcs_read32(PAGE_FAULT_ERROR_CODE_MATCH);
-	dumparea.cr3_target_count = vmcs_read32(CR3_TARGET_COUNT);
-	dumparea.vm_exit_controls = vmcs_read32(VM_EXIT_CONTROLS);
-	dumparea.vm_exit_msr_store_count = vmcs_read32(VM_EXIT_MSR_STORE_COUNT);
-	dumparea.vm_exit_msr_load_count = vmcs_read32(VM_EXIT_MSR_LOAD_COUNT);
-	dumparea.vm_entry_controls = vmcs_read32(VM_ENTRY_CONTROLS);
-	dumparea.vm_entry_msr_load_count = vmcs_read32(VM_ENTRY_MSR_LOAD_COUNT);
-	dumparea.vm_entry_intr_info_field = vmcs_read32(VM_ENTRY_INTR_INFO_FIELD);
-	dumparea.vm_entry_exception_error_code = vmcs_read32(VM_ENTRY_EXCEPTION_ERROR_CODE);
-	dumparea.vm_entry_instruction_len = vmcs_read32(VM_ENTRY_INSTRUCTION_LEN);
-	dumparea.tpr_threshold = vmcs_read32(TPR_THRESHOLD);
-	dumparea.secondary_vm_exec_control = vmcs_read32(SECONDARY_VM_EXEC_CONTROL);
-	dumparea.ple_gap = vmcs_read32(PLE_GAP);
-	dumparea.ple_window = vmcs_read32(PLE_WINDOW);
-	dumparea.vm_instruction_error = vmcs_read32(VM_INSTRUCTION_ERROR);
-	dumparea.vm_exit_reason = vmcs_read32(VM_EXIT_REASON);
-	dumparea.vm_exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
-	dumparea.vm_exit_intr_error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
-	dumparea.idt_vectoring_info_field = vmcs_read32(IDT_VECTORING_INFO_FIELD);
-	dumparea.idt_vectoring_error_code = vmcs_read32(IDT_VECTORING_ERROR_CODE);
-	dumparea.vm_exit_instruction_len = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
-	dumparea.vmx_instruction_info = vmcs_read32(VMX_INSTRUCTION_INFO);
-	dumparea.guest_es_limit = vmcs_read32(GUEST_ES_LIMIT);
-	dumparea.guest_cs_limit = vmcs_read32(GUEST_CS_LIMIT);
-	dumparea.guest_ss_limit = vmcs_read32(GUEST_SS_LIMIT);
-	dumparea.guest_ds_limit = vmcs_read32(GUEST_DS_LIMIT);
-	dumparea.guest_fs_limit = vmcs_read32(GUEST_FS_LIMIT);
-	dumparea.guest_gs_limit = vmcs_read32(GUEST_GS_LIMIT);
-	dumparea.guest_ldtr_limit = vmcs_read32(GUEST_LDTR_LIMIT);
-	dumparea.guest_tr_limit = vmcs_read32(GUEST_TR_LIMIT);
-	dumparea.guest_gdtr_limit = vmcs_read32(GUEST_GDTR_LIMIT);
-	dumparea.guest_idtr_limit = vmcs_read32(GUEST_IDTR_LIMIT);
-	dumparea.guest_es_ar_bytes = vmcs_read32(GUEST_ES_AR_BYTES);
-	dumparea.guest_cs_ar_bytes = vmcs_read32(GUEST_CS_AR_BYTES);
-	dumparea.guest_ss_ar_bytes = vmcs_read32(GUEST_SS_AR_BYTES);
-	dumparea.guest_ds_ar_bytes = vmcs_read32(GUEST_DS_AR_BYTES);
-	dumparea.guest_fs_ar_bytes = vmcs_read32(GUEST_FS_AR_BYTES);
-	dumparea.guest_gs_ar_bytes = vmcs_read32(GUEST_GS_AR_BYTES);
-	dumparea.guest_ldtr_ar_bytes = vmcs_read32(GUEST_LDTR_AR_BYTES);
-	dumparea.guest_tr_ar_bytes = vmcs_read32(GUEST_TR_AR_BYTES);
-	dumparea.guest_interruptibilty_info = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
-	dumparea.guest_activity_state = vmcs_read32(GUEST_ACTIVITY_STATE);
-	dumparea.guest_sysenter_cs = vmcs_read32(GUEST_SYSENTER_CS);
-	dumparea.host_ia32_sysenter_cs = vmcs_read32(HOST_IA32_SYSENTER_CS);
+	dumparea[vmcs_dump_idx].pin_based_vm_exec_control = vmcs_read32(PIN_BASED_VM_EXEC_CONTROL);
+	dumparea[vmcs_dump_idx].cpu_based_vm_exec_control = vmcs_read32(CPU_BASED_VM_EXEC_CONTROL);
+	dumparea[vmcs_dump_idx].exception_bitmap = vmcs_read32(EXCEPTION_BITMAP);
+	dumparea[vmcs_dump_idx].page_fault_error_code_mask = vmcs_read32(PAGE_FAULT_ERROR_CODE_MASK);
+	dumparea[vmcs_dump_idx].page_fault_error_code_match = vmcs_read32(PAGE_FAULT_ERROR_CODE_MATCH);
+	dumparea[vmcs_dump_idx].cr3_target_count = vmcs_read32(CR3_TARGET_COUNT);
+	dumparea[vmcs_dump_idx].vm_exit_controls = vmcs_read32(VM_EXIT_CONTROLS);
+	dumparea[vmcs_dump_idx].vm_exit_msr_store_count = vmcs_read32(VM_EXIT_MSR_STORE_COUNT);
+	dumparea[vmcs_dump_idx].vm_exit_msr_load_count = vmcs_read32(VM_EXIT_MSR_LOAD_COUNT);
+	dumparea[vmcs_dump_idx].vm_entry_controls = vmcs_read32(VM_ENTRY_CONTROLS);
+	dumparea[vmcs_dump_idx].vm_entry_msr_load_count = vmcs_read32(VM_ENTRY_MSR_LOAD_COUNT);
+	dumparea[vmcs_dump_idx].vm_entry_intr_info_field = vmcs_read32(VM_ENTRY_INTR_INFO_FIELD);
+	dumparea[vmcs_dump_idx].vm_entry_exception_error_code = vmcs_read32(VM_ENTRY_EXCEPTION_ERROR_CODE);
+	dumparea[vmcs_dump_idx].vm_entry_instruction_len = vmcs_read32(VM_ENTRY_INSTRUCTION_LEN);
+	dumparea[vmcs_dump_idx].tpr_threshold = vmcs_read32(TPR_THRESHOLD);
+	dumparea[vmcs_dump_idx].secondary_vm_exec_control = vmcs_read32(SECONDARY_VM_EXEC_CONTROL);
+	dumparea[vmcs_dump_idx].ple_gap = vmcs_read32(PLE_GAP);
+	dumparea[vmcs_dump_idx].ple_window = vmcs_read32(PLE_WINDOW);
+	dumparea[vmcs_dump_idx].vm_instruction_error = vmcs_read32(VM_INSTRUCTION_ERROR);
+	dumparea[vmcs_dump_idx].vm_exit_reason = vmcs_read32(VM_EXIT_REASON);
+	dumparea[vmcs_dump_idx].vm_exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+	dumparea[vmcs_dump_idx].vm_exit_intr_error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
+	dumparea[vmcs_dump_idx].idt_vectoring_info_field = vmcs_read32(IDT_VECTORING_INFO_FIELD);
+	dumparea[vmcs_dump_idx].idt_vectoring_error_code = vmcs_read32(IDT_VECTORING_ERROR_CODE);
+	dumparea[vmcs_dump_idx].vm_exit_instruction_len = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
+	dumparea[vmcs_dump_idx].vmx_instruction_info = vmcs_read32(VMX_INSTRUCTION_INFO);
+	dumparea[vmcs_dump_idx].guest_es_limit = vmcs_read32(GUEST_ES_LIMIT);
+	dumparea[vmcs_dump_idx].guest_cs_limit = vmcs_read32(GUEST_CS_LIMIT);
+	dumparea[vmcs_dump_idx].guest_ss_limit = vmcs_read32(GUEST_SS_LIMIT);
+	dumparea[vmcs_dump_idx].guest_ds_limit = vmcs_read32(GUEST_DS_LIMIT);
+	dumparea[vmcs_dump_idx].guest_fs_limit = vmcs_read32(GUEST_FS_LIMIT);
+	dumparea[vmcs_dump_idx].guest_gs_limit = vmcs_read32(GUEST_GS_LIMIT);
+	dumparea[vmcs_dump_idx].guest_ldtr_limit = vmcs_read32(GUEST_LDTR_LIMIT);
+	dumparea[vmcs_dump_idx].guest_tr_limit = vmcs_read32(GUEST_TR_LIMIT);
+	dumparea[vmcs_dump_idx].guest_gdtr_limit = vmcs_read32(GUEST_GDTR_LIMIT);
+	dumparea[vmcs_dump_idx].guest_idtr_limit = vmcs_read32(GUEST_IDTR_LIMIT);
+	dumparea[vmcs_dump_idx].guest_es_ar_bytes = vmcs_read32(GUEST_ES_AR_BYTES);
+	dumparea[vmcs_dump_idx].guest_cs_ar_bytes = vmcs_read32(GUEST_CS_AR_BYTES);
+	dumparea[vmcs_dump_idx].guest_ss_ar_bytes = vmcs_read32(GUEST_SS_AR_BYTES);
+	dumparea[vmcs_dump_idx].guest_ds_ar_bytes = vmcs_read32(GUEST_DS_AR_BYTES);
+	dumparea[vmcs_dump_idx].guest_fs_ar_bytes = vmcs_read32(GUEST_FS_AR_BYTES);
+	dumparea[vmcs_dump_idx].guest_gs_ar_bytes = vmcs_read32(GUEST_GS_AR_BYTES);
+	dumparea[vmcs_dump_idx].guest_ldtr_ar_bytes = vmcs_read32(GUEST_LDTR_AR_BYTES);
+	dumparea[vmcs_dump_idx].guest_tr_ar_bytes = vmcs_read32(GUEST_TR_AR_BYTES);
+	dumparea[vmcs_dump_idx].guest_interruptibilty_info = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
+	dumparea[vmcs_dump_idx].guest_activity_state = vmcs_read32(GUEST_ACTIVITY_STATE);
+	dumparea[vmcs_dump_idx].guest_sysenter_cs = vmcs_read32(GUEST_SYSENTER_CS);
+	dumparea[vmcs_dump_idx].host_ia32_sysenter_cs = vmcs_read32(HOST_IA32_SYSENTER_CS);
 
-	dumparea.cr0_guest_host_mask = vmcs_readl(CR0_GUEST_HOST_MASK);
-	dumparea.cr4_guest_host_mask = vmcs_readl(CR4_GUEST_HOST_MASK);
-	dumparea.cr0_read_shadow = vmcs_readl(CR0_READ_SHADOW);
-	dumparea.cr4_read_shadow = vmcs_readl(CR4_READ_SHADOW);
-	dumparea.cr3_target_value0 = vmcs_readl(CR3_TARGET_VALUE0);
-	dumparea.cr3_target_value1 = vmcs_readl(CR3_TARGET_VALUE1);
-	dumparea.cr3_target_value2 = vmcs_readl(CR3_TARGET_VALUE2);
-	dumparea.cr3_target_value3 = vmcs_readl(CR3_TARGET_VALUE3);
-	dumparea.exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
-	dumparea.guest_linear_address = vmcs_readl(GUEST_LINEAR_ADDRESS);
-	dumparea.guest_cr0 = vmcs_readl(GUEST_CR0);
-	dumparea.guest_cr3 = vmcs_readl(GUEST_CR3);
-	dumparea.guest_cr4 = vmcs_readl(GUEST_CR4);
-	dumparea.guest_es_base = vmcs_readl(GUEST_ES_BASE);
-	dumparea.guest_cs_base = vmcs_readl(GUEST_CS_BASE);
-	dumparea.guest_ss_base = vmcs_readl(GUEST_SS_BASE);
-	dumparea.guest_ds_base = vmcs_readl(GUEST_DS_BASE);
-	dumparea.guest_fs_base = vmcs_readl(GUEST_FS_BASE);
-	dumparea.guest_gs_base = vmcs_readl(GUEST_GS_BASE);
-	dumparea.guest_ldtr_base = vmcs_readl(GUEST_LDTR_BASE);
-	dumparea.guest_tr_base = vmcs_readl(GUEST_TR_BASE);
-	dumparea.guest_gdtr_base = vmcs_readl(GUEST_GDTR_BASE);
-	dumparea.guest_idtr_base = vmcs_readl(GUEST_IDTR_BASE);
-	dumparea.guest_dr7 = vmcs_readl(GUEST_DR7);
-	dumparea.guest_rsp = vmcs_readl(GUEST_RSP);
-	dumparea.guest_rip = vmcs_readl(GUEST_RIP);
-	dumparea.guest_rflags = vmcs_readl(GUEST_RFLAGS);
-	dumparea.guest_pending_dbg_exceptions = vmcs_readl(GUEST_PENDING_DBG_EXCEPTIONS);
-	dumparea.guest_sysenter_esp = vmcs_readl(GUEST_SYSENTER_ESP);
-	dumparea.guest_sysenter_eip = vmcs_readl(GUEST_SYSENTER_EIP);
-	dumparea.host_cr0 = vmcs_readl(HOST_CR0);
-	dumparea.host_cr3 = vmcs_readl(HOST_CR3);
-	dumparea.host_cr4 = vmcs_readl(HOST_CR4);
-	dumparea.host_fs_base = vmcs_readl(HOST_FS_BASE);
-	dumparea.host_gs_base = vmcs_readl(HOST_GS_BASE);
-	dumparea.host_tr_base = vmcs_readl(HOST_TR_BASE);
-	dumparea.host_gdtr_base = vmcs_readl(HOST_GDTR_BASE);
-	dumparea.host_idtr_base = vmcs_readl(HOST_IDTR_BASE);
-	dumparea.host_ia32_sysenter_esp = vmcs_readl(HOST_IA32_SYSENTER_ESP);
-	dumparea.host_ia32_sysenter_eip = vmcs_readl(HOST_IA32_SYSENTER_EIP);
-	dumparea.host_rsp = vmcs_readl(HOST_RSP);
-	dumparea.host_rip = vmcs_readl(HOST_RIP);
+	dumparea[vmcs_dump_idx].cr0_guest_host_mask = vmcs_readl(CR0_GUEST_HOST_MASK);
+	dumparea[vmcs_dump_idx].cr4_guest_host_mask = vmcs_readl(CR4_GUEST_HOST_MASK);
+	dumparea[vmcs_dump_idx].cr0_read_shadow = vmcs_readl(CR0_READ_SHADOW);
+	dumparea[vmcs_dump_idx].cr4_read_shadow = vmcs_readl(CR4_READ_SHADOW);
+	dumparea[vmcs_dump_idx].cr3_target_value0 = vmcs_readl(CR3_TARGET_VALUE0);
+	dumparea[vmcs_dump_idx].cr3_target_value1 = vmcs_readl(CR3_TARGET_VALUE1);
+	dumparea[vmcs_dump_idx].cr3_target_value2 = vmcs_readl(CR3_TARGET_VALUE2);
+	dumparea[vmcs_dump_idx].cr3_target_value3 = vmcs_readl(CR3_TARGET_VALUE3);
+	dumparea[vmcs_dump_idx].exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+	dumparea[vmcs_dump_idx].guest_linear_address = vmcs_readl(GUEST_LINEAR_ADDRESS);
+	dumparea[vmcs_dump_idx].guest_cr0 = vmcs_readl(GUEST_CR0);
+	dumparea[vmcs_dump_idx].guest_cr3 = vmcs_readl(GUEST_CR3);
+	dumparea[vmcs_dump_idx].guest_cr4 = vmcs_readl(GUEST_CR4);
+	dumparea[vmcs_dump_idx].guest_es_base = vmcs_readl(GUEST_ES_BASE);
+	dumparea[vmcs_dump_idx].guest_cs_base = vmcs_readl(GUEST_CS_BASE);
+	dumparea[vmcs_dump_idx].guest_ss_base = vmcs_readl(GUEST_SS_BASE);
+	dumparea[vmcs_dump_idx].guest_ds_base = vmcs_readl(GUEST_DS_BASE);
+	dumparea[vmcs_dump_idx].guest_fs_base = vmcs_readl(GUEST_FS_BASE);
+	dumparea[vmcs_dump_idx].guest_gs_base = vmcs_readl(GUEST_GS_BASE);
+	dumparea[vmcs_dump_idx].guest_ldtr_base = vmcs_readl(GUEST_LDTR_BASE);
+	dumparea[vmcs_dump_idx].guest_tr_base = vmcs_readl(GUEST_TR_BASE);
+	dumparea[vmcs_dump_idx].guest_gdtr_base = vmcs_readl(GUEST_GDTR_BASE);
+	dumparea[vmcs_dump_idx].guest_idtr_base = vmcs_readl(GUEST_IDTR_BASE);
+	dumparea[vmcs_dump_idx].guest_dr7 = vmcs_readl(GUEST_DR7);
+	dumparea[vmcs_dump_idx].guest_rsp = vmcs_readl(GUEST_RSP);
+	dumparea[vmcs_dump_idx].guest_rip = vmcs_readl(GUEST_RIP);
+	dumparea[vmcs_dump_idx].guest_rflags = vmcs_readl(GUEST_RFLAGS);
+	dumparea[vmcs_dump_idx].guest_pending_dbg_exceptions = vmcs_readl(GUEST_PENDING_DBG_EXCEPTIONS);
+	dumparea[vmcs_dump_idx].guest_sysenter_esp = vmcs_readl(GUEST_SYSENTER_ESP);
+	dumparea[vmcs_dump_idx].guest_sysenter_eip = vmcs_readl(GUEST_SYSENTER_EIP);
+	dumparea[vmcs_dump_idx].host_cr0 = vmcs_readl(HOST_CR0);
+	dumparea[vmcs_dump_idx].host_cr3 = vmcs_readl(HOST_CR3);
+	dumparea[vmcs_dump_idx].host_cr4 = vmcs_readl(HOST_CR4);
+	dumparea[vmcs_dump_idx].host_fs_base = vmcs_readl(HOST_FS_BASE);
+	dumparea[vmcs_dump_idx].host_gs_base = vmcs_readl(HOST_GS_BASE);
+	dumparea[vmcs_dump_idx].host_tr_base = vmcs_readl(HOST_TR_BASE);
+	dumparea[vmcs_dump_idx].host_gdtr_base = vmcs_readl(HOST_GDTR_BASE);
+	dumparea[vmcs_dump_idx].host_idtr_base = vmcs_readl(HOST_IDTR_BASE);
+	dumparea[vmcs_dump_idx].host_ia32_sysenter_esp = vmcs_readl(HOST_IA32_SYSENTER_ESP);
+	dumparea[vmcs_dump_idx].host_ia32_sysenter_eip = vmcs_readl(HOST_IA32_SYSENTER_EIP);
+	dumparea[vmcs_dump_idx].host_rsp = vmcs_readl(HOST_RSP);
+	dumparea[vmcs_dump_idx].host_rip = vmcs_readl(HOST_RIP);
 }
+
 
 /*
  * Sets up the vmcs for emulated real mode.
@@ -4463,39 +4575,43 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 		}
 		if (!enable_unrestricted_guest)
 			exec_control &= ~SECONDARY_EXEC_UNRESTRICTED_GUEST;
-#ifdef XXX
+
 		if (!ple_gap)
-#endif /*XXX*/
 			exec_control &= ~SECONDARY_EXEC_PAUSE_LOOP_EXITING;
 		vmcs_write32(SECONDARY_VM_EXEC_CONTROL, exec_control);
 	}
 
-#ifdef XXX
 	if (ple_gap) {
 		vmcs_write32(PLE_GAP, ple_gap);
 		vmcs_write32(PLE_WINDOW, ple_window);
 	}
-#endif /*XXX*/
+
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, !!bypass_guest_pf);
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, !!bypass_guest_pf);
 	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 22.2.1 */
 
 	vmcs_writel(HOST_CR0, read_cr0());  /* 22.2.3 */
-	vmcs_writel(HOST_CR4, kvm_read_cr4(&vmx->vcpu));  /* 22.2.3, 22.2.5 */
-	vmcs_writel(HOST_CR3, getcr3(vmx->vcpu));  /* 22.2.3  FIXME: shadow tables */
+	vmcs_writel(HOST_CR4, read_cr4());  /* 22.2.3, 22.2.5 */
+	vmcs_writel(HOST_CR3, read_cr3());  /* 22.2.3  FIXME: shadow tables */
 
 	vmcs_write16(HOST_CS_SELECTOR, KCS_SEL);  /* 22.2.4 */
+#ifndef XXX
 	vmcs_write16(HOST_DS_SELECTOR, KDS_SEL);  /* 22.2.4 */
 	vmcs_write16(HOST_ES_SELECTOR, KDS_SEL);  /* 22.2.4 */
 	vmcs_write16(HOST_FS_SELECTOR, kvm_read_fs());    /* 22.2.4 */
 	vmcs_write16(HOST_GS_SELECTOR, kvm_read_gs());    /* 22.2.4 */
+
+#else
+	vmcs_write16(HOST_DS_SELECTOR, 0x4b);  /* 22.2.4 */
+	vmcs_write16(HOST_ES_SELECTOR, 0x4b);  /* 22.2.4 */
+	vmcs_write16(HOST_FS_SELECTOR, 0);    /* 22.2.4 */
+	vmcs_write16(HOST_GS_SELECTOR, 0);    /* 22.2.4 */
+#endif /*XXX*/
 	vmcs_write16(HOST_SS_SELECTOR, KDS_SEL);  /* 22.2.4 */
 #ifdef CONFIG_X86_64
 	rdmsrl(MSR_FS_BASE, a);
-	cmn_err(CE_NOTE, "rdmsrl MSR_FS_BASE = %lx\n", a);
 	vmcs_writel(HOST_FS_BASE, a); /* 22.2.4 */
 	rdmsrl(MSR_GS_BASE, a);
-	cmn_err(CE_NOTE, "rdmsrl MSR_GS_BASE = %lx\n", a);
 	vmcs_writel(HOST_GS_BASE, a); /* 22.2.4 */
 #else
 	vmcs_writel(HOST_FS_BASE, 0); /* 22.2.4 */
@@ -4568,7 +4684,10 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	guest_write_tsc(0, tsc_base);
 	
 	/*XXX - debugging */
-	kvm_vmcs_dump();
+	if (vmcs_dump_idx < 10) {
+		kvm_vmcs_dump();
+		vmcs_dump_idx++;
+	}
 
 	return 0;
 }
@@ -4714,7 +4833,7 @@ int is_long_mode(struct kvm_vcpu *vcpu)
 #endif
 }
 
-ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask)
+inline ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask)
 {
 	uint64_t tmask = mask & KVM_POSSIBLE_CR4_GUEST_BITS;
 
@@ -4729,7 +4848,6 @@ inline int is_pae(struct kvm_vcpu *vcpu)
 	return kvm_read_cr4_bits(vcpu, X86_CR4_PAE);
 }
 
-
 static void
 __vmx_load_host_state(struct vcpu_vmx *vmx)
 {
@@ -4740,7 +4858,7 @@ __vmx_load_host_state(struct vcpu_vmx *vmx)
 
 #ifdef XXX  /* kstat stuff */
 	++vmx->vcpu.stat.host_state_reload;
-#endif
+#endif /*XXX*/
 	vmx->host_state.loaded = 0;
 	if (vmx->host_state.fs_reload_needed)
 		kvm_load_fs(vmx->host_state.fs_sel);
@@ -4907,6 +5025,8 @@ static int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu,
 	r = E2BIG;
 	if (cpuid->nent > KVM_MAX_CPUID_ENTRIES)
 		goto out;
+	bcopy(entries, vcpu->arch.cpuid_entries, 
+	      cpuid->nent * sizeof(struct kvm_cpuid_entry2));
 	vcpu_load(vcpu);
 	vcpu->arch.cpuid_nent = cpuid->nent;
 	kvm_apic_set_version(vcpu);
@@ -4935,6 +5055,19 @@ out:
 	return r;
 }
 
+static void ept_save_pdptrs(struct kvm_vcpu *vcpu)
+{
+	if (is_paging(vcpu) && is_pae(vcpu) && !is_long_mode(vcpu)) {
+		vcpu->arch.pdptrs[0] = vmcs_read64(GUEST_PDPTR0);
+		vcpu->arch.pdptrs[1] = vmcs_read64(GUEST_PDPTR1);
+		vcpu->arch.pdptrs[2] = vmcs_read64(GUEST_PDPTR2);
+		vcpu->arch.pdptrs[3] = vmcs_read64(GUEST_PDPTR3);
+	}
+
+	BT_SET((unsigned long *)&vcpu->arch.regs_avail, VCPU_EXREG_PDPTR);
+	BT_SET((unsigned long *)&vcpu->arch.regs_dirty, VCPU_EXREG_PDPTR);
+}
+
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
 {
 	BT_SET((unsigned long *)&vcpu->arch.regs_avail, reg);
@@ -4946,10 +5079,8 @@ static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg)
 		vcpu->arch.regs[VCPU_REGS_RIP] = vmcs_readl(GUEST_RIP);
 		break;
 	case VCPU_EXREG_PDPTR:
-#ifdef XXX
 		if (enable_ept)
 			ept_save_pdptrs(vcpu);
-#endif /*XXX*/
 		break;
 	default:
 		break;
@@ -5214,12 +5345,12 @@ int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 }
 
 
-ulong kvm_read_cr4(struct kvm_vcpu *vcpu)
+inline ulong kvm_read_cr4(struct kvm_vcpu *vcpu)
 {
 	return kvm_read_cr4_bits(vcpu, ~0UL);
 }
 
-ulong kvm_read_cr0(struct kvm_vcpu *vcpu)
+inline ulong kvm_read_cr0(struct kvm_vcpu *vcpu)
 {
 	return kvm_read_cr0_bits(vcpu, ~0UL);
 }
@@ -6982,7 +7113,6 @@ static void vmx_complete_interrupts(struct vcpu_vmx *vmx)
 
 	idtv_info_valid = idt_vectoring_info & VECTORING_INFO_VALID_MASK;
 
-#ifdef XXX
 	if (cpu_has_virtual_nmis()) {
 		unblock_nmi = (exit_intr_info & INTR_INFO_UNBLOCK_NMI) != 0;
 		vector = exit_intr_info & INTR_INFO_VECTOR_MASK;
@@ -7000,18 +7130,20 @@ static void vmx_complete_interrupts(struct vcpu_vmx *vmx)
 		    vector != DF_VECTOR && !idtv_info_valid)
 			vmcs_set_bits(GUEST_INTERRUPTIBILITY_INFO,
 				      GUEST_INTR_STATE_NMI);
-	} else if (unlikely(vmx->soft_vnmi_blocked))
+	}
+#ifdef XXX
+	else if (vmx->soft_vnmi_blocked)
 		vmx->vnmi_blocked_time +=
 			ktime_to_ns(ktime_sub(ktime_get(), vmx->entry_time));
 #endif /*XXX*/
+
 	vmx->vcpu.arch.nmi_injected = 0;
 	kvm_clear_exception_queue(&vmx->vcpu);
 	kvm_clear_interrupt_queue(&vmx->vcpu);
 
-#ifdef XXX
 	if (!idtv_info_valid)
 		return;
-#endif /*XXX*/
+
 	vector = idt_vectoring_info & VECTORING_INFO_VECTOR_MASK;
 	type = idt_vectoring_info & VECTORING_INFO_TYPE_MASK;
 
@@ -7115,9 +7247,6 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	 * Loading guest fpu may have cleared host cr0.ts
 	 */
 	vmcs_writel(HOST_CR0, read_cr0());
-
-	/*XXX - debugging */
-	kvm_vmcs_dump();
 
 	__asm__(
 		/* Store host registers */
@@ -7224,9 +7353,12 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	      );
 
 	/*XXX - debugging */
-	dumparea.launch_resume_error =  vmcs_read32(VM_INSTRUCTION_ERROR);
+	if (vmcs_dump_idx < 10) {
+		dumparea[vmcs_dump_idx].launch_resume_error = vmcs_read32(VM_INSTRUCTION_ERROR);
+		kvm_vmcs_dump();
+		vmcs_dump_idx++;
+	}
 	
-
 	vcpu->arch.regs_avail = ~((1 << VCPU_REGS_RIP) | (1 << VCPU_REGS_RSP)
 				  | (1 << VCPU_EXREG_PDPTR));
 	vcpu->arch.regs_dirty = 0;
@@ -10347,8 +10479,7 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 		       "(0x%x) and exit reason is 0x%x\n",
 		       __func__, vectoring_info, exit_reason);
 
-#ifdef XXX
-	if (unlikely(!cpu_has_virtual_nmis() && vmx->soft_vnmi_blocked)) {
+	if (!cpu_has_virtual_nmis() && vmx->soft_vnmi_blocked) {
 		if (vmx_interrupt_allowed(vcpu)) {
 			vmx->soft_vnmi_blocked = 0;
 		} else if (vmx->vnmi_blocked_time > 1000000000LL &&
@@ -10365,7 +10496,6 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 			vmx->soft_vnmi_blocked = 0;
 		}
 	}
-#endif /*XXX*/
 
 	if (exit_reason < kvm_vmx_max_exit_handlers
 	    && kvm_vmx_exit_handlers[exit_reason])
@@ -11315,92 +11445,84 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		rval = kvm_dev_ioctl_check_extension_generic(arg, rval_p);
 		break;
 	case KVM_GET_MSRS: {
-		struct kvm_msrs_ioc kvm_msrs_ioc;
-		struct kvm_msrs kvm_msrs;
+		struct kvm_msrs_ioc *kvm_msrs_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
-		struct kvm_msr_entry *entries;
-		unsigned size;
-		int n;
 
-		if (ddi_copyin((const void *)arg, &kvm_msrs_ioc,
-			       sizeof(kvm_msrs_ioc), mode) != 0) {
+		kvm_msrs_ioc = kmem_alloc(sizeof(struct kvm_msrs_ioc), KM_SLEEP);
+		if (ddi_copyin((const void *)arg, kvm_msrs_ioc,
+			       sizeof(struct kvm_msrs_ioc), mode) != 0) {
 			rval = EFAULT;
 			break;
 		}
-		kvmp = find_kvm_id(kvm_msrs_ioc.kvm_kvmid);
+		kvmp = find_kvm_id(kvm_msrs_ioc->kvm_kvmid);
 		rval = EINVAL;
-		if (kvmp == NULL)
-			break;
-		if (!kvmp || kvm_msrs_ioc.kvm_cpu_index >= kvmp->online_vcpus)
-			break;
-
-		vcpu = kvmp->vcpus[kvm_msrs_ioc.kvm_cpu_index];
-
-		if (ddi_copyin(kvm_msrs_ioc.kvm_msrs, &kvm_msrs, sizeof(kvm_msrs), mode)) {
-			rval = EFAULT;
+		if (!kvmp || kvm_msrs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
 			break;
 		}
 
-		if (kvm_msrs.nmsrs >= MAX_IO_MSRS) {
+		vcpu = kvmp->vcpus[kvm_msrs_ioc->kvm_cpu_index];
+
+		if (kvm_msrs_ioc->kvm_msrs.nmsrs >= MAX_IO_MSRS) {
 			rval = E2BIG;
 			break;
 		}
 		
-		rval = n = __msr_io(vcpu, &kvm_msrs, kvm_msrs.entries, kvm_get_msr);
+		rval = __msr_io(vcpu, &kvm_msrs_ioc->kvm_msrs, kvm_msrs_ioc->kvm_msrs.entries, kvm_get_msr);
 
 		if (rval < 0) {
+			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
 			rval = EINVAL;
 			break;
 		}
 
-		rval = ddi_copyout(entries, (caddr_t)(((uint64_t)kvm_msrs.entries)), size, mode);
-		
-		*rval_p = n;
+		rval = ddi_copyout(kvm_msrs_ioc, (caddr_t)arg, sizeof(struct kvm_msrs_ioc), mode);
+		*rval_p = kvm_msrs_ioc->kvm_msrs.nmsrs;
+		kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));		
+
 
 		break;
 	}
 
 	case KVM_SET_MSRS: {
-		struct kvm_msrs_ioc kvm_msrs_ioc;
-		struct kvm_msrs kvm_msrs;
+		struct kvm_msrs_ioc *kvm_msrs_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
-		struct kvm_msr_entry *entries;
-		unsigned size;
 		int n;
 
-		if (ddi_copyin((const void *)arg, &kvm_msrs_ioc,
-			       sizeof(kvm_msrs_ioc), mode) != 0) {
+		kvm_msrs_ioc = kmem_alloc(sizeof(struct kvm_msrs_ioc), KM_SLEEP);
+		if (ddi_copyin((const void *)arg, kvm_msrs_ioc,
+			       sizeof(struct kvm_msrs_ioc), mode) != 0) {
 			rval = EFAULT;
 			break;
 		}
 
 		rval = EINVAL;
-		kvmp = find_kvm_id(kvm_msrs_ioc.kvm_kvmid);
-		if (kvmp == NULL)
-			break;
-		if (!kvmp || kvm_msrs_ioc.kvm_cpu_index >= kvmp->online_vcpus)
-			break;
-
-		vcpu = kvmp->vcpus[kvm_msrs_ioc.kvm_cpu_index];
-
-		if (ddi_copyin(kvm_msrs_ioc.kvm_msrs, &kvm_msrs, sizeof(kvm_msrs), mode)) {
-			rval = EFAULT;
+		kvmp = find_kvm_id(kvm_msrs_ioc->kvm_kvmid);
+		if (!kvmp || kvm_msrs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
 			break;
 		}
+
+		vcpu = kvmp->vcpus[kvm_msrs_ioc->kvm_cpu_index];
 		
-		if (kvm_msrs.nmsrs >= MAX_IO_MSRS) {
+		if (kvm_msrs_ioc->kvm_msrs.nmsrs >= MAX_IO_MSRS) {
+			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
 			rval = E2BIG;
 			break;
 		}
 
-		rval = n = __msr_io(vcpu, &kvm_msrs, kvm_msrs.entries, do_set_msr);
+		
+		rval = n =  __msr_io(vcpu, &kvm_msrs_ioc->kvm_msrs, kvm_msrs_ioc->kvm_msrs.entries, do_set_msr);
+
+		kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
 
 		if (rval < 0) {
 			rval = EINVAL;
 			break;
-		}
+		} else
+			rval = 0;  /* success */
 		*rval_p = n;
 		break;
 	}
@@ -11645,7 +11767,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		if (ddi_copyout(&kvm_fpu_ioc, (caddr_t)arg, sizeof(struct kvm_fpu), mode))
+		if (ddi_copyout(&kvm_fpu_ioc, (caddr_t)arg, sizeof(struct kvm_fpu_ioc), mode))
 			rval = EFAULT;
 
 		*rval_p = 0;

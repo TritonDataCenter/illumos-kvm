@@ -841,11 +841,11 @@ struct kvm_msrs {
 	uint32_t nmsrs; /* number of msrs in entries */
 	uint32_t pad;
 
-	struct kvm_msr_entry entries[1];
+	struct kvm_msr_entry entries[100];
 };
 
 struct kvm_msrs_ioc {
-	struct kvm_msrs *kvm_msrs;
+	struct kvm_msrs kvm_msrs;
 	int kvm_cpu_index;
 	int kvm_kvmid;
 };

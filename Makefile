@@ -13,7 +13,7 @@ CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 -DCONFIG_X86_64 -DDEBUG -c -g -DCONFIG_SOLA
 
 INCLUDEDIR= -I $(KERNEL_SOURCE)/usr/src/uts/intel -I $(KERNEL_SOURCE)/usr/src/uts/i86pc -I $(KERNEL_SOURCE)/usr/src/uts/common
 
-kvm: kvm.c kvm_x86.c emulate.c kvm.h kvm_x86host.h
+kvm: kvm.c kvm_x86.c emulate.c kvm.h kvm_x86host.h msr.h
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) emulate.c

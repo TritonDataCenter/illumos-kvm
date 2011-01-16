@@ -448,7 +448,11 @@ struct kvm_vcpu_arch {
 	int nmi_injected;
 
 	struct mtrr_state_type mtrr_state;
-	uint32_t pat;
+#ifdef XXX
+	uint32_t pat;  /*XXX linux- copies to/from a 64-bit field */
+#else
+	uint64_t pat;
+#endif /*XXX*/
 
 	int switch_db_regs;
 	unsigned long db[KVM_NR_DB_REGS];
@@ -519,7 +523,7 @@ struct kvm_arch {
 
 	gpa_t wall_clock;
 
-	struct page *ept_identity_pagetable;
+	caddr_t ept_identity_pagetable;
 	int ept_identity_pagetable_done;
 	gpa_t ept_identity_map_addr;
 
