@@ -49,6 +49,7 @@ static int kvm_usage_count;
 static list_t vm_list;
 kmutex_t kvm_lock;
 kmem_cache_t *kvm_cache;
+struct vmx_capability  vmx_capability;
 
 /*
  * The entire state of the kvm device.
@@ -245,7 +246,7 @@ inline void ept_sync_global(void)
 		__invept(VMX_EPT_EXTENT_GLOBAL, 0, 0);
 }
 
-int enable_ept = 1;  
+int enable_ept = 0;  
 
 static inline void ept_sync_context(uint64_t eptp)
 {
@@ -290,7 +291,7 @@ inline int is_pae(struct kvm_vcpu *vcpu);
 
 static void ept_load_pdptrs(struct kvm_vcpu *vcpu)
 {
-	if (!(BT_SET((unsigned long *)&vcpu->arch.regs_dirty, VCPU_EXREG_PDPTR)))
+	if (!(BT_TEST((unsigned long *)&vcpu->arch.regs_dirty, VCPU_EXREG_PDPTR)))
 		return;
 
 	if (is_paging(vcpu) && is_pae(vcpu) && !is_long_mode(vcpu)) {
@@ -507,12 +508,10 @@ static uint64_t vmx_get_mt_mask(struct kvm_vcpu *vcpu, gfn_t gfn, int is_mmio)
 	 */
 	if (is_mmio)
 		ret = MTRR_TYPE_UNCACHABLE << VMX_EPT_MT_EPTE_SHIFT;
-#ifdef XXX
 	else if (vcpu->kvm->arch.iommu_domain &&
 		!(vcpu->kvm->arch.iommu_flags & KVM_IOMMU_CACHE_COHERENCY))
 		ret = kvm_get_guest_memory_type(vcpu, gfn) <<
 		      VMX_EPT_MT_EPTE_SHIFT;
-#endif /*XXX*/
 	else
 		ret = (MTRR_TYPE_WRBACK << VMX_EPT_MT_EPTE_SHIFT)
 			| VMX_EPT_IPAT_BIT;
@@ -1214,6 +1213,7 @@ static int setup_vmcs_config(struct vmcs_config *vmcs_conf)
 	uint32_t _cpu_based_2nd_exec_control = 0;
 	uint32_t _vmexit_control = 0;
 	uint32_t _vmentry_control = 0;
+	uint32_t ept, vpid;
 
 	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;
 	opt = PIN_BASED_VIRTUAL_NMIS;
@@ -1399,7 +1399,7 @@ static inline int cpu_has_vmx_ple(void)
  * Time is measured based on a counter that runs at the same rate as the TSC,
  * refer SDM volume 3b section 21.6.13 & 22.1.3.
  */
-#define KVM_VMX_DEFAULT_PLE_GAP    41
+#define KVM_VMX_EFAULT_PLE_GAP    41
 #define KVM_VMX_DEFAULT_PLE_WINDOW 4096
 static int ple_gap = KVM_VMX_DEFAULT_PLE_GAP;
 static int ple_window = KVM_VMX_DEFAULT_PLE_WINDOW;
@@ -1411,9 +1411,8 @@ static int vmx_hardware_setup(void)
 		return EIO;
 #ifdef XXX
 	if (boot_cpu_has(X86_FEATURE_NX))
-		kvm_enable_efer_bits(EFER_NX);
 #endif /*XXX*/
-
+		kvm_enable_efer_bits(EFER_NX);
 
 	if (!cpu_has_vmx_vpid())
 		enable_vpid = 0;
@@ -4368,8 +4367,9 @@ struct vmcs_dump_area dumparea[10];
 int vmcs_dump_idx = 0;
 
 void
-kvm_vmcs_dump(void)
+kvm_vmcs_dump(int where)
 {
+	dumparea[vmcs_dump_idx].where = where;
 	dumparea[vmcs_dump_idx].virtual_processor_id = vmcs_read16(VIRTUAL_PROCESSOR_ID);
 	dumparea[vmcs_dump_idx].guest_es_selector = vmcs_read16(GUEST_ES_SELECTOR);
 	dumparea[vmcs_dump_idx].guest_cs_selector = vmcs_read16(GUEST_CS_SELECTOR);
@@ -4685,7 +4685,7 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	
 	/*XXX - debugging */
 	if (vmcs_dump_idx < 10) {
-		kvm_vmcs_dump();
+		kvm_vmcs_dump(0);
 		vmcs_dump_idx++;
 	}
 
@@ -5092,10 +5092,9 @@ unsigned long kvm_get_rflags(struct kvm_vcpu *vcpu)
 	unsigned long rflags;
 
 	rflags = kvm_x86_ops->get_rflags(vcpu);
-#ifdef XXX
+
 	if (vcpu->guest_debug & KVM_GUESTDBG_SINGLESTEP)
 		rflags &= ~(unsigned long)(X86_EFLAGS_TF | X86_EFLAGS_RF);
-#endif /*XXX*/
 	return rflags;
 }
 
@@ -5138,12 +5137,7 @@ int kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 		.ar_bytes = GUEST_##seg##_AR_BYTES,	   	\
 	}
 
-static struct kvm_vmx_segment_field {
-	unsigned selector;
-	unsigned base;
-	unsigned limit;
-	unsigned ar_bytes;
-} kvm_vmx_segment_fields[] = {
+struct kvm_vmx_segment_field kvm_vmx_segment_fields[] = {
 	VMX_SEGMENT_FIELD(CS),
 	VMX_SEGMENT_FIELD(DS),
 	VMX_SEGMENT_FIELD(ES),
@@ -5227,6 +5221,7 @@ static void vmx_set_segment(struct kvm_vcpu *vcpu,
 	} else
 		ar = vmx_segment_access_rights(var);
 
+
 	/*
 	 *   Fix the "Accessed" bit in AR field of segment registers for older
 	 * qemu binaries.
@@ -5261,13 +5256,11 @@ static uint16_t get_segment_selector(struct kvm_vcpu *vcpu, int seg)
 
 void kvm_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags)
 {
-#ifdef XXX
 	if (vcpu->guest_debug & KVM_GUESTDBG_SINGLESTEP &&
 	    vcpu->arch.singlestep_cs ==
 			get_segment_selector(vcpu, VCPU_SREG_CS) &&
 	    vcpu->arch.singlestep_rip == kvm_rip_read(vcpu))
 		rflags |= X86_EFLAGS_TF | X86_EFLAGS_RF;
-#endif /*XXX*/
 	kvm_x86_ops->set_rflags(vcpu, rflags);
 }
 
@@ -5295,7 +5288,7 @@ int kvm_arch_vcpu_ioctl_set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 #endif
 
 	kvm_rip_write(vcpu, regs->rip);
-	kvm_set_rflags(vcpu, regs->rflags);
+	kvm_set_rflags(vcpu, regs->rflags|2);
 
 	vcpu->arch.exception.pending = 0;
 
@@ -5896,7 +5889,6 @@ static void kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 	struct pvclock_wall_clock wc;
 	struct timespec boot;
 
-#ifdef XXX
 	if (!wall_clock)
 		return;
 
@@ -5910,6 +5902,7 @@ static void kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 	 * wall clock specified here.  guest system time equals host
 	 * system time for us, thus we must fill in host boot time here.
 	 */
+#ifdef XXX
 	getboottime(&boot);
 
 	wc.sec = boot.tv_sec;
@@ -5950,7 +5943,7 @@ void mark_page_dirty(struct kvm *kvm, gfn_t gfn)
 			generic___set_le_bit(offset, p);
 #else
 		/* XXX - assume little endian */
-		if (!BT_TEST(p, offset))
+		if (!BT_TEST(p, offset))  /* XXX why ask if we're going to set it??? */
 			BT_SET(p, offset);
 #endif /*XXX*/
 	}
@@ -7233,7 +7226,6 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	if (BT_TEST((unsigned long *)&vcpu->arch.regs_dirty, VCPU_REGS_RIP))
 		vmcs_writel(GUEST_RIP, vcpu->arch.regs[VCPU_REGS_RIP]);
 
-#ifdef XXX
 	/* When single-stepping over STI and MOV SS, we must clear the
 	 * corresponding interruptibility bits in the guest state. Otherwise
 	 * vmentry fails as it then expects bit 14 (BS) in pending debug
@@ -7241,12 +7233,18 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	 * case. */
 	if (vcpu->guest_debug & KVM_GUESTDBG_SINGLESTEP)
 		vmx_set_interrupt_shadow(vcpu, 0);
-#endif /*XXX*/
 
 	/*
 	 * Loading guest fpu may have cleared host cr0.ts
 	 */
 	vmcs_writel(HOST_CR0, read_cr0());
+
+	/*XXX - debugging */
+	if (vmcs_dump_idx < 10) {
+		kvm_vmcs_dump(1);
+		vmcs_dump_idx++;
+	}
+
 
 	__asm__(
 		/* Store host registers */
@@ -7355,7 +7353,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	/*XXX - debugging */
 	if (vmcs_dump_idx < 10) {
 		dumparea[vmcs_dump_idx].launch_resume_error = vmcs_read32(VM_INSTRUCTION_ERROR);
-		kvm_vmcs_dump();
+		kvm_vmcs_dump(2);
 		vmcs_dump_idx++;
 	}
 	
@@ -8295,10 +8293,8 @@ static int handle_rmode_exception(struct kvm_vcpu *vcpu,
 		 */
 		to_vmx(vcpu)->vcpu.arch.event_exit_inst_len =
 			vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
-#ifdef XXX
 		if (vcpu->guest_debug & KVM_GUESTDBG_USE_SW_BP)
 			return 0;
-#endif /*XXX*/
 		/* fall through */
 	case DE_VECTOR:
 	case OF_VECTOR:
@@ -8402,7 +8398,6 @@ static int handle_exception(struct kvm_vcpu *vcpu)
 	ex_no = intr_info & INTR_INFO_VECTOR_MASK;
 	switch (ex_no) {
 	case DB_VECTOR:
-#ifdef XXX
 		dr6 = vmcs_readl(EXIT_QUALIFICATION);
 		if (!(vcpu->guest_debug &
 		      (KVM_GUESTDBG_SINGLESTEP | KVM_GUESTDBG_USE_HW_BP))) {
@@ -8413,9 +8408,7 @@ static int handle_exception(struct kvm_vcpu *vcpu)
 		kvm_run->debug.arch.dr6 = dr6 | DR6_FIXED_1;
 		kvm_run->debug.arch.dr7 = vmcs_readl(GUEST_DR7);
 		/* fall through */
-#endif /*XXX*/
 	case BP_VECTOR:
-#ifdef XXX
 		/*
 		 * Update instruction length as we may reinject #BP from
 		 * user space while in guest debugging mode. Reading it for
@@ -8426,7 +8419,6 @@ static int handle_exception(struct kvm_vcpu *vcpu)
 		kvm_run->exit_reason = KVM_EXIT_DEBUG;
 		kvm_run->debug.arch.pc = vmcs_readl(GUEST_CS_BASE) + rip;
 		kvm_run->debug.arch.exception = ex_no;
-#endif /*XXX*/
 		break;
 	default:
 		kvm_run->exit_reason = KVM_EXIT_EXCEPTION;
@@ -9128,6 +9120,15 @@ static int handle_cr(struct kvm_vcpu *vcpu)
 	return 0;
 }
 
+static int check_dr_alias(struct kvm_vcpu *vcpu)
+{
+	if (kvm_read_cr4_bits(vcpu, X86_CR4_DE)) {
+		kvm_queue_exception(vcpu, UD_VECTOR);
+		return -1;
+	}
+	return 0;
+}
+
 static int handle_dr(struct kvm_vcpu *vcpu)
 {
 	unsigned long exit_qualification;
@@ -9138,6 +9139,7 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 	/* Do not handle if the CPL > 0, will trigger GP on re-entry */
 	if (!kvm_require_cpl(vcpu, 0))
 		return 1;
+#endif
 	dr = vmcs_readl(GUEST_DR7);
 
 	if (dr & DR7_GD) {
@@ -9163,7 +9165,7 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 			return 1;
 		}
 	}
-#endif /*XXX*/
+
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
 	dr = exit_qualification & DEBUG_REG_ACCESS_NUM;
 	reg = DEBUG_REG_ACCESS_REG(exit_qualification);
@@ -9173,18 +9175,14 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 			val = vcpu->arch.db[dr];
 			break;
 		case 4:
-#ifdef XXX
 			if (check_dr_alias(vcpu) < 0)
-#endif /*XXX*/
 				return 1;
 			/* fall through */
 		case 6:
 			val = vcpu->arch.dr6;
 			break;
 		case 5:
-#ifdef XXX
 			if (check_dr_alias(vcpu) < 0)
-#endif /*XXX*/
 				return 1;
 			/* fall through */
 		default: /* 7 */
@@ -9197,15 +9195,11 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 		switch (dr) {
 		case 0 ... 3:
 			vcpu->arch.db[dr] = val;
-#ifdef XXX
 			if (!(vcpu->guest_debug & KVM_GUESTDBG_USE_HW_BP))
-#endif
 				vcpu->arch.eff_db[dr] = val;
 			break;
 		case 4:
-#ifdef XXX
 			if (check_dr_alias(vcpu) < 0)
-#endif /*XXX*/
 				return 1;
 			/* fall through */
 		case 6:
@@ -9216,9 +9210,7 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 			vcpu->arch.dr6 = (val & DR6_VOLATILE) | DR6_FIXED_1;
 			break;
 		case 5:
-#ifdef XXX
 			if (check_dr_alias(vcpu) < 0)
-#endif /*XXX*/
 				return 1;
 			/* fall through */
 		default: /* 7 */
@@ -9227,15 +9219,13 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 				return 1;
 			}
 			vcpu->arch.dr7 = (val & DR7_VOLATILE) | DR7_FIXED_1;
-#ifdef XXX
+
 			if (!(vcpu->guest_debug & KVM_GUESTDBG_USE_HW_BP)) {
-#endif /*XXX*/
 				vmcs_writel(GUEST_DR7, vcpu->arch.dr7);
 				vcpu->arch.switch_db_regs =
 					(val & DR7_BP_EN_MASK);
-#ifdef XXX
+
 			}
-#endif /*XXX*/
 			break;
 		}
 	}
@@ -10891,6 +10881,69 @@ void kvm_load_guest_fpu(struct kvm_vcpu *vcpu)
 #endif /*XXX*/
 }
 
+static inline unsigned long native_get_debugreg(int regno)
+{
+	unsigned long val = 0;	/* Damn you, gcc! */
+
+	switch (regno) {
+	case 0:
+		__asm__("mov %%db0, %0" :"=r" (val));
+		break;
+	case 1:
+		__asm__("mov %%db1, %0" :"=r" (val));
+		break;
+	case 2:
+		__asm__("mov %%db2, %0" :"=r" (val));
+		break;
+	case 3:
+		__asm__("mov %%db3, %0" :"=r" (val));
+		break;
+	case 6:
+		__asm__("mov %%db6, %0" :"=r" (val));
+		break;
+	case 7:
+		__asm__("mov %%db7, %0" :"=r" (val));
+		break;
+	default:
+		cmn_err(CE_WARN, "kvm: invalid debug register retrieval, regno =  %d\n", regno);
+	}
+	return val;
+}
+
+static inline void native_set_debugreg(int regno, unsigned long value)
+{
+	switch (regno) {
+	case 0:
+		__asm__("mov %0, %%db0"	::"r" (value));
+		break;
+	case 1:
+		__asm__("mov %0, %%db1"	::"r" (value));
+		break;
+	case 2:
+		__asm__("mov %0, %%db2"	::"r" (value));
+		break;
+	case 3:
+		__asm__("mov %0, %%db3"	::"r" (value));
+		break;
+	case 6:
+		__asm__("mov %0, %%db6"	::"r" (value));
+		break;
+	case 7:
+		__asm__("mov %0, %%db7"	::"r" (value));
+		break;
+	default:
+		cmn_err(CE_WARN, "kvm: invalid debug register set, regno =  %d\n", regno);
+	}
+}
+
+/*
+ * These special macros can be used to get or set a debugging register
+ */
+#define get_debugreg(var, register)				\
+	(var) = native_get_debugreg(register)
+#define set_debugreg(value, register)				\
+	native_set_debugreg(register, value)
+
 static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
 	int r;
@@ -10917,32 +10970,38 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 			__kvm_migrate_timers(vcpu);
 #endif /*XXX*/
 		}
+
 		if (BT_TEST(&vcpu->requests, KVM_REQ_KVMCLOCK_UPDATE)) {
 			BT_CLEAR(&vcpu->requests, KVM_REQ_KVMCLOCK_UPDATE);
 #ifdef XXX
 			kvm_write_guest_time(vcpu);
 #endif /*XXX*/
 		}
+
 		if (BT_TEST(&vcpu->requests, KVM_REQ_MMU_SYNC)) {
 			BT_CLEAR(&vcpu->requests, KVM_REQ_MMU_SYNC);
 			kvm_mmu_sync_roots(vcpu);
 		}
+
 		if (BT_TEST(&vcpu->requests, KVM_REQ_TLB_FLUSH)) {
 			BT_CLEAR(&vcpu->requests, KVM_REQ_TLB_FLUSH);
 			kvm_x86_ops->tlb_flush(vcpu);
 		}
+
 		if (BT_TEST(&vcpu->requests, KVM_REQ_REPORT_TPR_ACCESS)) {
 			BT_CLEAR(&vcpu->requests, KVM_REQ_REPORT_TPR_ACCESS);
 			vcpu->run->exit_reason = KVM_EXIT_TPR_ACCESS;
 			r = 0;
 			goto out;
 		}
+
 		if (BT_TEST(&vcpu->requests, KVM_REQ_TRIPLE_FAULT)) {
 			BT_CLEAR(&vcpu->requests, KVM_REQ_TRIPLE_FAULT);
 			vcpu->run->exit_reason = KVM_EXIT_SHUTDOWN;
 			r = 0;
 			goto out;
 		}
+
 		if (BT_TEST(&vcpu->requests, KVM_REQ_DEACTIVATE_FPU)) {
 			BT_CLEAR(&vcpu->requests, KVM_REQ_DEACTIVATE_FPU);
 			vcpu->fpu_active = 0;
@@ -10985,8 +11044,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 #endif /*XXX*/
 	kvm_guest_enter();
 
-#ifdef XXX
-	if (unlikely(vcpu->arch.switch_db_regs)) {
+	if (vcpu->arch.switch_db_regs) {
 		set_debugreg(0, 7);
 		set_debugreg(vcpu->arch.eff_db[0], 0);
 		set_debugreg(vcpu->arch.eff_db[1], 1);
@@ -10994,6 +11052,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		set_debugreg(vcpu->arch.eff_db[3], 3);
 	}
 
+#ifdef XXX
 	trace_kvm_entry(vcpu->vcpu_id);
 #endif /*XXX*/
 	kvm_x86_ops->run(vcpu);

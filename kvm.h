@@ -496,6 +496,10 @@ extern list_t vm_list;
 #define KVM_CAP_DEVICE_ASSIGNMENT 17
 #endif
 #define KVM_CAP_IOMMU 18
+
+/* For vcpu->arch.iommu_flags */
+#define KVM_IOMMU_CACHE_COHERENCY	0x1
+
 #ifdef __KVM_HAVE_MSI
 #define KVM_CAP_DEVICE_MSI 20
 #endif
@@ -587,6 +591,13 @@ struct kvm_dtable {
 /* Architectural interrupt line count. */
 #define KVM_NR_INTERRUPTS 256
 
+
+struct kvm_vmx_segment_field {
+	unsigned selector;
+	unsigned base;
+	unsigned limit;
+	unsigned ar_bytes;
+};
 
 /* for KVM_GET_SREGS and KVM_SET_SREGS */
 struct kvm_sregs {
@@ -1293,10 +1304,10 @@ struct kvm_rmap_desc {
 };
 
 
-static struct vmx_capability {
+struct vmx_capability {
 	uint32_t ept;
 	uint32_t vpid;
-} vmx_capability;
+};
 
 struct vmcs {
 	uint32_t revision_id;

@@ -995,7 +995,6 @@ static inline int apic_test_and_clear_vector(int vec, caddr_t bitmap)
 	} else
 		return (0);
 #endif /*XXX*/
-
 }
 
 static void apic_set_eoi(struct kvm_lapic *apic)
@@ -1375,8 +1374,6 @@ extern int enable_ept;
 extern int enable_unrestricted_guest;
 extern int emulate_invalid_guest_state;
 
-static int bypass_guest_pf = 1;
-
 extern void vmcs_clear(struct vmcs *vmcs);
 extern void vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
 extern void vmx_vcpu_put(struct kvm_vcpu *vcpu);
@@ -1672,21 +1669,7 @@ static void ept_update_paging_mode_cr0(unsigned long *hw_cr0,
 		.ar_bytes = GUEST_##seg##_AR_BYTES,	   	\
 	}
 
-static struct kvm_vmx_segment_field {
-	unsigned selector;
-	unsigned base;
-	unsigned limit;
-	unsigned ar_bytes;
-} kvm_vmx_segment_fields[] = {
-	VMX_SEGMENT_FIELD(CS),
-	VMX_SEGMENT_FIELD(DS),
-	VMX_SEGMENT_FIELD(ES),
-	VMX_SEGMENT_FIELD(FS),
-	VMX_SEGMENT_FIELD(GS),
-	VMX_SEGMENT_FIELD(SS),
-	VMX_SEGMENT_FIELD(TR),
-	VMX_SEGMENT_FIELD(LDTR),
-};
+extern struct kvm_vmx_segment_field  kvm_vmx_segment_fields[];
 
 static void fix_pmode_dataseg(int seg, struct kvm_save_segment *save)
 {
@@ -1830,7 +1813,7 @@ static int init_rmode_identity_map(struct kvm *kvm)
 	/* Set up identity-mapping pagetable for EPT in real mode */
 	for (i = 0; i < PT32_ENT_PER_PAGE; i++) {
 		tmp = (i << 22) + (PT_VALID | PT_WRITABLE | PT_USER |
-				   PT_REF | PT_MOD /*XXX | _PAGE_PSE*/);
+				   PT_REF | PT_MOD | PT_PAT_4K);
 		r = kvm_write_guest_page(kvm, identity_map_pfn,
 				&tmp, i * sizeof(tmp), sizeof(tmp));
 		if (r < 0)
@@ -2078,17 +2061,13 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	 * GUEST_CS_BASE should really be 0xffff0000, but VT vm86 mode
 	 * insists on having GUEST_CS_BASE == GUEST_CS_SELECTOR << 4.  Sigh.
 	 */
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	if (kvm_vcpu_is_bsp(&vmx->vcpu)) {
 		vmcs_write16(GUEST_CS_SELECTOR, 0xf000);
 		vmcs_writel(GUEST_CS_BASE, 0x000f0000);
 	} else {
-#endif /*CONFIG_KVM_APIC_ARCHITECTURE*/
 		vmcs_write16(GUEST_CS_SELECTOR, vmx->vcpu.arch.sipi_vector << 8);
 		vmcs_writel(GUEST_CS_BASE, vmx->vcpu.arch.sipi_vector << 12);
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	}
-#endif /*CONFIG_KVM_APIC_ARCHITECTURE*/
 
 	seg_setup(VCPU_SREG_DS);
 	seg_setup(VCPU_SREG_ES);
@@ -2111,11 +2090,10 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	vmcs_writel(GUEST_SYSENTER_EIP, 0);
 
 	vmcs_writel(GUEST_RFLAGS, 0x02);
-#ifdef XXX
+
 	if (kvm_vcpu_is_bsp(&vmx->vcpu))
 		kvm_rip_write(vcpu, 0xfff0);
 	else
-#endif /*XXX*/
 		kvm_rip_write(vcpu, 0);
 
 	kvm_register_write(vcpu, VCPU_REGS_RSP, 0);
