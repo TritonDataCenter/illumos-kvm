@@ -16,6 +16,11 @@ struct kvm_coalesced_mmio_zone {
 	uint32_t pad;
 };
 
+struct kvm_coalesced_mmio_zone_ioc {
+	struct kvm_coalesced_mmio_zone zone;
+	int kvmid;
+};
+
 #ifdef CONFIG_KVM_MMIO
 
 #define KVM_COALESCED_MMIO_ZONE_MAX 100

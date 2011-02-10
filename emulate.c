@@ -444,7 +444,7 @@ static uint32_t group2_table[] = {
 	"pushf; "                                                       \
 	"notl %"_LO32 _tmp"; "                                          \
 	"andl %"_LO32 _tmp",("_STK"); "                                 \
-	"andl %"_LO32 _tmp","__stringify(BT_NBIPUL/4)"("_STK"); "	\
+	"andl %"_LO32 _tmp","__stringify(64/4)"("_STK"); "	\
 	"pop  %"_tmp"; "                                                \
 	"orl  %"_LO32 _tmp",("_STK"); "                                 \
 	"popf; "                                                        \

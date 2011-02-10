@@ -30,10 +30,8 @@
 
 #include "kvm_types.h"
 
-#define KVM_PIO_PAGE_OFFSET 1
-#ifdef XXX
-#define KVM_COALESCED_MMIO_PAGE_OFFSET 2
-#endif
+#define KVM_PIO_PAGE_OFFSET 0
+#define KVM_COALESCED_MMIO_PAGE_OFFSET 0
 
 #define CR3_PAE_RESERVED_BITS ((X86_CR3_PWT | X86_CR3_PCD) - 1)
 #define CR3_NONPAE_RESERVED_BITS ((PAGESIZE-1) & ~(X86_CR3_PWT | X86_CR3_PCD))
@@ -364,8 +362,8 @@ struct kvm_vcpu_arch {
 	 * kvm_{register,rip}_{read,write} functions.
 	 */
 	unsigned long regs[NR_VCPU_REGS];
-	uint32_t regs_avail;
-	uint32_t regs_dirty;
+	uint64_t regs_avail;
+	uint64_t regs_dirty;
 
 	unsigned long cr0;
 	unsigned long cr0_guest_owned_bits;
@@ -518,8 +516,8 @@ struct kvm_arch {
 	struct kvm_pit *vpit;
 	int vapics_in_nmi_mode;
 
-	unsigned int tss_addr;
-	struct page *apic_access_page;
+	uint64_t tss_addr;
+	caddr_t apic_access_page;
 
 	gpa_t wall_clock;
 
@@ -675,7 +673,7 @@ struct kvm_x86_ops {
 	void (*enable_nmi_window)(struct kvm_vcpu *vcpu);
 	void (*enable_irq_window)(struct kvm_vcpu *vcpu);
 	void (*update_cr8_intercept)(struct kvm_vcpu *vcpu, int tpr, int irr);
-	int (*set_tss_addr)(struct kvm *kvm, uintptr_t addr);
+	int (*set_tss_addr)(struct kvm *kvm, caddr_t addr);
 	int (*get_tdp_level)(void);
 	uint64_t (*get_mt_mask)(struct kvm_vcpu *vcpu, gfn_t gfn, int is_mmio);
 	int (*get_lpage_level)(void);
@@ -995,7 +993,6 @@ enum {
 
 #define KVM_ARCH_WANT_MMU_NOTIFIER
 
-#ifdef XXX
 int kvm_unmap_hva(struct kvm *kvm, unsigned long hva);
 int kvm_age_hva(struct kvm *kvm, unsigned long hva);
 void kvm_set_spte_hva(struct kvm *kvm, unsigned long hva, pte_t pte);
@@ -1006,6 +1003,5 @@ int kvm_cpu_get_interrupt(struct kvm_vcpu *v);
 
 void kvm_define_shared_msr(unsigned index, uint32_t msr);
 void kvm_set_shared_msr(unsigned index, uint64_t val, uint64_t mask);
-#endif /*XXX*/
 #endif /*_KERNEL*/
 #endif /* _ASM_X86_KVM_HOST_H */
