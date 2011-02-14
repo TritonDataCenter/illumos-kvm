@@ -115,11 +115,13 @@ inline gpa_t gfn_to_gpa(gfn_t gfn)
 	return (gpa_t)gfn << PAGESHIFT;
 }
 
+caddr_t pfn_to_page(struct kvm *kvm, pfn_t pfn);
+
 void kvm_release_pfn_clean(pfn_t pfn)
 {
-#ifdef XXX  /*XXX probably just free the page */	
+#ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn))
-		put_page(pfn_to_page(pfn));
+		put_page(pfn_to_page(kvm, pfn));
 #endif /*XXX*/
 }
 
@@ -208,13 +210,13 @@ kvm_arch_destroy_vm(struct kvm *kvm)
 #ifdef XXX
 	kvm_free_vcpus(kvm);
 	kvm_free_physmem(kvm);
-#endif
 #ifdef APIC
 	if (kvm->arch.apic_access_page)
 		put_page(kvm->arch.apic_access_page);
 	if (kvm->arch.ept_identity_pagetable)
 		put_page(kvm->arch.ept_identity_pagetable);
 #endif /*APIC*/
+#endif /*XXX*/
 #if defined(CONFIG_MMU_NOTIFIER) && defined(KVM_ARCH_WANT_MMU_NOTIFIER)
 	cleanup_srcu_struct(&kvm->srcu);
 #endif /*CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER*/
@@ -1454,8 +1456,7 @@ static int alloc_identity_pagetable(struct kvm *kvm)
 	if (r)
 		goto out;
 
-	kvm->arch.ept_identity_pagetable = gfn_to_page(kvm,
-			kvm->arch.ept_identity_map_addr >> PAGESHIFT);
+	kvm->arch.ept_identity_pagetable = (caddr_t)kvm_userspace_mem.userspace_addr;
 out:
 	mutex_exit(&kvm->slots_lock);
 	return r;
@@ -1466,6 +1467,7 @@ static int alloc_apic_access_page(struct kvm *kvm)
 	struct kvm_userspace_memory_region kvm_userspace_mem;
 	int r = 0;
 
+	memset(&kvm_userspace_mem, 0, sizeof(struct kvm_userspace_memory_region));
 	mutex_enter(&kvm->slots_lock);
 	if (kvm->arch.apic_access_page)
 		goto out;
@@ -1477,7 +1479,7 @@ static int alloc_apic_access_page(struct kvm *kvm)
 	if (r)
 		goto out;
 
-	kvm->arch.apic_access_page = gfn_to_page(kvm, 0xfee00);
+	kvm->arch.apic_access_page = (caddr_t)kvm_userspace_mem.userspace_addr;
 out:
 	mutex_exit(&kvm->slots_lock);
 	return r;
@@ -1504,7 +1506,7 @@ vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 	}
 #endif /*NOTNOW*/
 
-	vmx->guest_msrs = kmem_alloc(PAGESIZE, KM_SLEEP);
+	vmx->guest_msrs = kmem_zalloc(PAGESIZE, KM_SLEEP);
 	if (!vmx->guest_msrs) {
 		return NULL;  /* XXX - need cleanup here */
 	}
@@ -1576,7 +1578,7 @@ void update_exception_bitmap(struct kvm_vcpu *vcpu)
 
 	eb = (1u << PF_VECTOR) | (1u << UD_VECTOR) | (1u << MC_VECTOR) |
 	     (1u << NM_VECTOR) | (1u << DB_VECTOR);
-#ifdef XXX
+#ifndef XXX
 	if ((vcpu->guest_debug &
 	     (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP)) ==
 	    (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP))
@@ -1607,10 +1609,8 @@ void kvm_lapic_set_base(struct kvm_vcpu *vcpu, uint64_t value)
 		return;
 	}
 
-#ifdef XXX
 	if (!kvm_vcpu_is_bsp(apic->vcpu))
 		value &= ~MSR_IA32_APICBASE_BSP;
-#endif /*XXX*/
 
 	vcpu->arch.apic_base = value;
 	if (apic_x2apic_mode(apic)) {
@@ -1868,7 +1868,7 @@ static int init_rmode_identity_map(struct kvm *kvm)
 	/* Set up identity-mapping pagetable for EPT in real mode */
 	for (i = 0; i < PT32_ENT_PER_PAGE; i++) {
 		tmp = (i << 22) + (PT_VALID | PT_WRITABLE | PT_USER |
-				   PT_REF | PT_MOD | PT_PAT_4K);
+				   PT_REF | PT_MOD | PT_PAGESIZE);
 		r = kvm_write_guest_page(kvm, identity_map_pfn,
 				&tmp, i * sizeof(tmp), sizeof(tmp));
 		if (r < 0)
@@ -2118,7 +2118,7 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	 */
 	if (kvm_vcpu_is_bsp(&vmx->vcpu)) {
 		vmcs_write16(GUEST_CS_SELECTOR, 0xf000);
-#ifdef XXX
+#ifndef XXX
 		vmcs_writel(GUEST_CS_BASE, 0x000f0000);
 #else
 		vmcs_writel(GUEST_CS_BASE, 0xffff0000);
@@ -2220,10 +2220,9 @@ int kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu)
 
 	vcpu->arch.switch_db_regs = 0;
 	memset(vcpu->arch.db, 0, sizeof(vcpu->arch.db));
-#ifdef XXX
 	vcpu->arch.dr6 = DR6_FIXED_1;
 	vcpu->arch.dr7 = DR7_FIXED_1;
-#endif /*XXX*/
+
 	/*	return kvm_x86_ops->vcpu_reset(vcpu);*/
 	return vmx_vcpu_reset(vcpu);
 }
@@ -2262,8 +2261,6 @@ extern struct kmem_cache *pte_chain_cache;
 extern struct kmem_cache *rmap_desc_cache;
 extern struct kmem_cache *mmu_page_header_cache;
 
-/*XXX the following is called for tdp (two dimensional hardware paging */
-/* we dont support this right now */
 static int mmu_topup_memory_cache_page(struct kvm_mmu_memory_cache *cache,
 				       int min)
 {
@@ -2515,11 +2512,47 @@ unsigned long *gfn_to_rmap(struct kvm *kvm, gfn_t gfn, int level)
 	return &slot->lpage_info[level - 2][idx].rmap_pde;
 }
 
-void kvm_set_pfn_accessed(pfn_t pfn)
+extern inline unsigned long bad_hva(void);
+
+/*
+ * XXX The following routine is misnamed.  Given a gfn
+ * or pfn, the routine returns a virtual address that points
+ * to the same page as the pfn.  On linux, you just use
+ * the kernel area mapped 1-to-1 with physical addresses,
+ * or use the user address stored in the memslot array.
+ * Right now on Solaris, all memory is allocated by the
+ * user level (in which case, we can use the memslot array),
+ * or it's allocated by the kernel, in which case we'll walk
+ * the kvm_mmu_page structs looking for a match.
+ * Either way, this routine is expensive (but how often is
+ * it called???).
+ */
+caddr_t pfn_to_page(struct kvm *kvm, pfn_t pfn)
+{
+	unsigned long raddr;
+	struct kvm_mmu_page *sp;
+	/*
+	 * XXX This routine takes a page frame number and
+	 * returns a virtual address referring to the page.
+	 */
+	raddr = gfn_to_hva(kvm, pfn);  /* search memslot array */
+	if (raddr == bad_hva()) {  /* not in memslots...*/
+		for (sp = list_head(&kvm->arch.active_mmu_pages); sp;
+		     sp = list_next(&kvm->arch.active_mmu_pages, sp)) {
+			if ((sp->hpa>>PAGESHIFT) == pfn) {
+				raddr = *sp->spt;
+				break;
+			}
+		}
+	}
+	return((caddr_t)raddr);
+}
+		
+void kvm_set_pfn_accessed(struct kvm *kvm, pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn))
-		mark_page_accessed(pfn_to_page(pfn));
+		mark_page_accessed(pfn_to_page(kvm, pfn));
 #endif /*XXX*/
 }
 
@@ -2552,11 +2585,11 @@ static void rmap_desc_remove_entry(unsigned long *rmapp,
 	mmu_free_rmap_desc(desc);
 }
 
-void kvm_set_pfn_dirty(pfn_t pfn)
+void kvm_set_pfn_dirty(struct kvm *kvm, pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn)) {
-		struct page *page = pfn_to_page(pfn);
+		struct page *page = pfn_to_page(kvm, pfn);
 		if (!PageReserved(page))
 			SetPageDirty(page);
 	}
@@ -2591,9 +2624,9 @@ void rmap_remove(struct kvm *kvm, uint64_t *spte)
 	sp = page_header(kvm_va2pa((caddr_t)spte), kvm);
 	pfn = spte_to_pfn(*spte);
 	if (*spte & shadow_accessed_mask)
-		kvm_set_pfn_accessed(pfn);
+		kvm_set_pfn_accessed(kvm, pfn);
 	if (is_writable_pte(*spte))
-		kvm_set_pfn_dirty(pfn);
+		kvm_set_pfn_dirty(kvm, pfn);
 	rmapp = gfn_to_rmap(kvm, sp->gfns[spte - sp->spt], sp->role.level);
 	if (!*rmapp) {
 		cmn_err(CE_WARN, "rmap_remove: %p %lx 0->BUG\n", spte, *spte);
@@ -2719,9 +2752,9 @@ static void page_header_update_slot(struct kvm *kvm, void *pte, gfn_t gfn)
 }
 
 
-void kvm_release_pfn_dirty(pfn_t pfn)
+void kvm_release_pfn_dirty(struct kvm_vcpu *vcpu, pfn_t pfn)
 {
-	kvm_set_pfn_dirty(pfn);
+	kvm_set_pfn_dirty(vcpu->kvm, pfn);
 	kvm_release_pfn_clean(pfn);
 }
 
@@ -2868,6 +2901,8 @@ int set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 
 	spte |= (uint64_t)pfn << PAGESHIFT;
 
+	cmn_err(CE_NOTE, "set_spte: spte = %lx\n", spte);
+
 	if ((pte_access & ACC_WRITE_MASK)
 	    || (write_fault && !is_write_protection(vcpu) && !user_fault)) {
 
@@ -2901,7 +2936,9 @@ int set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 		mark_page_dirty(vcpu->kvm, gfn);
 
 set_pte:
+	cmn_err(CE_CONT, "set_spte: calling __set_spte with sptep = %p, spte = %lx\n", sptep, spte);
 	__set_spte(sptep, spte);
+	cmn_err(CE_CONT, "set_spte: returning %x\n", ret);
 	return ret;
 }
 
@@ -2917,8 +2954,11 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 	int was_rmapped = 0;
 	int was_writable = is_writable_pte(*sptep);
 	int rmap_count;
-
+	cmn_err(CE_NOTE, "mmu_set_spte: vcpu = %p sptep = %p, level = %x, gfn = %lx\n",
+		vcpu, sptep, level, gfn);
+	cmn_err(CE_CONT, "mmu_set_spte: pfn = %lx, *sptep = %lx\n", pfn, *sptep);
 	if (is_rmap_spte(*sptep)) {
+		cmn_err(CE_CONT, "mmu_set_spte: is_rmap_spte is true\n");
 		/*
 		 * If we overwrite a PTE page pointer with a 2MB PMD, unlink
 		 * the parent of the now unreachable PTE.
@@ -2929,16 +2969,21 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 			uint64_t pte = *sptep;
 
 			child = page_header(pte & PT64_BASE_ADDR_MASK, vcpu->kvm);
+			cmn_err(CE_CONT, "mmu_set_spte: child = %p, pte %lx, removing parent\n", child, pte);
 			mmu_page_remove_parent_pte(child, sptep);
 		} else if (pfn != spte_to_pfn(*sptep)) {
+			cmn_err(CE_CONT, "mmu_set_spte: removing rmap for pfn = %lx, spte_to_pfn = %lx\n",
+				pfn, spte_to_pfn(*sptep));
 			rmap_remove(vcpu->kvm, sptep);
 		} else
 			was_rmapped = 1;
 	}
 
+	cmn_err(CE_CONT, "mmu_set_spte: calling set_spte...\n");
 	if (set_spte(vcpu, sptep, pte_access, user_fault, write_fault,
 		      dirty, level, gfn, pfn, speculative, 1,
 		      reset_host_protection)) {
+		cmn_err(CE_CONT, "mmu_set_spte: set_spte returned non-null\n");
 		if (write_fault)
 			*ptwrite = 1;
 		kvm_x86_ops->tlb_flush(vcpu);
@@ -2949,17 +2994,22 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 		++vcpu->kvm->stat.lpages;
 #endif /*XXX*/
 
+	cmn_err(CE_CONT, "mmu_set_spte: calling page_header_update_slot, kvm = %p, sptep = %p, gfn = %lx\n",
+		vcpu->kvm, sptep, gfn);
 	page_header_update_slot(vcpu->kvm, sptep, gfn);
 	if (!was_rmapped) {
 		rmap_count = rmap_add(vcpu, sptep, gfn);
+		cmn_err(CE_CONT, "mmu_set_spte: added rmap for vcpu = %p, sptep = %p, gfn = %lx, rmap_count = %d\n",
+			vcpu, sptep, gfn, rmap_count);
 		kvm_release_pfn_clean(pfn);
 #ifdef XXX
 		if (rmap_count > RMAP_RECYCLE_THRESHOLD)
 			rmap_recycle(vcpu, sptep, gfn);
 #endif /*XXX*/
 	} else {
+		cmn_err(CE_CONT, "mmu_set_spte: releasing pfn = %lx, was_writable = %x\n", pfn, was_writable);
 		if (was_writable)
-			kvm_release_pfn_dirty(pfn);
+			kvm_release_pfn_dirty(vcpu, pfn);
 		else
 			kvm_release_pfn_clean(pfn);
 	}
@@ -3045,6 +3095,7 @@ static int __direct_map(struct kvm_vcpu *vcpu, gpa_t v, int write,
 					      iterator.level - 1,
 					      1, ACC_ALL, iterator.sptep);
 			if (!sp) {
+				cmn_err(CE_WARN, "nonpaging_map: ENOMEM\n");
 				kvm_release_pfn_clean(pfn);
 				return -ENOMEM;
 			}
@@ -3088,7 +3139,6 @@ inline void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 static int tdp_page_fault(struct kvm_vcpu *vcpu, gva_t gpa,
 				uint32_t error_code)
 {
-#ifdef XXX
 	pfn_t pfn;
 	int r;
 	int level;
@@ -3106,8 +3156,10 @@ static int tdp_page_fault(struct kvm_vcpu *vcpu, gva_t gpa,
 
 	gfn &= ~(KVM_PAGES_PER_HPAGE(level) - 1);
 
+#ifdef XXX
 	mmu_seq = vcpu->kvm->mmu_notifier_seq;
 	smp_rmb();
+#endif /*XXX*/
 
 	pfn = gfn_to_pfn(vcpu->kvm, gfn);
 	if (is_error_pfn(pfn)) {
@@ -3129,7 +3181,6 @@ static int tdp_page_fault(struct kvm_vcpu *vcpu, gva_t gpa,
 out_unlock:
 	mutex_exit(&vcpu->kvm->mmu_lock);
 	kvm_release_pfn_clean(pfn);
-#endif /*XXX*/
 	return 0;
 }
 
@@ -3282,18 +3333,6 @@ static void reset_rsvds_bits_mask(struct kvm_vcpu *vcpu, int level)
 	}
 }
 
-caddr_t pfn_to_page(pfn_t pfn)
-{
-	/*
-	 * XXX This routine takes a page frame number and
-	 * returns a virtual address referring to the page.
-	 */
-	return (caddr_t)NULL;  /* XXX fix me!!! */
-}
-
-	
-
-
 void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
 			     struct kvm_vcpu *vcpu, uint64_t addr)
 {
@@ -3310,8 +3349,10 @@ void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
 	}
 }
 
-int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator)
+int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator, struct kvm_vcpu *vcpu)
 {
+	struct kvm_mmu_page *sp;
+
 	if (iterator->level < PT_PAGE_TABLE_LEVEL)
 		return 0;
 
@@ -3320,7 +3361,25 @@ int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator)
 			return 0;
 
 	iterator->index = SHADOW_PT_INDEX(iterator->addr, iterator->level);
-	iterator->sptep	= ((uint64_t *)(iterator->shadow_addr)) + iterator->index;
+	cmn_err(CE_NOTE, "iterator->level = %x, iterator->shadow_addr = %lx, iterator->addr = %lx\n",
+		iterator->level, iterator->shadow_addr, iterator->addr);
+	cmn_err(CE_CONT, "iterator->index = %x\n", iterator->index);
+#ifdef XXX
+	iterator->sptep	= ((uint64_t *)__va(iterator->shadow_addr)) + iterator->index;
+#else
+	for (sp = list_head(&vcpu->kvm->arch.active_mmu_pages); sp;
+	     sp = list_next(&vcpu->kvm->arch.active_mmu_pages, sp)) {
+		if (sp->hpa == iterator->shadow_addr) {
+			iterator->sptep = ((uint64_t *)sp->spt) + iterator->index ;
+			cmn_err(CE_CONT, "sp = %p, spt = %p, sptep = %p\n", sp, sp->spt, iterator->sptep);
+			break;
+		}
+	}
+	if (!sp) {
+		cmn_err(CE_NOTE, "shadow_addr %lx not in mmu_page_list\n", iterator->shadow_addr);
+		return 0;
+	}
+#endif /*XXX*/
 	return 1;
 }
 
@@ -3425,12 +3484,10 @@ gfn_t pse36_gfn_delta(uint32_t gpte)
 	return (gpte & PT32_DIR_PSE36_MASK) << shift;
 }
 
-void kvm_get_pfn(pfn_t pfn)
+void kvm_get_pfn(struct kvm_vcpu *vcpu, pfn_t pfn)
 {
-#ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn))
-		get_page(pfn_to_page(pfn));
-#endif /*XXX*/
+		get_page(pfn_to_page(vcpu->kvm, pfn));
 }
 
 #define PTTYPE 64
@@ -3654,18 +3711,9 @@ int init_kvm_mmu(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.update_pte.pfn = -1; /* bad_pfn */
 
-#ifdef XXX
-	/*
-	 * XXX currently, we won't support 2 dimensional paging.
-	 * So the hardware will not do guest-virtual to guest-physical
-	 * and guest-physical to host physical.  So we'll need to
-	 * implement "shadow" paging...
-	 */
-  
 	if (tdp_enabled)
 		return init_kvm_tdp_mmu(vcpu);
 	else
-#endif
 		return init_kvm_softmmu(vcpu);
 	return 0;
 }
@@ -3837,6 +3885,8 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 				if (!userspace_addr)
 					return -ENOMEM;
 				memslot->userspace_addr = (unsigned long) userspace_addr;
+				mem->userspace_addr = (unsigned long) userspace_addr;
+				
 			}
 #endif /*DO_MMAP_SOLARIS*/
 #endif /*XXX*/

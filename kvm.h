@@ -1147,19 +1147,19 @@ struct kvm_irq_routing_table {
 struct kvm_shadow_walk_iterator {
 	uint64_t addr;
 	hpa_t shadow_addr;
-	int level;
 	uint64_t *sptep;
+	int level;
 	unsigned index;
 };
 
 extern void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
 			     struct kvm_vcpu *vcpu, uint64_t addr);
-extern int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator);
+extern int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator, struct kvm_vcpu *vcpu);
 extern void shadow_walk_next(struct kvm_shadow_walk_iterator *iterator);
 
 #define for_each_shadow_entry(_vcpu, _addr, _walker)    \
 	for (shadow_walk_init(&(_walker), _vcpu, _addr);	\
-	     shadow_walk_okay(&(_walker));			\
+	     shadow_walk_okay(&(_walker), _vcpu);			\
 	     shadow_walk_next(&(_walker)))
 
 struct kvm {

@@ -63,11 +63,7 @@ found:
 	return result + ffz(tmp);
 }
 
-#ifdef XXX
 int largepages_enabled = 1;
-#else
-int largepages_enabled = 0;
-#endif /*XXX*/
 
 extern struct kvm *kvm_arch_create_vm(void);
 extern void kvm_arch_destroy_vm(struct kvm *kvmp);
@@ -2026,9 +2022,7 @@ int kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 
 void kvm_reload_remote_mmus(struct kvm *kvm)
 {
-#ifdef XXX	
 	make_all_cpus_request(kvm, KVM_REQ_MMU_RELOAD);
-#endif
 }
 
 void kvm_mmu_flush_tlb(struct kvm_vcpu *vcpu)
@@ -2333,7 +2327,7 @@ static int mmu_alloc_roots(struct kvm_vcpu *vcpu)
 			root_gfn = 0;
 		if (mmu_check_root(vcpu, root_gfn))
 			return 1;
-		sp = kvm_mmu_get_page(vcpu, root_gfn, i << 30,
+	       		sp = kvm_mmu_get_page(vcpu, root_gfn, i << 30,
 				      PT32_ROOT_LEVEL, direct,
 				      ACC_ALL, NULL);
 #ifdef XXX
@@ -3460,9 +3454,6 @@ kvm_create_vm(void)
 		return (NULL);
 	}
 
-	list_create(&kvmp->arch.active_mmu_pages, sizeof (struct kvm_mmu_page),
-		    offsetof(struct kvm_mmu_page, link));
- 
 	rw_init(&kvmp->kvm_rwlock, NULL, RW_DRIVER, NULL);
 
 	for (i = 0; i < KVM_NR_BUSES; i++) {
@@ -3949,11 +3940,7 @@ skip_lpage:
 	kvm_arch_commit_memory_region(kvmp, mem, old, user_alloc);
 
 	kvm_free_physmem_slot(&old, &new);
-#ifdef NOTNOW
-		/* XXX this needs to be here, but I'm getting kernel heap corruption */
-		/* panics with someone writing to a buffer after it is freed */
 	kmem_free(old_memslots, sizeof (struct kvm_memslots));
-#endif /*NOTNOW*/
 	if (flush_shadow)
 		kvm_arch_flush_shadow(kvmp);
 
@@ -5586,7 +5573,7 @@ struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
 	return NULL;
 }
 
-static inline unsigned long bad_hva(void)
+inline unsigned long bad_hva(void)
 {
 	return PAGEOFFSET;
 }
@@ -6089,6 +6076,7 @@ int kvm_write_guest_page(struct kvm *kvm, gfn_t gfn, const void *data,
 	unsigned long addr;
 
 	addr = gfn_to_hva(kvm, gfn);
+	cmn_err(CE_NOTE, "kvm_write_guest_page: gfn = %lx, hva = %lx\n", gfn, addr);
 	if (kvm_is_error_hva(addr))
 		return -EFAULT;
 	/* XXX - addr could be user or kernel */
@@ -6518,17 +6506,19 @@ inline void get_page(caddr_t page)
 {
 }
 
-extern caddr_t pfn_to_page(pfn_t pfn);
+extern caddr_t pfn_to_page(struct kvm *kvm, pfn_t pfn);
 
-inline int kvm_is_mmio_pfn(pfn_t pfn)
+inline int kvm_is_mmio_pfn(struct kvm *kvm, pfn_t pfn)
 {
 #ifdef XXX
 	if (pfn_valid(pfn)) {
-		struct page *page = compound_head(pfn_to_page(pfn));
+		struct page *page = compound_head(pfn_to_page(kvm, pfn));
 		return PageReserved(page);
 	}
-#endif
 	return 1;
+#else
+	return 0;
+#endif /*XXX*/
 }
 
 caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn)
@@ -6537,8 +6527,8 @@ caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn)
 
 	pfn = gfn_to_pfn(kvm, gfn);
 
-	if (!kvm_is_mmio_pfn(pfn))
-		return pfn_to_page(pfn);
+	if (!kvm_is_mmio_pfn(kvm, pfn))
+		return pfn_to_page(kvm, pfn);
 
 	get_page(bad_page);
 	return (caddr_t)bad_page;
@@ -7347,6 +7337,7 @@ static void fixup_rmode_irq(struct vcpu_vmx *vmx)
 static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+
 
 	/* Record the guest's net vcpu time for enforced NMI injections. */
 #ifdef XXX
@@ -8348,6 +8339,8 @@ int kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gva_t cr2, uint32_t error_code)
 	enum emulation_result er;
 
 	r = vcpu->arch.mmu.page_fault(vcpu, cr2, error_code);
+	cmn_err(CE_NOTE, "kvm_mmu_page_fault: %p(%p, %lx, %x) returned %x\n",
+		vcpu->arch.mmu.page_fault, vcpu, cr2, error_code, r);
 	if (r < 0)
 		goto out;
 
@@ -8355,12 +8348,14 @@ int kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gva_t cr2, uint32_t error_code)
 		r = 1;
 		goto out;
 	}
-
+	cmn_err(CE_CONT, "kvm_mmu_page_fault: topping up memory caches\n");
 	r = mmu_topup_memory_caches(vcpu);
 	if (r)
 		goto out;
 
 	er = emulate_instruction(vcpu, cr2, error_code, 0);
+	cmn_err(CE_CONT, "kvm_mmu_page_fault: emulate_instruction returned %x\n", er);
+
 
 	switch (er) {
 	case EMULATE_DONE:
@@ -8379,6 +8374,7 @@ int kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gva_t cr2, uint32_t error_code)
 		cmn_err(CE_PANIC, "kvm_mmu_page_fault: unknown return from emulate_instruction: %x\n", er);
 	}
 out:
+	cmn_err(CE_NOTE, "kvm_mmu_page_fault: returns %d\n", r);
 	return r;
 }
 
@@ -10295,6 +10291,7 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
 	unsigned long exit_qualification;
 	gpa_t gpa;
 	int gla_validity;
+	int rval;
 
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
 
@@ -10319,7 +10316,9 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
 #ifdef XXX
 	trace_kvm_page_fault(gpa, exit_qualification);
 #else
-	return kvm_mmu_page_fault(vcpu, gpa & PAGEMASK, 0);
+	rval = kvm_mmu_page_fault(vcpu, gpa & PAGEMASK, 0);
+	cmn_err(CE_NOTE, "handle_ept_violation: returns %d\n", rval);
+	return rval;
 #endif /*XXX*/
 }
 
@@ -10569,7 +10568,9 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	uint32_t exit_reason = vmx->exit_reason;
 	uint32_t vectoring_info = vmx->idt_vectoring_info;
+	int rval;
 
+	cmn_err(CE_NOTE, "vmx_handle_exit: exit_reason = %d, vectoring_info = %x\n", exit_reason, vectoring_info);
 	/* If guest state is invalid, start emulating */
 	if (vmx->emulation_required && emulate_invalid_guest_state)
 		return handle_invalid_guest_state(vcpu);
@@ -10583,6 +10584,9 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 		vcpu->run->exit_reason = KVM_EXIT_FAIL_ENTRY;
 		vcpu->run->fail_entry.hardware_entry_failure_reason
 			= vmcs_read16(VM_INSTRUCTION_ERROR)&0xff;
+		cmn_err(CE_NOTE, "vmx_handle_exit: fail = %x, failure reason = %x\n",
+			vmx->fail, (unsigned int)vcpu->run->fail_entry.hardware_entry_failure_reason&0xff);
+
 		return 0;
 	}
 
@@ -10613,9 +10617,12 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	}
 
 	if (exit_reason < kvm_vmx_max_exit_handlers
-	    && kvm_vmx_exit_handlers[exit_reason])
-		return kvm_vmx_exit_handlers[exit_reason](vcpu);
-	else {
+	    && kvm_vmx_exit_handlers[exit_reason]) {
+		rval = kvm_vmx_exit_handlers[exit_reason](vcpu);
+		cmn_err(CE_NOTE, "vmx_handle_exit: returning %d from kvm_vmx_exit_handlers[%d]\n",
+			rval, exit_reason);
+		return rval;
+	} else {
 		vcpu->run->exit_reason = KVM_EXIT_UNKNOWN;
 		vcpu->run->hw.hardware_exit_reason = exit_reason;
 	}
@@ -11201,6 +11208,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 #endif /*XXX*/
 	kvm_lapic_sync_from_vapic(vcpu);
 	r = kvm_x86_ops->handle_exit(vcpu);
+	cmn_err(CE_NOTE, "vcpu_enter_guest: returning %d\n", r);
 out:
 	return r;
 }
@@ -11364,11 +11372,6 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 #ifdef XXX
 			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
 #endif /*XXX*/
-			/*
-			 * XXX - the following should use a bitset_t
-			 * and do bitset_atomic_test_and_del().
-			 * but I am lazy, and will get to it later
-			 */
 			if (test_and_clear_bit(KVM_REQ_UNHALT, &vcpu->requests))
 			{
 				switch(vcpu->arch.mp_state) {
@@ -11385,8 +11388,10 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 			}
 		}
 
-		if (r <= 0)
+		if (r <= 0) {
+			cmn_err(CE_NOTE, "__vcpu_run: r = %d\n", r);
 			break;
+		}
 
 #ifdef XXX
 		clear_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
@@ -11415,6 +11420,7 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 #endif /*XXX*/
 	post_kvm_run_save(vcpu);
 	vapic_exit(vcpu);
+	cmn_err(CE_NOTE, "__vcpu_run: returning %d\n", r);
 	return r;
 }
 

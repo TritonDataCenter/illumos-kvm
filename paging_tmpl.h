@@ -303,7 +303,7 @@ static void FNAME(update_pte)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *page,
 	if (mmu_notifier_retry(vcpu, vcpu->arch.update_pte.mmu_seq))
 		return;
 #endif
-	kvm_get_pfn(pfn);
+	kvm_get_pfn(vcpu, pfn);
 	/*
 	 * we call mmu_set_spte() with reset_host_protection = 1 beacuse that
 	 * vcpu->arch.update_pte.pfn was fetched from get_user_pages(write = 1).
