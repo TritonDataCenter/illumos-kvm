@@ -352,11 +352,10 @@ struct kvm_lapic {
 	uint32_t divide_count;
 	struct kvm_vcpu *vcpu;
 	int irr_pending;
-	/* page is not page_t of solaris, but equivalent */
-	struct page *regs_page;
+	page_t *regs_page;
 	void *regs;
 	gpa_t vapic_addr;
-	caddr_t vapic_page;
+	page_t *vapic_page;
 };
 
 struct vcpu_vmx;
@@ -1885,13 +1884,15 @@ struct vcpu_vmx {
 
 static inline struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i)
 {
+#ifdef XXX
 	smp_rmb();
+#endif /*XXX*/
 	return kvm->vcpus[i];
 }
 
 #define kvm_for_each_vcpu(idx, vcpup, kvm) \
 	for (idx = 0, vcpup = kvm_get_vcpu(kvm, idx); \
-	     idx < atomic_read(&kvm->online_vcpus) && vcpup; \
+	     idx < kvm->online_vcpus && vcpup; /* XXX - need protection */ \
 	     vcpup = kvm_get_vcpu(kvm, ++idx))
 #ifdef XXX
 struct kvm_irq_mask_notifier {
@@ -1991,7 +1992,8 @@ struct kvm_pit {
 #endif /*XXX*/
 };
 
-
+#define page_to_pfn(page) (page->p_pagenum)
+#define set_page_private(page, v)	((page)->p_private = (v))
 
 #ifdef XXX
 #define __ex(x) __kvm_handle_fault_on_reboot(x)

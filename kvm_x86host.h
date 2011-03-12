@@ -440,7 +440,7 @@ struct kvm_vcpu_arch {
 #endif /*XXX*/
 	unsigned int hv_clock_tsc_khz;
 	unsigned int time_offset;
-	struct page *time_page;
+	page_t *time_page;
 
 	int nmi_pending;
 	int nmi_injected;
@@ -517,11 +517,11 @@ struct kvm_arch {
 	int vapics_in_nmi_mode;
 
 	uint64_t tss_addr;
-	caddr_t apic_access_page;
+	page_t *apic_access_page;
 
 	gpa_t wall_clock;
 
-	caddr_t ept_identity_pagetable;
+	page_t *ept_identity_pagetable;
 	int ept_identity_pagetable_done;
 	gpa_t ept_identity_map_addr;
 
@@ -820,12 +820,6 @@ int kvm_check_iopl(struct kvm_vcpu *vcpu);
 
 struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn);
 
-static inline struct kvm_mmu_page *page_header(hpa_t shadow_page)
-{
-	struct page *page = pfn_to_page(shadow_page >> PAGE_SHIFT);
-
-	return (struct kvm_mmu_page *)page_private(page);
-}
 
 #endif /*XXX*/
 

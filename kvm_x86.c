@@ -115,7 +115,7 @@ inline gpa_t gfn_to_gpa(gfn_t gfn)
 	return (gpa_t)gfn << PAGESHIFT;
 }
 
-caddr_t pfn_to_page(struct kvm *kvm, pfn_t pfn);
+page_t *pfn_to_page(pfn_t pfn);
 
 void kvm_release_pfn_clean(pfn_t pfn)
 {
@@ -438,9 +438,12 @@ int irqchip_in_kernel(struct kvm *kvm)
 	return ret;
 }
 
+extern page_t *alloc_page(size_t size, int flag);
+extern caddr_t page_address(page_t *page);
+
 static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
 {
-	caddr_t page;
+	page_t *page;
 	int i;
 
 	ASSERT(vcpu);
@@ -454,11 +457,11 @@ static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
 	 * XXX - also, don't need to allocate a full page, we'll look
 	 * at htable_t later on solaris.
 	 */
-	page = kmem_zalloc(PAGESIZE, KM_SLEEP);
+	page = alloc_page(PAGESIZE, KM_SLEEP);
 	if (!page)
 		return -ENOMEM;
 
-	vcpu->arch.mmu.pae_root = (uint64_t *)page;
+	vcpu->arch.mmu.pae_root = (uint64_t *)page_address(page);
 
 	/* XXX - why only 4?  must be physical address extension */
 	/* which is used for 32-bit guest virtual with 36-bit physical, */
@@ -550,6 +553,11 @@ static inline void report_tpr_access(struct kvm_lapic *apic, int write)
 }
 
 extern void apic_update_ppr(struct kvm_lapic *apic);
+
+int kvm_apic_id(struct kvm_lapic *apic)
+{
+	return (apic_get_reg(apic, APIC_ID) >> 24) & 0xff;
+}
 
 static uint32_t __apic_read(struct kvm_lapic *apic, unsigned int offset)
 {
@@ -856,6 +864,86 @@ int kvm_apic_set_irq(struct kvm_vcpu *vcpu, struct kvm_lapic_irq *irq)
 			irq->level, irq->trig_mode);
 }
 
+int kvm_apic_match_physical_addr(struct kvm_lapic *apic, uint16_t dest)
+{
+	return dest == 0xff || kvm_apic_id(apic) == dest;
+}
+
+int kvm_apic_match_logical_addr(struct kvm_lapic *apic, uint8_t mda)
+{
+	int result = 0;
+	uint32_t logical_id;
+
+	if (apic_x2apic_mode(apic)) {
+		logical_id = apic_get_reg(apic, APIC_LDR);
+		return logical_id & mda;
+	}
+
+	logical_id = GET_APIC_LOGICAL_ID(apic_get_reg(apic, APIC_LDR));
+
+	switch (apic_get_reg(apic, APIC_DFR)) {
+	case APIC_DFR_FLAT:
+		if (logical_id & mda)
+			result = 1;
+		break;
+	case APIC_DFR_CLUSTER:
+		if (((logical_id >> 4) == (mda >> 0x4))
+		    && (logical_id & mda & 0xf))
+			result = 1;
+		break;
+	default:
+		cmn_err(CE_WARN, "Bad DFR vcpu %d: %08x\n",
+		       apic->vcpu->vcpu_id, apic_get_reg(apic, APIC_DFR));
+		break;
+	}
+
+	return result;
+}
+
+int kvm_apic_match_dest(struct kvm_vcpu *vcpu, struct kvm_lapic *source,
+			   int short_hand, int dest, int dest_mode)
+{
+	int result = 0;
+	struct kvm_lapic *target = vcpu->arch.apic;
+
+	/* XXX - debug */
+	cmn_err(CE_NOTE, "target %p, source %p, dest 0x%x, "
+		   "dest_mode 0x%x, short_hand 0x%x\n",
+		   target, source, dest, dest_mode, short_hand);
+
+	ASSERT(!target);
+	switch (short_hand) {
+	case APIC_DEST_NOSHORT:
+		if (dest_mode == 0)
+			/* Physical mode. */
+			result = kvm_apic_match_physical_addr(target, dest);
+		else
+			/* Logical mode. */
+			result = kvm_apic_match_logical_addr(target, dest);
+		break;
+	case APIC_DEST_SELF:
+		result = (target == source);
+		break;
+	case APIC_DEST_ALLINC:
+		result = 1;
+		break;
+	case APIC_DEST_ALLBUT:
+		result = (target != source);
+		break;
+	default:
+		cmn_err(CE_WARN, "Bad dest shorthand value %x\n",
+		       short_hand);
+		break;
+	}
+
+	return result;
+}
+
+int kvm_apic_compare_prio(struct kvm_vcpu *vcpu1, struct kvm_vcpu *vcpu2)
+{
+	return vcpu1->arch.apic_arb_prio - vcpu2->arch.apic_arb_prio;
+}
+
 int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 		struct kvm_lapic_irq *irq)
 {
@@ -866,15 +954,20 @@ int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 			kvm_is_dm_lowest_prio(irq))
 		cmn_err(CE_NOTE, "kvm: apic: phys broadcast and lowest prio\n");
 
-#ifdef XXX
-	kvm_for_each_vcpu(i, vcpu, kvm) {
+	/*XXX - currently assumes only 1 vcpu */
+#ifdef XXX	
+/*	kvm_for_each_vcpu(i, vcpu, kvm) {*/
+#else
+	for (i = 0; i < 1; i++) {
+		vcpu = kvm->vcpus[i];
+#endif /*XXX*/
 		if (!kvm_apic_present(vcpu))
 			continue;
-
+		
 		if (!kvm_apic_match_dest(vcpu, src, irq->shorthand,
-					irq->dest_id, irq->dest_mode))
+					 irq->dest_id, irq->dest_mode))
 			continue;
-
+			
 		if (!kvm_is_dm_lowest_prio(irq)) {
 			if (r < 0)
 				r = 0;
@@ -886,10 +979,9 @@ int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 				lowest = vcpu;
 		}
 	}
-#endif /*XXX*/
 	if (lowest)
 		r = kvm_apic_set_irq(lowest, irq);
-
+	
 	return r;
 }
 
@@ -934,12 +1026,42 @@ void apic_set_tpr(struct kvm_lapic *apic, uint32_t tpr)
 	apic_update_ppr(apic);
 }
 
+static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
+{
+	union kvm_ioapic_redirect_entry *entry = &ioapic->redirtbl[irq];
+	struct kvm_lapic_irq irqe;
+
+	/* XXX - debug */
+	cmn_err(CE_NOTE, "dest_mode=%x delivery_mode=%x vector=%x trig_mode=%x\n",
+		     entry->fields.dest_mode,
+		     entry->fields.delivery_mode, entry->fields.vector,
+		     entry->fields.trig_mode);
+
+	irqe.dest_id = entry->fields.dest_id;
+	irqe.vector = entry->fields.vector;
+	irqe.dest_mode = entry->fields.dest_mode;
+	irqe.trig_mode = entry->fields.trig_mode;
+	irqe.delivery_mode = entry->fields.delivery_mode << 8;
+	irqe.level = 1;
+	irqe.shorthand = 0;
+
+#ifdef CONFIG_X86
+	/* Always delivery PIT interrupt to vcpu 0 */
+	if (irq == 0) {
+		irqe.dest_mode = 0; /* Physical mode. */
+		/* need to read apic_id from apic regiest since
+		 * it can be rewritten */
+		irqe.dest_id = ioapic->kvm->bsp_vcpu->vcpu_id;
+	}
+#endif
+	return kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe);
+}
+
 
 static int ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
 {
 	union kvm_ioapic_redirect_entry *pent;
 	int injected = -1;
-#ifdef XXX
 
 	pent = &ioapic->redirtbl[idx];
 
@@ -948,7 +1070,6 @@ static int ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
 		if (injected && pent->fields.trig_mode == IOAPIC_LEVEL_TRIG)
 			pent->fields.remote_irr = 1;
 	}
-#endif /*XXX*/
 	return injected;
 }
 
@@ -957,7 +1078,6 @@ static void __kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector,
 {
 	int i;
 
-#ifdef XXX
 	for (i = 0; i < IOAPIC_NUM_PINS; i++) {
 		union kvm_ioapic_redirect_entry *ent = &ioapic->redirtbl[i];
 
@@ -984,7 +1104,6 @@ static void __kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector,
 		if (!ent->fields.mask && (ioapic->irr & (1 << i)))
 			ioapic_service(ioapic, i);
 	}
-#endif /*XXX*/
 }
 
 extern void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode);
@@ -1001,6 +1120,26 @@ static inline int apic_test_and_clear_vector(int vec, caddr_t bitmap)
 	} else
 		return (0);
 #endif /*XXX*/
+}
+
+static inline int apic_lvt_nmi_mode(uint32_t lvt_val)
+{
+	return (lvt_val & (APIC_MODE_MASK | APIC_LVT_MASKED)) == APIC_DM_NMI;
+}
+
+static void apic_manage_nmi_watchdog(struct kvm_lapic *apic, uint32_t lvt0_val)
+{
+	int nmi_wd_enabled = apic_lvt_nmi_mode(apic_get_reg(apic, APIC_LVT0));
+
+	if (apic_lvt_nmi_mode(lvt0_val)) {
+		if (!nmi_wd_enabled) {
+			/* XXX - debug */
+			cmn_err(CE_NOTE, "Receive NMI setting on APIC_LVT0 for cpu %d\n", 
+				apic->vcpu->vcpu_id);
+			apic->vcpu->kvm->arch.vapics_in_nmi_mode++;
+		}
+	} else if (nmi_wd_enabled)
+		apic->vcpu->kvm->arch.vapics_in_nmi_mode--;
 }
 
 static void apic_set_eoi(struct kvm_lapic *apic)
@@ -1098,9 +1237,7 @@ int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 		break;
 
 	case APIC_LVT0:
-#ifdef XXX
 		apic_manage_nmi_watchdog(apic, val);
-#endif /*XXX*/
 	case APIC_LVTT:
 	case APIC_LVTTHMR:
 	case APIC_LVTPC:
@@ -1194,13 +1331,13 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
 
 	vcpu->arch.apic = apic;
 
-	apic->regs_page = kmem_zalloc(PAGESIZE, KM_SLEEP);
+	apic->regs_page = alloc_page(PAGESIZE, KM_SLEEP);
 	if (apic->regs_page == NULL) {
 		cmn_err(CE_WARN, "malloc apic regs error for vcpu %x\n",
 		       vcpu->vcpu_id);
 		goto nomem_free_apic;
 	}
-	apic->regs = apic->regs_page;
+	apic->regs = page_address(apic->regs_page);
 	memset(apic->regs, 0, PAGESIZE);
 	apic->vcpu = vcpu;
 
@@ -1232,7 +1369,7 @@ extern int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu);
 int
 kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 {
-	void *page;
+	page_t *page;
 	struct kvm *kvm;
 	int r;
 
@@ -1245,12 +1382,12 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	else
 		vcpu->arch.mp_state = KVM_MP_STATE_UNINITIALIZED;
 
-	page = kmem_zalloc(PAGESIZE, KM_SLEEP);
+	page = alloc_page(PAGESIZE, KM_SLEEP);
 	if (!page) {
 		r = ENOMEM;
 		goto fail;
 	}
-	vcpu->arch.pio_data = page;
+	vcpu->arch.pio_data = page_address(page);
 
 	r = kvm_mmu_create(vcpu);
 	if (r < 0)
@@ -1298,8 +1435,9 @@ static const struct kvm_io_device_ops coalesced_mmio_ops = {
 int
 kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned id)
 {
-	struct kvm_run *kvm_run;
+	page_t *page;
 	int r;
+	caddr_t kvm_run;
 
 	mutex_init(&vcpu->mutex, NULL, MUTEX_DRIVER, 0);
 	vcpu->cpu = -1;
@@ -1308,33 +1446,15 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, struct kvm_vcpu_ioc *arg, 
 #ifdef NOTNOW
 	init_waitqueue_head(&vcpu->wq);
 #endif
-	/* XXX the following assumes returned address is page aligned */
-	kvm_run = (struct kvm_run *)kmem_zalloc(3*PAGESIZE, KM_SLEEP);  /* XXX 3* ?? pio/mmio_ring follows kvm_run */
-	if (!kvm_run) {
+	page = alloc_page(PAGESIZE, KM_SLEEP);
+	if (!page) {
 		r = ENOMEM;
 		goto fail;
 	}
-	vcpu->run = kvm_run;
+	vcpu->run = (struct kvm_run *)page_address(page);
+	kvm_run = (caddr_t)vcpu->run;
 
-#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
-	{
-		/* XXX on linux, mmio and pio ring follows kvm_run... */
-		/* not sure how that is supposed to work, but we'll do it this way...*/
-		struct kvm_coalesced_mmio_dev *dev;
-		kvm->coalesced_mmio_ring = (struct kvm_coalesced_mmio_ring *)(((caddr_t) kvm_run)+(2*PAGESIZE));
-		dev = (struct kvm_coalesced_mmio_dev *)(((caddr_t) kvm_run)+PAGESIZE);
-		mutex_init(&dev->lock, NULL, MUTEX_DRIVER, 0);
-		kvm_iodevice_init(&dev->dev, &coalesced_mmio_ops);
-		dev->kvm = kvm;
-		kvm->coalesced_mmio_dev = dev;
-		mutex_enter(&kvm->slots_lock);
-		r = kvm_io_bus_register_dev(kvm, KVM_MMIO_BUS, &dev->dev);
-		mutex_exit(&kvm->slots_lock);
-		if (r < 0)
-			goto fail_free_run;
-	}
-#endif
-	arg->kvm_run_addr = (hat_getpfnum(kas.a_hat, (char *)kvm_run)<<PAGESHIFT)|((uint64_t)kvm_run&PAGEOFFSET);
+	arg->kvm_run_addr = (hat_getpfnum(kas.a_hat, kvm_run)<<PAGESHIFT)|((uint64_t)kvm_run&PAGEOFFSET);
 	arg->kvm_vcpu_addr = (uint64_t)vcpu;
 
 	r = kvm_arch_vcpu_init(vcpu);
@@ -1343,7 +1463,9 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, struct kvm_vcpu_ioc *arg, 
 	return 0;
 
 fail_free_run:
-	kmem_free(kvm_run, PAGESIZE);
+#ifdef XXX
+	free_page((unsigned long)vcpu->run);
+#endif /*XXX*/
 	vcpu->run = 0;
 fail:
 	return r;
@@ -1435,7 +1557,7 @@ static void allocate_vpid(struct vcpu_vmx *vmx)
 	mutex_exit(&vmx_vpid_lock);
 }
 
-extern caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn);
+extern page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn);
 
 static int alloc_identity_pagetable(struct kvm *kvm)
 {
@@ -1450,13 +1572,14 @@ static int alloc_identity_pagetable(struct kvm *kvm)
 	kvm_userspace_mem.guest_phys_addr =
 		kvm->arch.ept_identity_map_addr;
 	kvm_userspace_mem.memory_size = PAGESIZE;
-	kvm_userspace_mem.userspace_addr = 0;
 
+	kvm_userspace_mem.userspace_addr = 0;
 	r = __kvm_set_memory_region(kvm, &kvm_userspace_mem, 0);
 	if (r)
 		goto out;
 
-	kvm->arch.ept_identity_pagetable = (caddr_t)kvm_userspace_mem.userspace_addr;
+	kvm->arch.ept_identity_pagetable = gfn_to_page(kvm,
+			kvm->arch.ept_identity_map_addr >> PAGESHIFT);
 out:
 	mutex_exit(&kvm->slots_lock);
 	return r;
@@ -1479,7 +1602,7 @@ static int alloc_apic_access_page(struct kvm *kvm)
 	if (r)
 		goto out;
 
-	kvm->arch.apic_access_page = (caddr_t)kvm_userspace_mem.userspace_addr;
+	kvm->arch.apic_access_page = gfn_to_page(kvm, 0xfee00);
 out:
 	mutex_exit(&kvm->slots_lock);
 	return r;
@@ -1591,11 +1714,6 @@ void update_exception_bitmap(struct kvm_vcpu *vcpu)
 	if (vcpu->fpu_active)
 		eb &= ~(1u << NM_VECTOR);
 	vmcs_write32(EXCEPTION_BITMAP, eb);
-}
-
-int kvm_apic_id(struct kvm_lapic *apic)
-{
-	return (apic_get_reg(apic, APIC_ID) >> 24) & 0xff;
 }
 
 
@@ -2081,6 +2199,8 @@ extern void vmx_fpu_activate(struct kvm_vcpu *vcpu);
 extern inline int vm_need_tpr_shadow(struct kvm *kvm);
 extern inline int cpu_has_vmx_tpr_shadow(void);
 
+#define page_to_phys(page) (page->p_pagenum << PAGESHIFT)
+
 int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -2180,14 +2300,14 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 		vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, 0);
 		if (vm_need_tpr_shadow(vmx->vcpu.kvm))
 			vmcs_write64(VIRTUAL_APIC_PAGE_ADDR,
-				     kvm_va2pa((caddr_t)vmx->vcpu.arch.apic->regs_page));
+				     page_to_phys(vmx->vcpu.arch.apic->regs_page));
 		vmcs_write32(TPR_THRESHOLD, 0);
 	}
 
 
 	if (vm_need_virtualize_apic_accesses(vmx->vcpu.kvm))
 		vmcs_write64(APIC_ACCESS_ADDR,
-			     kvm_va2pa((caddr_t)vmx->vcpu.kvm->arch.apic_access_page));
+			     page_to_phys(vmx->vcpu.kvm->arch.apic_access_page));
 
 	if (vmx->vpid != 0)
 		vmcs_write16(VIRTUAL_PROCESSOR_ID, vmx->vpid);
@@ -2264,20 +2384,16 @@ extern struct kmem_cache *mmu_page_header_cache;
 static int mmu_topup_memory_cache_page(struct kvm_mmu_memory_cache *cache,
 				       int min)
 {
-	caddr_t page;
+	page_t *page;
 
 	if (cache->nobjs >= min)
 		return 0;
 	while (cache->nobjs < ARRAY_SIZE(cache->objects)) {
-		page = kmem_zalloc(PAGESIZE, KM_SLEEP);
+		page = alloc_page(PAGESIZE, KM_SLEEP);
 		if (!page)
 			return -ENOMEM;
-#ifdef XXX
 		set_page_private(page, 0);
 		cache->objects[cache->nobjs++] = page_address(page);
-#else
-		cache->objects[cache->nobjs++] = page;
-#endif /*XXX*/
 	}
 	return 0;
 }
@@ -2419,19 +2535,19 @@ static int mapping_level(struct kvm_vcpu *vcpu, gfn_t large_gfn)
 }
 
 
-extern caddr_t bad_page;
-extern inline void get_page(caddr_t page);
-
-#define page_to_pfn(page) (hat_getpfnum(kas.a_hat, page))
+extern page_t *bad_page;
+extern inline void get_page(page_t *page);
 
 static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 {
-	caddr_t page[1];
+	page_t page[1];
 	int npages;
 	pfn_t pfn;
+	proc_t *procp = ttoproc(curthread);
+	struct as *as = procp->p_as;
 
+	cmn_err(CE_NOTE, "hva_to_pfn: addr = %lx\n", addr);
 #ifdef XXX
-	might_sleep();
 
 	npages = get_user_pages_fast(addr, 1, 1, page);
 
@@ -2454,23 +2570,31 @@ static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 	} else
 		pfn = page_to_pfn(page[0]);
 #else
-	pfn = hat_getpfnum(kas.a_hat, (caddr_t)addr);
+	if (addr < kernelbase)
+		pfn = hat_getpfnum(as->a_hat, (caddr_t)addr);
+	else
+		pfn = hat_getpfnum(kas.a_hat, (caddr_t)addr);
 #endif /*XXX*/
-
+	cmn_err(CE_CONT, "hva_to_pfn: returning %lx\n", pfn);
 	return pfn;
 }
 
 pfn_t gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 {
 	unsigned long addr;
+	pfn_t pfn;
 
+	cmn_err(CE_NOTE, "gfn_to_pfn: gfn = %lx\n", gfn);
 	addr = gfn_to_hva(kvm, gfn);
+	cmn_err(CE_CONT, "gfn_to_pfn: addr = %lx\n", addr);
 	if (kvm_is_error_hva(addr)) {
 		get_page(bad_page);
 		return page_to_pfn(bad_page);
 	}
 
-	return hva_to_pfn(kvm, addr);
+	pfn = hva_to_pfn(kvm, addr);
+	cmn_err(CE_CONT, "gfn_to_pfn: pfn = %lx\n", pfn);
+	return pfn;
 }
 
 extern pfn_t bad_pfn;
@@ -2485,7 +2609,7 @@ int is_nx(struct kvm_vcpu *vcpu)
 	return vcpu->arch.efer & EFER_NX;
 }
 
-extern struct kvm_mmu_page * page_header(hpa_t shadow_page, struct kvm *kvm);
+extern struct kvm_mmu_page *page_header(hpa_t shadow_page);
 
 pfn_t spte_to_pfn(uint64_t pte)
 {
@@ -2513,46 +2637,18 @@ unsigned long *gfn_to_rmap(struct kvm *kvm, gfn_t gfn, int level)
 }
 
 extern inline unsigned long bad_hva(void);
+extern page_t *page_numtopp_nolock(pfn_t pfn);
 
-/*
- * XXX The following routine is misnamed.  Given a gfn
- * or pfn, the routine returns a virtual address that points
- * to the same page as the pfn.  On linux, you just use
- * the kernel area mapped 1-to-1 with physical addresses,
- * or use the user address stored in the memslot array.
- * Right now on Solaris, all memory is allocated by the
- * user level (in which case, we can use the memslot array),
- * or it's allocated by the kernel, in which case we'll walk
- * the kvm_mmu_page structs looking for a match.
- * Either way, this routine is expensive (but how often is
- * it called???).
- */
-caddr_t pfn_to_page(struct kvm *kvm, pfn_t pfn)
+page_t *pfn_to_page(pfn_t pfn)
 {
-	unsigned long raddr;
-	struct kvm_mmu_page *sp;
-	/*
-	 * XXX This routine takes a page frame number and
-	 * returns a virtual address referring to the page.
-	 */
-	raddr = gfn_to_hva(kvm, pfn);  /* search memslot array */
-	if (raddr == bad_hva()) {  /* not in memslots...*/
-		for (sp = list_head(&kvm->arch.active_mmu_pages); sp;
-		     sp = list_next(&kvm->arch.active_mmu_pages, sp)) {
-			if ((sp->hpa>>PAGESHIFT) == pfn) {
-				raddr = *sp->spt;
-				break;
-			}
-		}
-	}
-	return((caddr_t)raddr);
+	return (page_numtopp_nolock(pfn));
 }
 		
 void kvm_set_pfn_accessed(struct kvm *kvm, pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn))
-		mark_page_accessed(pfn_to_page(kvm, pfn));
+		mark_page_accessed(pfn_to_page(pfn));
 #endif /*XXX*/
 }
 
@@ -2589,9 +2685,9 @@ void kvm_set_pfn_dirty(struct kvm *kvm, pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn)) {
-		struct page *page = pfn_to_page(kvm, pfn);
+		struct page *page = pfn_to_page(pfn);
 		if (!PageReserved(page))
-			SetPageDirty(page);
+			SetPageDirty(page); /*XXX - definition not in linux???*/
 	}
 #endif /*XXX*/
 }
@@ -2621,7 +2717,7 @@ void rmap_remove(struct kvm *kvm, uint64_t *spte)
 
 	if (!is_rmap_spte(*spte))
 		return;
-	sp = page_header(kvm_va2pa((caddr_t)spte), kvm);
+	sp = page_header(kvm_va2pa((caddr_t)spte));
 	pfn = spte_to_pfn(*spte);
 	if (*spte & shadow_accessed_mask)
 		kvm_set_pfn_accessed(kvm, pfn);
@@ -2693,7 +2789,7 @@ static int rmap_add(struct kvm_vcpu *vcpu, uint64_t *spte, gfn_t gfn)
 	if (!is_rmap_spte(*spte))
 		return count;
 	gfn = unalias_gfn(vcpu->kvm, gfn);
-	sp = page_header(kvm_va2pa((caddr_t)spte), vcpu->kvm);
+	sp = page_header(kvm_va2pa((caddr_t)spte));
 	sp->gfns[spte - sp->spt] = gfn;
 	rmapp = gfn_to_rmap(vcpu->kvm, gfn, sp->role.level);
 	if (!*rmapp) {
@@ -2746,7 +2842,7 @@ int memslot_id(struct kvm *kvm, gfn_t gfn)
 static void page_header_update_slot(struct kvm *kvm, void *pte, gfn_t gfn)
 {
 	int slot = memslot_id(kvm, gfn);
-	struct kvm_mmu_page *sp = page_header(kvm_va2pa(pte), kvm);
+	struct kvm_mmu_page *sp = page_header(kvm_va2pa(pte));
 
 	__set_bit(slot, sp->slot_bitmap);
 }
@@ -2968,7 +3064,7 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 			struct kvm_mmu_page *child;
 			uint64_t pte = *sptep;
 
-			child = page_header(pte & PT64_BASE_ADDR_MASK, vcpu->kvm);
+			child = page_header(pte & PT64_BASE_ADDR_MASK);
 			cmn_err(CE_CONT, "mmu_set_spte: child = %p, pte %lx, removing parent\n", child, pte);
 			mmu_page_remove_parent_pte(child, sptep);
 		} else if (pfn != spte_to_pfn(*sptep)) {
@@ -3197,7 +3293,7 @@ void mmu_free_roots(struct kvm_vcpu *vcpu)
 	if (vcpu->arch.mmu.shadow_root_level == PT64_ROOT_LEVEL) {
 		hpa_t root = vcpu->arch.mmu.root_hpa;
 
-		sp = page_header(root, vcpu->kvm);
+		sp = page_header(root);
 		--sp->root_count;
 		if (!sp->root_count && sp->role.invalid)
 			kvm_mmu_zap_page(vcpu->kvm, sp);
@@ -3210,7 +3306,7 @@ void mmu_free_roots(struct kvm_vcpu *vcpu)
 
 		if (root) {
 			root &= PT64_BASE_ADDR_MASK;
-			sp = page_header(root, vcpu->kvm);
+			sp = page_header(root);
 			--sp->root_count;
 			if (!sp->root_count && sp->role.invalid)
 				kvm_mmu_zap_page(vcpu->kvm, sp);
@@ -3351,8 +3447,6 @@ void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
 
 int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator, struct kvm_vcpu *vcpu)
 {
-	struct kvm_mmu_page *sp;
-
 	if (iterator->level < PT_PAGE_TABLE_LEVEL)
 		return 0;
 
@@ -3367,18 +3461,8 @@ int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator, struct kvm_vcpu 
 #ifdef XXX
 	iterator->sptep	= ((uint64_t *)__va(iterator->shadow_addr)) + iterator->index;
 #else
-	for (sp = list_head(&vcpu->kvm->arch.active_mmu_pages); sp;
-	     sp = list_next(&vcpu->kvm->arch.active_mmu_pages, sp)) {
-		if (sp->hpa == iterator->shadow_addr) {
-			iterator->sptep = ((uint64_t *)sp->spt) + iterator->index ;
-			cmn_err(CE_CONT, "sp = %p, spt = %p, sptep = %p\n", sp, sp->spt, iterator->sptep);
-			break;
-		}
-	}
-	if (!sp) {
-		cmn_err(CE_NOTE, "shadow_addr %lx not in mmu_page_list\n", iterator->shadow_addr);
-		return 0;
-	}
+	iterator->sptep = (uint64_t *)page_address(pfn_to_page((iterator->shadow_addr)>>PAGESHIFT)) + iterator->index;
+	cmn_err(CE_CONT, "sptep = %p\n", iterator->sptep);
 #endif /*XXX*/
 	return 1;
 }
@@ -3412,11 +3496,54 @@ int kvm_read_guest_atomic(struct kvm *kvm, gpa_t gpa, void *data,
 	return 0;
 }
 
+int make_all_cpus_request(struct kvm *kvm, unsigned int req)
+{
+	int i, cpu, me;
+#ifdef XXX
+	cpumask_var_t cpus;
+#endif /*XXX*/
+	int called = 1;
+	struct kvm_vcpu *vcpu;
+
+#ifdef XXX
+	zalloc_cpumask_var(&cpus, GFP_ATOMIC);
+	mutex_enter(&kvm->requests_lock);
+	me = smp_processor_id();
+	kvm_for_each_vcpu(i, vcpu, kvm) {
+#else
+	for (i = 0; i < 1; i++) {
+		vcpu = kvm->vcpus[i];
+		if (!vcpu)
+			return 0;
+#endif /*XXX*/
+		if (test_and_set_bit(req, &vcpu->requests))
+			continue;
+		cpu = vcpu->cpu;
+#ifdef XXX
+		if (cpus != NULL && cpu != -1 && cpu != me)
+			cpumask_set_cpu(cpu, cpus);
+#endif
+	}
+#ifdef XXX
+	if (unlikely(cpus == NULL))
+		smp_call_function_many(cpu_online_mask, ack_flush, NULL, 1);
+	else if (!cpumask_empty(cpus))
+		smp_call_function_many(cpus, ack_flush, NULL, 1);
+	else
+		called = false;
+	mutex_exit(&kvm->requests_lock);
+	free_cpumask_var(cpus);
+#endif /*XXX*/
+	return called;
+}
+
 void kvm_flush_remote_tlbs(struct kvm *kvm)
 {
 #ifdef XXX
 	if (make_all_cpus_request(kvm, KVM_REQ_TLB_FLUSH))
 		++kvm->stat.remote_tlb_flush;
+#else
+	(void)make_all_cpus_request(kvm, KVM_REQ_TLB_FLUSH);
 #endif /*XXX*/
 }
 
@@ -3487,7 +3614,7 @@ gfn_t pse36_gfn_delta(uint32_t gpte)
 void kvm_get_pfn(struct kvm_vcpu *vcpu, pfn_t pfn)
 {
 	if (!kvm_is_mmio_pfn(pfn))
-		get_page(pfn_to_page(vcpu->kvm, pfn));
+		get_page(pfn_to_page(pfn));
 }
 
 #define PTTYPE 64
@@ -3836,6 +3963,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 				   int user_alloc)
 {
 	int npages = memslot->npages;
+	int i;
 
 	/*To keep backward compatibility with older userspace,
 	 *x86 needs to hanlde !user_alloc case.
@@ -3857,38 +3985,27 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 				return PTR_ERR((void *)userspace_addr);
 			memslot->userspace_addr = (unsigned long) userspace_addr;
 #else
-			/*
-			 * XXX It would be nice to do what linux is doing here.  I.e., map
-			 * pages to user address space.  But doing it this way can
-			 * result in stack overflow panics from pagefaults.  Besides,
-			 * user level never accesses these pages anyway(???).
-			 * The big advantage in mapping the pages to user address space
-			 * is that they are not part of the kernel, and can get paged out.
-			 * Also, cleanup on exit should be automatic.  Are there other
-			 * advantages...?
-			 */
-#ifdef DO_MMAP_SOLARIS
 			{
 				int rval;
 				caddr_t userspace_addr = NULL;
 				userspace_addr = smmap64(NULL, npages*PAGESIZE,
-							 PROT_READ|PROT_WRITE|PROT_EXEC,
+							 PROT_READ|PROT_WRITE,
 							 MAP_PRIVATE|MAP_ANON,
 							 -1, 0);
 				cmn_err(CE_NOTE, "kvm_arch_prepare_memory_region: mmap at %p\n", userspace_addr);
+				/*
+				 * the mmap sets up the mapping, but there are no pages allocated.
+				 * Code sets up the shadow page tables before the pages are
+				 * allocated, so there are invalid pages in the map.
+				 * We'll touch the pages so they get allocated here.
+				 */
+				for (i = 0; i < npages; i++) {
+					if (copyout(empty_zero_page, userspace_addr + (i * PAGESIZE), sizeof(empty_zero_page))) {
+						cmn_err(CE_WARN, "could not copy to mmap page\n");
+					}
+				}
 				memslot->userspace_addr = (unsigned long) userspace_addr;
 			}
-#else
-			{
-				caddr_t userspace_addr = NULL;  /* not really user space... */
-				userspace_addr = kmem_zalloc(npages*PAGESIZE, KM_SLEEP);
-				if (!userspace_addr)
-					return -ENOMEM;
-				memslot->userspace_addr = (unsigned long) userspace_addr;
-				mem->userspace_addr = (unsigned long) userspace_addr;
-				
-			}
-#endif /*DO_MMAP_SOLARIS*/
 #endif /*XXX*/
 		}
 	}
@@ -4070,16 +4187,15 @@ static void coalesced_mmio_destructor(struct kvm_io_device *this)
 
 int kvm_coalesced_mmio_init(struct kvm *kvm)
 {
-#ifdef XXX
 	struct kvm_coalesced_mmio_dev *dev;
-	caddr_t *page;
+	page_t *page;
 	int ret;
 
 	ret = -ENOMEM;
-	page = kmem_zalloc(PAGESIZE, KM_SLEEP);
+	page = alloc_page(PAGESIZE, KM_SLEEP);
 	if (!page)
 		goto out_err;
-	kvm->coalesced_mmio_ring = (struct kvm_coalesced_mmio_ring *)page;
+	kvm->coalesced_mmio_ring = (struct kvm_coalesced_mmio_ring *)page_address(page);
 
 	ret = -ENOMEM;
 	dev = kmem_zalloc(sizeof(struct kvm_coalesced_mmio_dev), KM_SLEEP);
@@ -4101,12 +4217,11 @@ int kvm_coalesced_mmio_init(struct kvm *kvm)
 out_free_dev:
 	kmem_free(dev, sizeof(struct kvm_coalesced_mmio_dev));
 out_free_page:
+#ifdef XXX
 	kmem_free(page, PAGESIZE);
+#endif /*XXX*/
 out_err:
 	return ret;
-#else
-	return EINVAL;
-#endif /*XXX*/
 }
 
 void kvm_coalesced_mmio_free(struct kvm *kvm)

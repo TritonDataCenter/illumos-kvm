@@ -78,7 +78,7 @@ static gfn_t gpte_to_gfn_lvl(pt_element_t gpte, int lvl)
 	return (gpte & PT_LVL_ADDR_MASK(lvl)) >> PAGESHIFT;
 }
 
-extern caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn);
+extern page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn);
 
 static int FNAME(cmpxchg_gpte)(struct kvm *kvm,
 			 gfn_t table_gfn, unsigned index,
@@ -86,11 +86,11 @@ static int FNAME(cmpxchg_gpte)(struct kvm *kvm,
 {
 	pt_element_t ret;
 	pt_element_t *table;
-	caddr_t page;
+	page_t *page;
 
 	page = gfn_to_page(kvm, table_gfn);
 
-	table = (pt_element_t *)page;
+	table = (pt_element_t *)page_address(page);
 #ifdef XXX
 	ret = CMPXCHG(&table[index], orig_pte, new_pte);
 	kvm_release_page_dirty(page);
@@ -103,6 +103,7 @@ static int FNAME(cmpxchg_gpte)(struct kvm *kvm,
 	if (table[index] == orig_pte)
 		table[index] = new_pte;
 
+	kvm_release_page_dirty(page);
 #endif /*XXX*/
 
 	return (ret != orig_pte);

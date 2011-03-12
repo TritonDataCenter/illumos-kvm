@@ -104,9 +104,9 @@ void kvm_put_kvm(struct kvm *kvm);
 #define HPA_MSB ((sizeof(hpa_t) * 8) - 1)
 #define HPA_ERR_MASK ((hpa_t)1 << HPA_MSB)
 static inline int is_error_hpa(hpa_t hpa) { return hpa >> HPA_MSB; }
-caddr_t gva_to_page(struct kvm_vcpu *vcpu, gva_t gva);
+page_t gva_to_page(struct kvm_vcpu *vcpu, gva_t gva);
 
-extern caddr_t bad_page;
+extern page_t *bad_page;
 extern pfn_t bad_pfn;
 
 int is_error_page(struct page *page);
@@ -132,7 +132,7 @@ void kvm_arch_flush_shadow(struct kvm *kvm);
 gfn_t unalias_gfn(struct kvm *kvm, gfn_t gfn);
 gfn_t unalias_gfn_instantiation(struct kvm *kvm, gfn_t gfn);
 
-caddr_t gfn_to_page(struct kvm *kvm, gfn_t gfn);
+page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn);
 unsigned long gfn_to_hva(struct kvm *kvm, gfn_t gfn);
 void kvm_release_page_clean(struct page *page);
 void kvm_release_page_dirty(struct page *page);

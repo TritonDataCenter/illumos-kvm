@@ -3,11 +3,11 @@
 #
 
 # Use the gcc compiler and Sun linker.
-KERNEL_SOURCE=/wd320/max/onnv.121
+KERNEL_SOURCE=/wd320/max/illumos/illumos-gate
 CC=gcc -m64 -mcmodel=kernel
 LD=/usr/bin/ld
-CTFCONVERT=$(KERNEL_SOURCE)/usr/src/tools/proto/opt/onbld/bin/i386/ctfconvert
-CTFMERGE=$(KERNEL_SOURCE)/usr/src/tools/proto/opt/onbld/bin/i386/ctfmerge
+CTFCONVERT=/wd320/max/onnv.121/usr/src/tools/proto/opt/onbld/bin/i386/ctfconvert
+CTFMERGE=/wd320/max/onnv.121/usr/src/tools/proto/opt/onbld/bin/i386/ctfmerge
 
 CFLAGS += -DCONFIG_HAVE_KVM_IRQCHIP -D__KVM_HAVE_IOAPIC -DCONFIG_X86_64 -D_KERNEL -D_MACHDEP -Dx86 -DDEBUG -c -g -DCONFIG_SOLARIS -DCONFIG_KVM_MMIO -DCONFIG_KVM_APIC_ARCHITECTURE -O2 -fident -finline -fno-inline-functions -fno-builtin -fno-asm -nodefaultlibs -D__sun -O -D_ASM_INLINES -ffreestanding -Wall -Wno-unknown-pragmas -Wno-missing-braces -Wno-sign-compare -Wno-parentheses -Wno-uninitialized -Wno-implicit-function-declaration -Wno-unused -Wno-trigraphs -Wno-char-subscripts -Wno-switch -gdwarf-2 -std=gnu99 -fno-dwarf2-indirect-strings -Werror -DDIS_MEM -D_KERNEL -ffreestanding -D_SYSCALL32 -D_DDI_STRICT -Di86pc -D_MACHDEP -DOPTERON_ERRATUM_88 -DOPTERON_ERRATUM_91 -DOPTERON_ERRATUM_93 -DOPTERON_ERRATUM_95 -DOPTERON_ERRATUM_99 -DOPTERON_ERRATUM_100 -DOPTERON_ERRATUM_101 -DOPTERON_ERRATUM_108 -DOPTERON_ERRATUM_109 -DOPTERON_ERRATUM_121 -DOPTERON_ERRATUM_122 -DOPTERON_ERRATUM_123 -DOPTERON_ERRATUM_131 -DOPTERON_WORKAROUND_6336786 -DOPTERON_WORKAROUND_6323525 -DOPTERON_ERRATUM_172 -DOPTERON_ERRATUM_298 -I/wd320/max/onnv.121/usr/src/common -nostdinc -c -DUTS_RELEASE="5.11" -DUTS_VERSION="onnv.121" -DUTS_PLATFORM="i86pc" -mno-red-zone
 
