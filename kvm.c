@@ -1542,38 +1542,6 @@ typedef int (*mmu_parent_walk_fn) (struct kvm_vcpu *vcpu, struct kvm_mmu_page *s
 
 extern uint64_t kvm_va2pa(caddr_t va);
 
-#ifdef XXX
-struct kvm_mmu_page *
-shadow_hpa_to_kvmpage(hpa_t shadow_page, struct kvm *kvm)
-{
-	struct kvm_mmu_page *sp;
-	/*
-	 * XXX - We'll probably need a faster way to do this...
-	 * For right now, search all kvm_mmu_page for matching hpa
-	 */
-	cmn_err(CE_NOTE, "shadow_hpa_to_kvmpage: shadow_page = %lx\n",
-		shadow_page);
-#ifdef DEBUG
-	for (sp = list_head(&kvm->arch.active_mmu_pages); sp;
-	     sp = list_next(&kvm->arch.active_mmu_pages, sp)) {
-		if (sp->hpa == (shadow_page & ~PAGEOFFSET))
-			cmn_err(CE_NOTE, "shadow_hpa_to_kvmpage: sp = %p, shadow_page = %lx\n",
-				sp, shadow_page);
-	}
-#endif /*DEBUG*/
-	for (sp = list_head(&kvm->arch.active_mmu_pages); sp;
-	     sp = list_next(&kvm->arch.active_mmu_pages, sp)) {
-		if (sp->hpa == (shadow_page & ~PAGEOFFSET)) {
-			cmn_err(CE_NOTE, "shadow_hpa_to_kvmpage: returning sp = %p, shadow_page = %lx\n",
-				sp, shadow_page);
-			return sp;
-		}
-	}
-	return NULL;
-}	
-
-#endif /*XXX*/
-
 struct kvm_mmu_page *page_private(page_t *page)
 {
 	return ((struct kvm_mmu_page *)page->p_private);
@@ -4524,6 +4492,7 @@ int vmcs_dump_idx = 0;
 void
 kvm_vmcs_dump(int where)
 {
+#ifdef XXX
 	dumparea[vmcs_dump_idx].where = where;
 	dumparea[vmcs_dump_idx].virtual_processor_id = vmcs_read16(VIRTUAL_PROCESSOR_ID);
 	dumparea[vmcs_dump_idx].guest_es_selector = vmcs_read16(GUEST_ES_SELECTOR);
@@ -4599,7 +4568,9 @@ kvm_vmcs_dump(int where)
 	dumparea[vmcs_dump_idx].secondary_vm_exec_control = vmcs_read32(SECONDARY_VM_EXEC_CONTROL);
 	dumparea[vmcs_dump_idx].ple_gap = vmcs_read32(PLE_GAP);
 	dumparea[vmcs_dump_idx].ple_window = vmcs_read32(PLE_WINDOW);
+#ifdef XXX
 	dumparea[vmcs_dump_idx].vm_instruction_error = vmcs_read32(VM_INSTRUCTION_ERROR);
+#endif /*XXX*/
 	dumparea[vmcs_dump_idx].vm_exit_reason = vmcs_read32(VM_EXIT_REASON);
 	dumparea[vmcs_dump_idx].vm_exit_intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
 	dumparea[vmcs_dump_idx].vm_exit_intr_error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
@@ -4672,6 +4643,7 @@ kvm_vmcs_dump(int where)
 	dumparea[vmcs_dump_idx].host_ia32_sysenter_eip = vmcs_readl(HOST_IA32_SYSENTER_EIP);
 	dumparea[vmcs_dump_idx].host_rsp = vmcs_readl(HOST_RSP);
 	dumparea[vmcs_dump_idx].host_rip = vmcs_readl(HOST_RIP);
+#endif /*XXX*/
 }
 
 
@@ -6647,18 +6619,22 @@ inline void get_page(page_t *page)
 
 extern pfn_t physmax;
 
+#ifdef XXX
 #define pfn_valid(pfn) ((pfn < physmax) && (pfn != PFN_INVALID))
+#else
+#define pfn_valid(pfn) (pfn != PFN_INVALID)
+#endif /*XXX*/
 
 inline int kvm_is_mmio_pfn(struct kvm *kvm, pfn_t pfn)
 {
 	if (pfn_valid(pfn)) {
-		struct page *page = compound_head(pfn_to_page(pfn));
 #ifdef XXX
+		struct page *page = compound_head(pfn_to_page(pfn));
 		return PageReserved(page);
 #endif
 		return 0;
-	}
-	return 1;
+	} else
+		return 1;
 }
 
 page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn)
@@ -7576,13 +7552,13 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 
 		/* Enter guest mode */
 		"jne .Llaunched \n\t"
-#ifdef XXX
+#ifndef XXX
 		__ex(ASM_VMX_VMLAUNCH) "\n\t"
 #else
 		ASM_VMX_VMLAUNCH "\n\t"
 #endif /*XXX*/
 		"jmp .Lkvm_vmx_return \n\t"
-#ifdef XXX
+#ifndef XXX
 		".Llaunched: " __ex(ASM_VMX_VMRESUME) "\n\t"
 #else
 		".Llaunched: " ASM_VMX_VMRESUME "\n\t"
@@ -7643,7 +7619,6 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 
 	/*XXX - debugging */
 	if (vmcs_dump_idx < 10) {
-		dumparea[vmcs_dump_idx].launch_resume_error = vmcs_read32(VM_INSTRUCTION_ERROR);
 		kvm_vmcs_dump(2);
 		vmcs_dump_idx++;
 	}
@@ -7657,8 +7632,12 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	if (vmx->rmode.irq.pending)
 		fixup_rmode_irq(vmx);
 
+#ifdef XXX
 	__asm__("mov %0, %%ds; mov %0, %%es" : : "r"SEL_GDT(GDT_UDATA, SEL_UPL));
-
+#else
+	__asm__("mov %0, %%ds; mov %0, %%es" : : "r"KDS_SEL);
+#endif /*XXX*/
+	vmx->launched = 1;
 
 	vmx_complete_interrupts(vmx);
 }
@@ -10853,7 +10832,7 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	if (vmx->fail) {
 		vcpu->run->exit_reason = KVM_EXIT_FAIL_ENTRY;
 		vcpu->run->fail_entry.hardware_entry_failure_reason
-			= vmcs_read16(VM_INSTRUCTION_ERROR)&0xff;
+			= vmcs_read32(VM_INSTRUCTION_ERROR);
 		cmn_err(CE_NOTE, "vmx_handle_exit: fail = %x, failure reason = %x\n",
 			vmx->fail, (unsigned int)vcpu->run->fail_entry.hardware_entry_failure_reason&0xff);
 
@@ -11659,6 +11638,13 @@ void kvm_lapic_reset(struct kvm_vcpu *vcpu)
 		__func__, vcpu, kvm_apic_id(apic), vcpu->arch.apic_base, apic->base_address);
 }
 
+static int dm_request_for_irq_injection(struct kvm_vcpu *vcpu)
+{
+	return (!irqchip_in_kernel(vcpu->kvm) && !kvm_cpu_has_interrupt(vcpu) &&
+		vcpu->run->request_interrupt_window &&
+		kvm_arch_interrupt_allowed(vcpu));
+}
+
 static int __vcpu_run(struct kvm_vcpu *vcpu)
 {
 	int r;
@@ -11716,12 +11702,15 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 		clear_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
 		if (kvm_cpu_has_pending_timer(vcpu))
 			kvm_inject_pending_timer_irqs(vcpu);
+#endif /*XXX*/
 		if (dm_request_for_irq_injection(vcpu)) {
 			r = -EINTR;
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
+#ifdef XXX
 			++vcpu->stat.request_irq_exits;
+#endif /*XXX*/
 		}
-
+#ifdef XXX
 		if (signal_pending(current)) {
 			r = -EINTR;
 			vcpu->run->exit_reason = KVM_EXIT_INTR;

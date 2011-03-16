@@ -121,7 +121,7 @@ void kvm_release_pfn_clean(pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn))
-		put_page(pfn_to_page(kvm, pfn));
+		put_page(pfn_to_page(pfn));
 #endif /*XXX*/
 }
 
@@ -2175,8 +2175,8 @@ void fx_init(struct kvm_vcpu *vcpu)
 	 * allocate ram with GFP_KERNEL.
 	 */
 	if (!used_math())
-		kvm_fx_save(&vcpu->arch.host_fx_image);
 #endif /*XXX*/
+		kvm_fx_save(&vcpu->arch.host_fx_image);
 
 	/* Initialize guest FPU by resetting ours and saving into guest's */
 	kpreempt_disable();
