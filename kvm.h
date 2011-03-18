@@ -1121,7 +1121,7 @@ struct kvm_kernel_irq_routing_entry {
 	struct list_node link;
 };
 
-/*#ifdef __KVM_HAVE_IOAPIC */
+#ifdef __KVM_HAVE_IOAPIC
 
 #define KVM_MAX_IRQ_ROUTES 1024
 
@@ -1136,6 +1136,7 @@ struct kvm_irq_routing_table {
 	list_t map[KVM_MAX_IRQ_ROUTES+1];
 };
 
+#endif /*__KVM_HAVE_IOAPIC*/
 #define MTRRphysBase_MSR(reg) (0x200 + 2 * (reg))
 #define MTRRphysMask_MSR(reg) (0x200 + 2 * (reg) + 1)
 
@@ -1161,6 +1162,12 @@ extern void shadow_walk_next(struct kvm_shadow_walk_iterator *iterator);
 	     shadow_walk_okay(&(_walker), _vcpu);			\
 	     shadow_walk_next(&(_walker)))
 
+enum kvm_bus {
+	KVM_MMIO_BUS,
+	KVM_PIO_BUS,
+	KVM_NR_BUSES
+};
+
 struct kvm {
 	kmutex_t mmu_lock;
 	kmutex_t requests_lock;
@@ -1170,10 +1177,10 @@ struct kvm {
 	/* the following was a read-copy update mechanism */
 	/* we'll use a reader-writer lock, for now */
 	krwlock_t kvm_rwlock;
-  /*#ifdef CONFIG_KVM_APIC_ARCHITECTURE*/
+#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	uint32_t bsp_vcpu_id;
 	struct kvm_vcpu *bsp_vcpu;
-  /*#endif*/
+#endif
 	struct kvm_vcpu *vcpus[KVM_MAX_VCPUS];
 	volatile int online_vcpus;
 	struct list_node vm_list;
@@ -1414,7 +1421,7 @@ extern unsigned int __invalid_size_argument_for_IOC;
 	  sizeof(t) : __invalid_size_argument_for_IOC)
 #else
 #define _IOC_TYPECHECK(t) (sizeof(t))
-#endif
+#endif /*_KERNEL*/
 #else /*XXX*/
 
 #define _IOC_TYPECHECK(t) (sizeof(t))
@@ -1426,7 +1433,7 @@ static inline void native_load_tr_desc(void)
 
 #define load_TR_desc() native_load_tr_desc()
 
-#endif
+#endif /*XXX*/
 
 
 #ifdef XXX
@@ -1894,13 +1901,15 @@ static inline struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i)
 	for (idx = 0, vcpup = kvm_get_vcpu(kvm, idx); \
 	     idx < kvm->online_vcpus && vcpup; /* XXX - need protection */ \
 	     vcpup = kvm_get_vcpu(kvm, ++idx))
+
 #ifdef XXX
 struct kvm_irq_mask_notifier {
 	void (*func)(struct kvm_irq_mask_notifier *kimn, bool masked);
 	int irq;
-	struct hlist_node link;
+	struct list_node link;
 };
 #endif /*XXX*/
+
 #ifdef __KVM_HAVE_IOAPIC
 void kvm_get_intr_delivery_bitmask(struct kvm_ioapic *ioapic,
 				   union kvm_ioapic_redirect_entry *entry,
@@ -1928,7 +1937,7 @@ void kvm_free_irq_routing(struct kvm *kvm);
 
 static inline void kvm_free_irq_routing(struct kvm *kvm) {}
 
-#endif
+#endif /*CONFIG_HAVE_KVM_IRQCHIP*/
 
 /*
  * vcpu->requests bit members
@@ -2053,12 +2062,210 @@ struct cpuid_data {
         struct kvm_cpuid_entry2 entries[100];
 } __attribute__((packed)) cpuid_data;
 
+/*
+ * It would be nice to use something smarter than a linear search, TBD...
+ * Thankfully we dont expect many devices to register (famous last words :),
+ * so until then it will suffice.  At least its abstracted so we can change
+ * in one place.
+ */
+struct kvm_io_bus {
+	int                   dev_count;
+#define NR_IOBUS_DEVS 200
+	struct kvm_io_device *devs[NR_IOBUS_DEVS];
+};
+
+int kvm_io_bus_write(struct kvm *kvm, enum kvm_bus bus_idx, gpa_t addr,
+		     int len, const void *val);
+int kvm_io_bus_read(struct kvm *kvm, enum kvm_bus bus_idx, gpa_t addr, int len,
+		    void *val);
+int kvm_io_bus_register_dev(struct kvm *kvm, enum kvm_bus bus_idx,
+			    struct kvm_io_device *dev);
+int kvm_io_bus_unregister_dev(struct kvm *kvm, enum kvm_bus bus_idx,
+			      struct kvm_io_device *dev);
+
 static inline unsigned long kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot)
 {
 	/* XXX */
 	/* 	return ALIGN(memslot->npages, BITS_PER_LONG) / 8; */
 	return ((BT_BITOUL(memslot->npages)) / 8);
 }
+
+int kvm_set_memory_region(struct kvm *kvm,
+			  struct kvm_userspace_memory_region *mem,
+			  int user_alloc);
+int __kvm_set_memory_region(struct kvm *kvm,
+			    struct kvm_userspace_memory_region *mem,
+			    int user_alloc);
+int kvm_arch_prepare_memory_region(struct kvm *kvm,
+				struct kvm_memory_slot *memslot,
+				struct kvm_memory_slot old,
+				struct kvm_userspace_memory_region *mem,
+				int user_alloc);
+void kvm_arch_commit_memory_region(struct kvm *kvm,
+				struct kvm_userspace_memory_region *mem,
+				struct kvm_memory_slot old,
+				int user_alloc);
+
+int is_error_page(struct page *page);
+int is_error_pfn(pfn_t pfn);
+int kvm_is_error_hva(unsigned long addr);
+void kvm_disable_largepages(void);
+void kvm_arch_flush_shadow(struct kvm *kvm);
+gfn_t unalias_gfn(struct kvm *kvm, gfn_t gfn);
+gfn_t unalias_gfn_instantiation(struct kvm *kvm, gfn_t gfn);
+
+page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn);
+unsigned long gfn_to_hva(struct kvm *kvm, gfn_t gfn);
+void kvm_release_page_clean(struct page *page);
+void kvm_release_page_dirty(struct page *page);
+void kvm_set_page_dirty(struct page *page);
+void kvm_set_page_accessed(struct page *page);
+
+pfn_t gfn_to_pfn(struct kvm *kvm, gfn_t gfn);
+pfn_t gfn_to_pfn_memslot(struct kvm *kvm,
+			 struct kvm_memory_slot *slot, gfn_t gfn);
+int memslot_id(struct kvm *kvm, gfn_t gfn);
+void kvm_get_pfn(struct kvm_vcpu *vcpu, pfn_t pfn);
+
+int kvm_read_guest_page(struct kvm *kvm, gfn_t gfn, void *data, int offset,
+			int len);
+int kvm_read_guest_atomic(struct kvm *kvm, gpa_t gpa, void *data,
+			  unsigned long len);
+int kvm_read_guest(struct kvm *kvm, gpa_t gpa, void *data, unsigned long len);
+int kvm_write_guest_page(struct kvm *kvm, gfn_t gfn, const void *data,
+			 int offset, int len);
+int kvm_write_guest(struct kvm *kvm, gpa_t gpa, const void *data,
+		    unsigned long len);
+int kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len);
+int kvm_clear_guest(struct kvm *kvm, gpa_t gpa, unsigned long len);
+struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn);
+int kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn);
+unsigned long kvm_host_page_size(struct kvm *kvm, gfn_t gfn);
+void mark_page_dirty(struct kvm *kvm, gfn_t gfn);
+
+void kvm_vcpu_block(struct kvm_vcpu *vcpu);
+void kvm_vcpu_on_spin(struct kvm_vcpu *vcpu);
+void kvm_resched(struct kvm_vcpu *vcpu);
+void kvm_load_guest_fpu(struct kvm_vcpu *vcpu);
+void kvm_put_guest_fpu(struct kvm_vcpu *vcpu);
+void kvm_flush_remote_tlbs(struct kvm *kvm);
+void kvm_reload_remote_mmus(struct kvm *kvm);
+
+long kvm_arch_dev_ioctl(struct file *filp,
+			unsigned int ioctl, unsigned long arg);
+long kvm_arch_vcpu_ioctl(struct file *filp,
+			 unsigned int ioctl, unsigned long arg);
+
+int kvm_get_dirty_log(struct kvm *kvm,
+			struct kvm_dirty_log *log, int *is_dirty);
+int kvm_vm_ioctl_get_dirty_log(struct kvm *kvm,
+				struct kvm_dirty_log *log);
+
+int kvm_vm_ioctl_set_memory_region(struct kvm *kvm,
+				   struct
+				   kvm_userspace_memory_region *mem,
+				   int user_alloc);
+long kvm_arch_vm_ioctl(struct file *filp,
+		       unsigned int ioctl, unsigned long arg);
+
+int kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu);
+int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu);
+
+#ifdef XXX
+int kvm_arch_vcpu_ioctl_translate(struct kvm_vcpu *vcpu,
+				    struct kvm_translation *tr);
+#endif /*XXX*/
+
+int kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs);
+int kvm_arch_vcpu_ioctl_set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs);
+int kvm_arch_vcpu_ioctl_get_sregs(struct kvm_vcpu *vcpu,
+				  struct kvm_sregs *sregs);
+int kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu,
+				  struct kvm_sregs *sregs);
+int kvm_arch_vcpu_ioctl_get_mpstate(struct kvm_vcpu *vcpu,
+				    struct kvm_mp_state *mp_state);
+int kvm_arch_vcpu_ioctl_set_mpstate(struct kvm_vcpu *vcpu,
+				    struct kvm_mp_state *mp_state);
+int kvm_arch_vcpu_ioctl_set_guest_debug(struct kvm_vcpu *vcpu,
+					struct kvm_guest_debug *dbg);
+int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run);
+
+int kvm_arch_init(void *opaque);
+void kvm_arch_exit(void);
+
+int kvm_arch_vcpu_init(struct kvm_vcpu *vcpu);
+void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu);
+
+void kvm_arch_vcpu_free(struct kvm_vcpu *vcpu);
+void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
+void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu);
+int kvm_arch_vcpu_setup(struct kvm_vcpu *vcpu);
+void kvm_arch_vcpu_destroy(struct kvm_vcpu *vcpu);
+
+int kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu);
+int kvm_arch_hardware_enable(void *garbage);
+void kvm_arch_hardware_disable(void *garbage);
+int kvm_arch_hardware_setup(void);
+void kvm_arch_hardware_unsetup(void);
+void kvm_arch_check_processor_compat(void *rtn);
+int kvm_arch_vcpu_runnable(struct kvm_vcpu *vcpu);
+
+void kvm_free_physmem(struct kvm *kvm);
+
+struct  kvm *kvm_arch_create_vm(void);
+void kvm_arch_destroy_vm(struct kvm *kvm);
+void kvm_free_all_assigned_devices(struct kvm *kvm);
+void kvm_arch_sync_events(struct kvm *kvm);
+
+int kvm_cpu_has_pending_timer(struct kvm_vcpu *vcpu);
+void kvm_vcpu_kick(struct kvm_vcpu *vcpu);
+
+#ifdef XXX
+void kvm_register_irq_mask_notifier(struct kvm *kvm, int irq,
+				    struct kvm_irq_mask_notifier *kimn);
+void kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
+				      struct kvm_irq_mask_notifier *kimn);
+void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, bool mask);
+#endif /*XXX*/
+
+#ifdef CONFIG_IOMMU_API
+int kvm_iommu_map_pages(struct kvm *kvm, struct kvm_memory_slot *slot);
+int kvm_iommu_map_guest(struct kvm *kvm);
+int kvm_iommu_unmap_guest(struct kvm *kvm);
+int kvm_assign_device(struct kvm *kvm,
+		      struct kvm_assigned_dev_kernel *assigned_dev);
+int kvm_deassign_device(struct kvm *kvm,
+			struct kvm_assigned_dev_kernel *assigned_dev);
+#else /* CONFIG_IOMMU_API */
+static inline int kvm_iommu_map_pages(struct kvm *kvm,
+				      gfn_t base_gfn,
+				      unsigned long npages)
+{
+	return 0;
+}
+
+static inline int kvm_iommu_map_guest(struct kvm *kvm)
+{
+	return -ENODEV;
+}
+
+static inline int kvm_iommu_unmap_guest(struct kvm *kvm)
+{
+	return 0;
+}
+
+static inline int kvm_assign_device(struct kvm *kvm,
+		struct kvm_assigned_dev_kernel *assigned_dev)
+{
+	return 0;
+}
+
+static inline int kvm_deassign_device(struct kvm *kvm,
+		struct kvm_assigned_dev_kernel *assigned_dev)
+{
+	return 0;
+}
+#endif /* CONFIG_IOMMU_API */
 
 #define for_each_unsync_children(bitmap, idx)		\
 	for (idx = bt_getlowbit(bitmap, 0, 512);	\
@@ -2068,5 +2275,4 @@ static inline unsigned long kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memsl
 #define PT_PAGE_SIZE_MASK (1ULL << 7)
 
 #endif
-
 #endif /*SOLARIS_KVM_H*/

@@ -9120,6 +9120,21 @@ static int guest_state_valid(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
+int need_resched()
+{
+	return (curthread->t_cpu->cpu_runrun || curthread->t_cpu->cpu_kprunrun);
+}
+
+void kvm_resched(struct kvm_vcpu *vcpu)
+{
+	preempt();
+}
+
+void schedule()
+{
+	preempt();
+}
+
 static int handle_invalid_guest_state(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -9144,9 +9159,9 @@ static int handle_invalid_guest_state(struct kvm_vcpu *vcpu)
 #ifdef XXX
 		if ((current))
 			goto out;
+#endif /*XXX*/
 		if (need_resched())
 			schedule();
-#endif /*XXX*/
 	}
 
 	vmx->emulation_required = 0;
@@ -11436,7 +11451,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	smp_mb__after_clear_bit();
 #endif /*XXX*/
 
-	if (vcpu->requests /*XXX || need_resched() || signal_pending(current)*/) {
+	if (vcpu->requests || need_resched() /* || signal_pending(current)*/) {
 		set_bit(KVM_REQ_KICK, &vcpu->requests);
 		kpreempt_enable();
 		r = 1;
@@ -11716,13 +11731,16 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
 			++vcpu->stat.signal_exits;
 		}
-
-		if (need_resched()) {
-			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
-			kvm_resched(vcpu);
-			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
-		}
 #endif /*XXX*/
+		if (need_resched()) {
+#ifdef XXX
+			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
+#endif /*XXX*/
+			kvm_resched(vcpu);
+#ifdef XXX
+			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
+#endif /*XXX*/
+		}
 	}
 #ifdef XXX
 	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
