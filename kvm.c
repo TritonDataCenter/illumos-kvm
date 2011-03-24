@@ -4174,7 +4174,9 @@ static void do_cpuid_ent(struct kvm_cpuid_entry2 *entry, uint32_t function,
 	/* all calls to cpuid_count() should be made on the same cpu */
 	/* XXX - right now, system panics at ddi_exit_critical() */
 	/* XXX - to run everything on same cpu, bind qemu at startup */
+
 	kpreempt_disable();
+
 	do_cpuid_1_ent(entry, function, index);
 	++*nent;
 
@@ -11521,7 +11523,9 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 #endif /*XXX*/
 	kvm_lapic_sync_from_vapic(vcpu);
 	r = kvm_x86_ops->handle_exit(vcpu);
+#ifdef XXX
 	cmn_err(CE_NOTE, "vcpu_enter_guest: returning %d\n", r);
+#endif /*XXX*/
 out:
 	return r;
 }
@@ -11709,7 +11713,9 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 		}
 
 		if (r <= 0) {
+#ifdef XXX
 			cmn_err(CE_NOTE, "__vcpu_run: r = %d\n", r);
+#endif /*XXX*/
 			break;
 		}
 
@@ -11747,7 +11753,9 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 #endif /*XXX*/
 	post_kvm_run_save(vcpu);
 	vapic_exit(vcpu);
+#ifdef XXX
 	cmn_err(CE_NOTE, "__vcpu_run: returning %d\n", r);
+#endif
 	return r;
 }
 

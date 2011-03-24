@@ -1642,7 +1642,6 @@ vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 		return NULL;
 	}
 
-
 	kpreempt_disable();
 
 	cpu = curthread->t_cpu->cpu_seqid;
