@@ -1121,7 +1121,7 @@ struct kvm_kernel_irq_routing_entry {
 	struct list_node link;
 };
 
-#ifdef __KVM_HAVE_IOAPIC
+/*#ifdef __KVM_HAVE_IOAPIC*/
 
 #define KVM_MAX_IRQ_ROUTES 1024
 
@@ -1136,7 +1136,19 @@ struct kvm_irq_routing_table {
 	list_t map[KVM_MAX_IRQ_ROUTES+1];
 };
 
-#endif /*__KVM_HAVE_IOAPIC*/
+struct kvm_kirq_routing {
+	uint32_t nr;
+	uint32_t flags;
+	struct kvm_irq_routing_entry entries[KVM_MAX_IRQ_ROUTES+1];
+};
+
+struct kvm_irq_routing_ioc {
+	struct kvm_kirq_routing kvm_kirq_routing;
+	int kvmid;
+};
+
+/*#endif  __KVM_HAVE_IOAPIC*/
+
 #define MTRRphysBase_MSR(reg) (0x200 + 2 * (reg))
 #define MTRRphysMask_MSR(reg) (0x200 + 2 * (reg) + 1)
 
@@ -1600,17 +1612,6 @@ struct kvm_irq_ioc {
 /* for KVM_SET_IDENTITY_MAP_ADDR */
 struct kvm_id_map_addr_ioc {
 	uint64_t ident_addr;
-	int kvmid;
-};
-
-struct kvm_kirq_routing {
-	uint32_t nr;
-	uint32_t flags;
-	struct kvm_irq_routing_entry entries[KVM_MAX_IRQ_ROUTES+1];
-};
-
-struct kvm_irq_routing_ioc {
-	struct kvm_kirq_routing kvm_kirq_routing;
 	int kvmid;
 };
 

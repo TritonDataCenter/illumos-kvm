@@ -2546,7 +2546,9 @@ static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 	proc_t *procp = ttoproc(curthread);
 	struct as *as = procp->p_as;
 
+#ifdef DEBUG
 	cmn_err(CE_NOTE, "hva_to_pfn: addr = %lx\n", addr);
+#endif /*DEBUG*/
 #ifdef XXX
 
 	npages = get_user_pages_fast(addr, 1, 1, page);
@@ -2575,7 +2577,9 @@ static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 	else
 		pfn = hat_getpfnum(kas.a_hat, (caddr_t)addr);
 #endif /*XXX*/
+#ifdef DEBUG
 	cmn_err(CE_CONT, "hva_to_pfn: returning %lx\n", pfn);
+#endif /*DEBUG*/
 	return pfn;
 }
 
@@ -2584,16 +2588,22 @@ pfn_t gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 	unsigned long addr;
 	pfn_t pfn;
 
+#ifdef DEBUG
 	cmn_err(CE_NOTE, "gfn_to_pfn: gfn = %lx\n", gfn);
+#endif /*DEBUG*/
 	addr = gfn_to_hva(kvm, gfn);
+#ifdef DEBUG
 	cmn_err(CE_CONT, "gfn_to_pfn: addr = %lx\n", addr);
+#endif /*DEBUG*/
 	if (kvm_is_error_hva(addr)) {
 		get_page(bad_page);
 		return page_to_pfn(bad_page);
 	}
 
 	pfn = hva_to_pfn(kvm, addr);
+#ifdef DEBUG
 	cmn_err(CE_CONT, "gfn_to_pfn: pfn = %lx\n", pfn);
+#endif /*DEBUG*/
 	return pfn;
 }
 
@@ -2997,7 +3007,9 @@ int set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 
 	spte |= (uint64_t)pfn << PAGESHIFT;
 
+#ifdef DEBUG
 	cmn_err(CE_NOTE, "set_spte: spte = %lx\n", spte);
+#endif /*DEBUG*/
 
 	if ((pte_access & ACC_WRITE_MASK)
 	    || (write_fault && !is_write_protection(vcpu) && !user_fault)) {
@@ -3032,9 +3044,13 @@ int set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 		mark_page_dirty(vcpu->kvm, gfn);
 
 set_pte:
+#ifdef DEBUG
 	cmn_err(CE_CONT, "set_spte: calling __set_spte with sptep = %p, spte = %lx\n", sptep, spte);
+#endif /*DEBUG*/
 	__set_spte(sptep, spte);
+#ifdef DEBUG
 	cmn_err(CE_CONT, "set_spte: returning %x\n", ret);
+#endif /*DEBUG*/
 	return ret;
 }
 
@@ -3050,11 +3066,15 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 	int was_rmapped = 0;
 	int was_writable = is_writable_pte(*sptep);
 	int rmap_count;
+#ifdef DEBUG
 	cmn_err(CE_NOTE, "mmu_set_spte: vcpu = %p sptep = %p, level = %x, gfn = %lx\n",
 		vcpu, sptep, level, gfn);
 	cmn_err(CE_CONT, "mmu_set_spte: pfn = %lx, *sptep = %lx\n", pfn, *sptep);
+#endif /*DEBUG*/
 	if (is_rmap_spte(*sptep)) {
+#ifdef DEBUG
 		cmn_err(CE_CONT, "mmu_set_spte: is_rmap_spte is true\n");
+#endif /*DEBUG*/
 		/*
 		 * If we overwrite a PTE page pointer with a 2MB PMD, unlink
 		 * the parent of the now unreachable PTE.
@@ -3065,21 +3085,29 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 			uint64_t pte = *sptep;
 
 			child = page_header(pte & PT64_BASE_ADDR_MASK);
+#ifdef DEBUG
 			cmn_err(CE_CONT, "mmu_set_spte: child = %p, pte %lx, removing parent\n", child, pte);
+#endif /*DEBUG*/
 			mmu_page_remove_parent_pte(child, sptep);
 		} else if (pfn != spte_to_pfn(*sptep)) {
+#ifdef DEBUG
 			cmn_err(CE_CONT, "mmu_set_spte: removing rmap for pfn = %lx, spte_to_pfn = %lx\n",
 				pfn, spte_to_pfn(*sptep));
+#endif /*DEBUG*/
 			rmap_remove(vcpu->kvm, sptep);
 		} else
 			was_rmapped = 1;
 	}
 
+#ifdef DEBUG
 	cmn_err(CE_CONT, "mmu_set_spte: calling set_spte...\n");
+#endif /*DEBUG*/
 	if (set_spte(vcpu, sptep, pte_access, user_fault, write_fault,
 		      dirty, level, gfn, pfn, speculative, 1,
 		      reset_host_protection)) {
+#ifdef DEBUG
 		cmn_err(CE_CONT, "mmu_set_spte: set_spte returned non-null\n");
+#endif /*DEBUG*/
 		if (write_fault)
 			*ptwrite = 1;
 		kvm_x86_ops->tlb_flush(vcpu);
@@ -3090,20 +3118,26 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 		++vcpu->kvm->stat.lpages;
 #endif /*XXX*/
 
+#ifdef DEBUG
 	cmn_err(CE_CONT, "mmu_set_spte: calling page_header_update_slot, kvm = %p, sptep = %p, gfn = %lx\n",
 		vcpu->kvm, sptep, gfn);
+#endif /*DEBUG*/
 	page_header_update_slot(vcpu->kvm, sptep, gfn);
 	if (!was_rmapped) {
 		rmap_count = rmap_add(vcpu, sptep, gfn);
+#ifdef DEBUG
 		cmn_err(CE_CONT, "mmu_set_spte: added rmap for vcpu = %p, sptep = %p, gfn = %lx, rmap_count = %d\n",
 			vcpu, sptep, gfn, rmap_count);
+#endif /*DEBUG*/
 		kvm_release_pfn_clean(pfn);
 #ifdef XXX
 		if (rmap_count > RMAP_RECYCLE_THRESHOLD)
 			rmap_recycle(vcpu, sptep, gfn);
 #endif /*XXX*/
 	} else {
+#ifdef DEBUG
 		cmn_err(CE_CONT, "mmu_set_spte: releasing pfn = %lx, was_writable = %x\n", pfn, was_writable);
+#endif /*DEBUG*/
 		if (was_writable)
 			kvm_release_pfn_dirty(vcpu, pfn);
 		else
@@ -3455,14 +3489,18 @@ int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator, struct kvm_vcpu 
 			return 0;
 
 	iterator->index = SHADOW_PT_INDEX(iterator->addr, iterator->level);
+#ifdef DEBUG
 	cmn_err(CE_NOTE, "iterator->level = %x, iterator->shadow_addr = %lx, iterator->addr = %lx\n",
 		iterator->level, iterator->shadow_addr, iterator->addr);
 	cmn_err(CE_CONT, "iterator->index = %x\n", iterator->index);
+#endif /*DEBUG*/
 #ifdef XXX
 	iterator->sptep	= ((uint64_t *)__va(iterator->shadow_addr)) + iterator->index;
 #else
 	iterator->sptep = (uint64_t *)page_address(pfn_to_page((iterator->shadow_addr)>>PAGESHIFT)) + iterator->index;
+#ifdef DEBUG
 	cmn_err(CE_CONT, "sptep = %p\n", iterator->sptep);
+#endif /*DEBUG*/
 #endif /*XXX*/
 	return 1;
 }
@@ -3734,7 +3772,9 @@ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
 	gfn_t gfn;
 	int r;
 
+#ifdef DEBUG
 	cmn_err(CE_NOTE, "%s: gva %lx error %x\n", __func__, gva, error_code);
+#endif /*DEBUG*/
 	r = mmu_topup_memory_caches(vcpu);
 	if (r)
 		return r;
@@ -3992,7 +4032,9 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 							 PROT_READ|PROT_WRITE,
 							 MAP_PRIVATE|MAP_ANON,
 							 -1, 0);
+#ifdef DEBUG
 				cmn_err(CE_NOTE, "kvm_arch_prepare_memory_region: mmap at %p\n", userspace_addr);
+#endif /*DEBUG*/
 				/*
 				 * the mmap sets up the mapping, but there are no pages allocated.
 				 * Code sets up the shadow page tables before the pages are
@@ -4294,9 +4336,11 @@ kvm_vm_ioctl(struct kvm *kvmp, unsigned int ioctl, unsigned long arg, int mode)
 	if (drv_getparm(UPROCP, &p) != 0)
 		cmn_err(CE_PANIC, "Cannot get proc_t for current process\n");
 
+#ifdef DEBUG
 	cmn_err(CE_NOTE, "kvm_vm_ioctl: cmd = %x\n", ioctl);
 	cmn_err(CE_CONT, "kvm_vm_ioctl: KVM_SET_USER_MEMORY_REGION = %x\n",
 		KVM_SET_USER_MEMORY_REGION);
+#endif /*DEBUG*/
 	if (kvmp->mm != p->p_as)
 		return EIO;
 	switch (ioctl) {
