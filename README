@@ -1,11 +1,35 @@
 Work toward making a "Linux KVM" /dev/kvm compatible device for Solaris.
 
-To build the driver, the opensolaris kernel header files must be accessible.
-In the Makefile, modify the KERNEL_SOURCE variable to the top level
-of the kernel source tree.  For example, if the kernel source is in
-"/export/home/max/snv147/usr/src/uts", the KERNEL_SOURCE variable should be
-"KERNEL_SOURCE=/export/home/max/snv147".
+To build the kvm kernel module, run make.
+(Hopefully there are no hardcoded path names, but if so,
+they are coming from solaris source.)
+This will result in a file, kvm.
 
-The driver currently loads.  This is definitely pre-alpha, as it will
-almost certainly panic the system when it is used.
+To install:
+=================
+
+#!/bin/sh
+cp kvm /tmp
+psradm -f 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15  # shouldn't need this...
+ln -s /tmp/kvm /kernel/drv/amd64/kvm
+cat > /kernel/drv/kvm.conf <<EOF
+name="kvm" parent="pseudo";
+EOF
+add_drv kvm
+ln -s /devices/pseudo/kvm@0:kvm /dev/kvm
+
+=========================
+
+I have been re-enabling a processor after it is installed (psradm -n 1).
+To run user level qemu:
+
+# pbind -b 0 $$
+# qemu-system-x86_64 -enable-kvm -kernel kvm.vmlinuz -initrd kvm.initrd -nographic -boot d -m 512 -net nic,model=virtio,name=virtio.0 -net user -vnc 0.0.0.0:0 -no-acpi -no-hpet
+
+Instead of -kernel and -initrd options, you can specify an iso image (I think at the end of the line).
+Currently, there are just a few messages printed out (most of the debug output is
+currently ifdef-ed out).  If you forget to do the pbind, count on getting a panic very quickly.
+
+
+
 

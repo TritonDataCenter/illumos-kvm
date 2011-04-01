@@ -2192,7 +2192,9 @@ struct kvm_mmu_page *kvm_mmu_get_page(struct kvm_vcpu *vcpu,
 #endif /*DEBUG*/
 	index = kvm_page_table_hashfn(gfn);
 	bucket = &vcpu->kvm->arch.mmu_page_hash[index];
+#ifdef DEBUG
 	cmn_err(CE_CONT, "kvm_mmu_get_page: index = %x\n", index);
+#endif /*DEBUG*/
 	for (sp = list_head(bucket); sp;
 	     sp = list_next(bucket, sp)) {
 		if (sp->gfn == gfn) {
@@ -4548,7 +4550,8 @@ inline ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
 
 #include "vmcs_dump.h"
 
-struct vmcs_dump_area dumparea[10];
+#define VMCS_DUMP_ENTRIES 1024
+struct vmcs_dump_area dumparea[VMCS_DUMP_ENTRIES];
 int vmcs_dump_idx = 0;
 
 void
@@ -4871,7 +4874,7 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	guest_write_tsc(0, tsc_base);
 	
 	/*XXX - debugging */
-	if (vmcs_dump_idx < 10) {
+	if (vmcs_dump_idx < VMCS_DUMP_ENTRIES) {
 		kvm_vmcs_dump(0);
 		vmcs_dump_idx++;
 	}
@@ -7606,7 +7609,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	vmcs_writel(HOST_CR0, read_cr0());
 
 	/*XXX - debugging */
-	if (vmcs_dump_idx < 10) {
+	if (vmcs_dump_idx < VMCS_DUMP_ENTRIES) {
 		kvm_vmcs_dump(1);
 		vmcs_dump_idx++;
 	}
@@ -7717,7 +7720,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	      );
 
 	/*XXX - debugging */
-	if (vmcs_dump_idx < 10) {
+	if (vmcs_dump_idx < VMCS_DUMP_ENTRIES) {
 		kvm_vmcs_dump(2);
 		vmcs_dump_idx++;
 	}
@@ -8787,7 +8790,11 @@ static int handle_exception(struct kvm_vcpu *vcpu)
 		/* EPT won't cause page fault directly */
 		if (enable_ept)
 			cmn_err(CE_PANIC, "page fault with ept enabled\n");
+#ifdef NOTNOW
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
+#else
+		cr2 = vmcs_read32(EXIT_QUALIFICATION);
+#endif /*NOTNOW*/
 #ifdef XXX
 		trace_kvm_page_fault(cr2, error_code);
 #endif /*XXX*/
@@ -9010,7 +9017,11 @@ static int handle_io(struct kvm_vcpu *vcpu)
 #ifdef XXX
 	++vcpu->stat.io_exits;
 #endif /*XXX*/
+#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+#else
+	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
+#endif /*NOTNOW*/
 	string = (exit_qualification & 16) != 0;
 
 	if (string) {
@@ -9458,7 +9469,11 @@ static int handle_cr(struct kvm_vcpu *vcpu)
 	int cr;
 	int reg;
 
+#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+#else
+	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
+#endif /*NOTNOW*/
 #ifdef DEBUG
 	cmn_err(CE_NOTE, "handle_cr: exit_qualification = %lx\n",
 		exit_qualification);
@@ -9600,7 +9615,11 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 		}
 	}
 
+#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+#else
+	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
+#endif /*NOTNOW*/
 	dr = exit_qualification & DEBUG_REG_ACCESS_NUM;
 	reg = DEBUG_REG_ACCESS_REG(exit_qualification);
 	if (exit_qualification & TYPE_MOV_FROM_DR) {
@@ -9933,7 +9952,11 @@ void kvm_mmu_invlpg(struct kvm_vcpu *vcpu, gva_t gva)
 
 static int handle_invlpg(struct kvm_vcpu *vcpu)
 {
+#ifdef NOTNOW
 	unsigned long exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+#else
+	unsigned long exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
+#endif /*NOTNOW*/
 
 	kvm_mmu_invlpg(vcpu, exit_qualification);
 	skip_emulated_instruction(vcpu);
@@ -9953,7 +9976,11 @@ static int handle_apic_access(struct kvm_vcpu *vcpu)
 	enum emulation_result er;
 	unsigned long offset;
 
+#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+#else
+	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
+#endif /*NOTNOW*/
 	offset = exit_qualification & 0xffful;
 
 	er = emulate_instruction(vcpu, 0, 0, 0);
@@ -10550,8 +10577,11 @@ static int handle_task_switch(struct kvm_vcpu *vcpu)
 
 	idt_v = (vmx->idt_vectoring_info & VECTORING_INFO_VALID_MASK);
 	type = (vmx->idt_vectoring_info & VECTORING_INFO_TYPE_MASK);
-
+#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+#else
+	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
+#endif /*NOTNOW*/
 
 	reason = (uint32_t)exit_qualification >> 30;
 	if (reason == TASK_SWITCH_GATE && idt_v) {
@@ -10601,7 +10631,11 @@ static int handle_ept_violation(struct kvm_vcpu *vcpu)
 	int gla_validity;
 	int rval;
 
+#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
+#else
+	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
+#endif /*NOTNOW*/
 #ifdef DEBUG
 	cmn_err(CE_NOTE, "handle_ept_violation: exit_qualification = %lx\n",
 		exit_qualification);
@@ -11064,7 +11098,7 @@ out:
 	return r;
 }
 
-static inline int kvm_mmu_reload(struct kvm_vcpu *vcpu)
+static int kvm_mmu_reload(struct kvm_vcpu *vcpu)
 {
 	if (vcpu->arch.mmu.root_hpa != INVALID_PAGE)
 		return 0;

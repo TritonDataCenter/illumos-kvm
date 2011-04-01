@@ -1955,7 +1955,195 @@ void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long val,
 	}
 }
 
+static int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
+				      struct kvm_vcpu *vcpu, uint32_t access,
+				      uint32_t *error)
+{
+	void *data = val;
+	int r = X86EMUL_CONTINUE;
+
+	while (bytes) {
+		gpa_t gpa = vcpu->arch.mmu.gva_to_gpa(vcpu, addr, access, error);
+		unsigned offset = addr & (PAGESIZE-1);
+		unsigned toread = min(bytes, (unsigned)PAGESIZE - offset);
+		int ret;
+
+		if (gpa == UNMAPPED_GVA) {
+			r = X86EMUL_PROPAGATE_FAULT;
+			goto out;
+		}
+		ret = kvm_read_guest(vcpu->kvm, gpa, data, toread);
+		if (ret < 0) {
+			r = X86EMUL_UNHANDLEABLE;
+			goto out;
+		}
+
+		bytes -= toread;
+		data += toread;
+		addr += toread;
+	}
+out:
+	return r;
+}
+
+static int kvm_read_guest_virt(gva_t addr, void *val, unsigned int bytes,
+			       struct kvm_vcpu *vcpu, uint32_t *error)
+{
+	uint32_t access = (kvm_x86_ops->get_cpl(vcpu) == 3) ? PFERR_USER_MASK : 0;
+	return kvm_read_guest_virt_helper(addr, val, bytes, vcpu, access,
+					  error);
+}
+
+static int kvm_read_guest_virt_system(gva_t addr, void *val, unsigned int bytes,
+			       struct kvm_vcpu *vcpu, uint32_t *error)
+{
+	return kvm_read_guest_virt_helper(addr, val, bytes, vcpu, 0, error);
+}
+
+static int kvm_write_guest_virt(gva_t addr, void *val, unsigned int bytes,
+				struct kvm_vcpu *vcpu, uint32_t *error)
+{
+	void *data = val;
+	int r = X86EMUL_CONTINUE;
+
+	while (bytes) {
+		gpa_t gpa = kvm_mmu_gva_to_gpa_write(vcpu, addr, error);
+		unsigned offset = addr & (PAGESIZE-1);
+		unsigned towrite = min(bytes, (unsigned)PAGESIZE - offset);
+		int ret;
+
+		if (gpa == UNMAPPED_GVA) {
+			r = X86EMUL_PROPAGATE_FAULT;
+			goto out;
+		}
+		ret = kvm_write_guest(vcpu->kvm, gpa, data, towrite);
+		if (ret < 0) {
+			r = X86EMUL_UNHANDLEABLE;
+			goto out;
+		}
+
+		bytes -= towrite;
+		data += towrite;
+		addr += towrite;
+	}
+out:
+	return r;
+}
+
+
 int kvm_emulate_pio(struct kvm_vcpu *vcpu, int in, int size, unsigned port);
+
+static int pio_copy_data(struct kvm_vcpu *vcpu)
+{
+	void *p = vcpu->arch.pio_data;
+	gva_t q = vcpu->arch.pio.guest_gva;
+	unsigned bytes;
+	int ret;
+	uint32_t error_code;
+
+	bytes = vcpu->arch.pio.size * vcpu->arch.pio.cur_count;
+	if (vcpu->arch.pio.in)
+		ret = kvm_write_guest_virt(q, p, bytes, vcpu, &error_code);
+	else
+		ret = kvm_read_guest_virt(q, p, bytes, vcpu, &error_code);
+
+	if (ret == X86EMUL_PROPAGATE_FAULT)
+		kvm_inject_page_fault(vcpu, q, error_code);
+
+	return ret;
+}
+
+static int pio_string_write(struct kvm_vcpu *vcpu)
+{
+	struct kvm_pio_request *io = &vcpu->arch.pio;
+	void *pd = vcpu->arch.pio_data;
+	int i, r = 0;
+
+	for (i = 0; i < io->cur_count; i++) {
+		if (kvm_io_bus_write(vcpu->kvm, KVM_PIO_BUS,
+				     io->port, io->size, pd)) {
+
+			r = -ENOTSUP;
+			break;
+		}
+		pd += io->size;
+	}
+	return r;
+}
+
+int kvm_emulate_pio_string(struct kvm_vcpu *vcpu, int in,
+		  int size, unsigned long count, int down,
+		  gva_t address, int rep, unsigned port)
+{
+	unsigned now, in_page;
+	int ret = 0;
+#ifdef XXX
+	trace_kvm_pio(!in, port, size, count);
+#endif /*XXX*/
+
+	vcpu->run->exit_reason = KVM_EXIT_IO;
+	vcpu->run->io.direction = in ? KVM_EXIT_IO_IN : KVM_EXIT_IO_OUT;
+	vcpu->run->io.size = vcpu->arch.pio.size = size;
+	vcpu->run->io.data_offset = KVM_PIO_PAGE_OFFSET * PAGESIZE;
+	vcpu->run->io.count = vcpu->arch.pio.count = vcpu->arch.pio.cur_count = count;
+	vcpu->run->io.port = vcpu->arch.pio.port = port;
+	vcpu->arch.pio.in = in;
+	vcpu->arch.pio.string = 1;
+	vcpu->arch.pio.down = down;
+	vcpu->arch.pio.rep = rep;
+
+	if (!count) {
+		kvm_x86_ops->skip_emulated_instruction(vcpu);
+		return 1;
+	}
+
+	if (!down)
+		in_page = PAGESIZE - offset_in_page(address);
+	else
+		in_page = offset_in_page(address) + size;
+	now = min(count, (unsigned long)in_page / size);
+	if (!now)
+		now = 1;
+	if (down) {
+		/*
+		 * String I/O in reverse.  Yuck.  Kill the guest, fix later.
+		 */
+#ifdef XXX
+		pr_unimpl(vcpu, "guest string pio down\n");
+#endif /*XXX*/
+		kvm_inject_gp(vcpu, 0);
+		return 1;
+	}
+	vcpu->run->io.count = now;
+	vcpu->arch.pio.cur_count = now;
+
+	if (vcpu->arch.pio.cur_count == vcpu->arch.pio.count)
+		kvm_x86_ops->skip_emulated_instruction(vcpu);
+
+	vcpu->arch.pio.guest_gva = address;
+
+	if (!vcpu->arch.pio.in) {
+		/* string PIO write */
+		ret = pio_copy_data(vcpu);
+		if (ret == X86EMUL_PROPAGATE_FAULT)
+			return 1;
+		if (ret == 0 && !pio_string_write(vcpu)) {
+			complete_pio(vcpu);
+			if (vcpu->arch.pio.count == 0)
+				ret = 1;
+		}
+	}
+	/* no string PIO read support yet */
+
+	return ret;
+}
+
+int emulate_clts(struct kvm_vcpu *vcpu)
+{
+	kvm_x86_ops->set_cr0(vcpu, kvm_read_cr0_bits(vcpu, ~X86_CR0_TS));
+	kvm_x86_ops->fpu_activate(vcpu);
+	return X86EMUL_CONTINUE;
+}
 
 int x86_emulate_insn(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 {
@@ -2164,7 +2352,6 @@ special_insn:
 			kvm_inject_gp(ctxt->vcpu, 0);
 			goto done;
 		}
-#ifdef XXX
 		if (kvm_emulate_pio_string(ctxt->vcpu,
 				1,
 				(c->d & ByteOp) ? 1 : c->op_bytes,
@@ -2178,7 +2365,6 @@ special_insn:
 			c->eip = saved_eip;
 			return -1;
 		}
-#endif /*XXX*/
 		return 0;
 	case 0x6e:		/* outsb */
 	case 0x6f:		/* outsw/outsd */
@@ -2187,7 +2373,6 @@ special_insn:
 			kvm_inject_gp(ctxt->vcpu, 0);
 			goto done;
 		}
-#ifdef XXX
 		if (kvm_emulate_pio_string(ctxt->vcpu,
 				0,
 				(c->d & ByteOp) ? 1 : c->op_bytes,
@@ -2202,7 +2387,6 @@ special_insn:
 			c->eip = saved_eip;
 			return -1;
 		}
-#endif /*XXX*/
 		return 0;
 	case 0x70 ... 0x7f: /* jcc (short) */
 		if (test_cc(c->b, ctxt->eflags))
@@ -2637,9 +2821,7 @@ twobyte_insn:
 			goto writeback;
 		break;
 	case 0x06:
-#ifdef XXX
 		emulate_clts(ctxt->vcpu);
-#endif /*XXX*/
 		c->dst.type = OP_NONE;
 		break;
 	case 0x08:		/* invd */
@@ -2661,8 +2843,8 @@ twobyte_insn:
 #ifdef XXX
 		rc = emulator_get_dr(ctxt, c->modrm_reg, &c->regs[c->modrm_rm]);
 		if (rc)
-#endif /*XXX*/
 			goto cannot_emulate;
+#endif /*XXX*/
 		c->dst.type = OP_NONE;	/* no writeback */
 		break;
 	case 0x22: /* mov reg, cr */
@@ -2679,8 +2861,8 @@ twobyte_insn:
 		rc = emulator_set_dr(ctxt, c->modrm_reg,
 				     c->regs[c->modrm_rm]);
 		if (rc)
-#endif /*XXX*/
 			goto cannot_emulate;
+#endif /*XXX*/
 		c->dst.type = OP_NONE;	/* no writeback */
 		break;
 	case 0x30:
