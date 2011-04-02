@@ -13551,6 +13551,17 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	case KVM_CHECK_EXTENSION:
 		rval = kvm_dev_ioctl_check_extension_generic(arg, rval_p);
 		break;
+	case KVM_X86_GET_MCE_CAP_SUPPORTED: {
+		uint64_t mce_cap;
+
+		mce_cap = KVM_MCE_CAP_SUPPORTED;
+		rval = EFAULT;
+		if (ddi_copyout(&mce_cap, (caddr_t) argp, sizeof mce_cap))
+			goto out;
+		rval = 0;
+		break;
+	}
+
 	case KVM_GET_MSRS: {
 		struct kvm_msrs_ioc *kvm_msrs_ioc;
 		struct kvm *kvmp;
