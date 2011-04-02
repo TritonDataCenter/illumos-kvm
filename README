@@ -30,6 +30,11 @@ Instead of -kernel and -initrd options, you can specify an iso image (I think at
 Currently, there are just a few messages printed out (most of the debug output is
 currently ifdef-ed out).  If you forget to do the pbind, count on getting a panic very quickly.
 
+NOTE:  Currently, you can run qemu/kvm 1 time for a given boot session.  In other
+words, 2 or more instances of qemu/kvm running at the same time is not supported, and neither
+is exiting one instance and starting another without a reboot in between.  This should not
+be too difficult to fix, but I think getting it to come up is more important right now.
+
 
 
 
