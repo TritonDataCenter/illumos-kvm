@@ -1,0 +1,43 @@
+#!/bin/bash
+
+for file in $*; do
+	cat $file | nawk "\
+		/#ifdef/{ if (inif) { nest++; } }
+		/#ifdef XXX/{
+			if (inif) {
+				print \"$file: recursive XXX at \" FNR ;
+				errs++;
+			}
+			inif = 1;
+			nest = 0;
+		}
+		/#ifdef XXX_KVM_TRACE/{ inif = 0 }
+		/#ifdef XXX_KVM_DOESNTCOMPILE/{ inif = 0 }
+		/#ifdef XXX_KVM_DECLARATION/{ inif = 0 }
+		/#else/{ if (inif && !nest) { foundelse = 1; } }
+		/XXX_KVM_PROBE;/{ if (inif && foundelse) { foundprobe = 1; } }
+		/#endif/{
+			if (inif && nest) {
+				nest--;
+			} else {
+				if (inif && !foundelse) {
+					print \"$file: missing #else at \" \
+					    FNR ;
+					errs++;
+				} else if (inif && !foundprobe) {
+					print \"$file: missing \" \
+					    \"XXX_KVM_PROBE; at \" FNR ;
+					errs++;
+				}
+				if (inif) { inif = foundelse = foundprobe = 0; }
+			}
+		}
+		END { exit(errs); }"
+
+	errs=$?
+
+	if [[ $errs -ne 0 ]]; then
+		echo $file: $errs errors
+		exit 1
+	fi
+done

@@ -6,8 +6,12 @@
 #include <sys/kstat.h>
 #include <sys/ddi.h>
 #include <sys/sunddi.h>
+#include <sys/sdt.h>
 
 #include "kvm_types.h"
+
+#define XXX_KVM_PROBE DTRACE_PROBE2(kvm__xxx, \
+	char *, __FILE__, int, __LINE__)
 
 #ifdef _KERNEL
 #include "bitops.h"

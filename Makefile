@@ -29,6 +29,9 @@ install: kvm
 	@pfexec ln -sf /tmp/kvm /usr/kernel/drv/amd64/kvm
 	@pfexec cp kvm.conf /usr/kernel/drv
 
+check:
+	@./tools/xxxcheck kvm_x86.c
+
 load: install
 	@echo "==> Loading kvm module"
 	@pfexec rem_drv kvm || /bin/true
