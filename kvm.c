@@ -4548,15 +4548,20 @@ static inline unsigned long native_read_cr3(void)
 
 inline ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
 
+#ifdef XXX_KVM_DOESNTCOMPILE
 #include "vmcs_dump.h"
+#endif
 
 #define VMCS_DUMP_ENTRIES 1024
+#ifdef XXX_KVM_DOESNTCOMPILE
 struct vmcs_dump_area dumparea[VMCS_DUMP_ENTRIES];
+#endif
 int vmcs_dump_idx = 0;
 
 void
 kvm_vmcs_dump(int where)
 {
+#ifdef XXX_KVM_DOESNTCOMPILE
 	dumparea[vmcs_dump_idx].where = where;
 	dumparea[vmcs_dump_idx].virtual_processor_id = vmcs_read16(VIRTUAL_PROCESSOR_ID);
 	dumparea[vmcs_dump_idx].guest_es_selector = vmcs_read16(GUEST_ES_SELECTOR);
@@ -4707,6 +4712,7 @@ kvm_vmcs_dump(int where)
 	dumparea[vmcs_dump_idx].host_ia32_sysenter_eip = vmcs_readl(HOST_IA32_SYSENTER_EIP);
 	dumparea[vmcs_dump_idx].host_rsp = vmcs_readl(HOST_RSP);
 	dumparea[vmcs_dump_idx].host_rip = vmcs_readl(HOST_RIP);
+#endif
 }
 
 
@@ -13551,6 +13557,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	case KVM_CHECK_EXTENSION:
 		rval = kvm_dev_ioctl_check_extension_generic(arg, rval_p);
 		break;
+#ifdef XXX_KVM_DOESNTCOMPILE
 	case KVM_X86_GET_MCE_CAP_SUPPORTED: {
 		uint64_t mce_cap;
 
@@ -13561,6 +13568,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		rval = 0;
 		break;
 	}
+#endif
 
 	case KVM_GET_MSRS: {
 		struct kvm_msrs_ioc *kvm_msrs_ioc;
