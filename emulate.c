@@ -2077,9 +2077,9 @@ int kvm_emulate_pio_string(struct kvm_vcpu *vcpu, int in,
 {
 	unsigned now, in_page;
 	int ret = 0;
-#ifdef XXX
-	trace_kvm_pio(!in, port, size, count);
-#endif /*XXX*/
+
+	DTRACE_PROBE4(kvm__pio, int, !in, unsigned, port, int, size,
+	    unsigned long, count)
 
 	vcpu->run->exit_reason = KVM_EXIT_IO;
 	vcpu->run->io.direction = in ? KVM_EXIT_IO_IN : KVM_EXIT_IO_OUT;
