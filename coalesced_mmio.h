@@ -48,8 +48,8 @@ int kvm_vm_ioctl_unregister_coalesced_mmio(struct kvm *kvm,
 
 #else
 
-static inline int kvm_coalesced_mmio_init(struct kvm *kvm) { return 0; }
-static inline void kvm_coalesced_mmio_free(struct kvm *kvm) { }
+static int kvm_coalesced_mmio_init(struct kvm *kvm) { return 0; }
+static void kvm_coalesced_mmio_free(struct kvm *kvm) { }
 
 #endif
 

@@ -411,7 +411,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 	return sptep;
 }
 
-extern inline void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu);
+extern void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu);
 
 /*
  * Page fault handler.  There are several causes for a page fault:

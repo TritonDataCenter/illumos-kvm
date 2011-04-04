@@ -55,7 +55,7 @@ struct kvm_ioapic {
 #endif /*XXX*/
 };
 
-static inline struct kvm_ioapic *ioapic_irqchip(struct kvm *kvm)
+static struct kvm_ioapic *ioapic_irqchip(struct kvm *kvm)
 {
 	return kvm->arch.vioapic;
 }

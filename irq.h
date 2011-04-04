@@ -82,7 +82,7 @@ int kvm_pic_read_irq(struct kvm *kvm);
 void kvm_pic_update_irq(struct kvm_pic *s);
 void kvm_pic_clear_isr_ack(struct kvm *kvm);
 
-static inline struct kvm_pic *pic_irqchip(struct kvm *kvm)
+static struct kvm_pic *pic_irqchip(struct kvm *kvm)
 {
 	return kvm->arch.vpic;
 }

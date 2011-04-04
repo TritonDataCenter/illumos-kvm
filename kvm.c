@@ -220,7 +220,7 @@ void vmx_fpu_activate(struct kvm_vcpu *vcpu);
 int get_ept_level(void);
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
 
-static inline void __invvpid(int ext, uint16_t vpid, gva_t gva)
+static void __invvpid(int ext, uint16_t vpid, gva_t gva)
 {
     struct {
 	uint64_t vpid : 16;
@@ -238,7 +238,7 @@ static inline void __invvpid(int ext, uint16_t vpid, gva_t gva)
 		  : : "a"(&operand), "c"(ext) : "cc", "memory");
 }
 
-inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx)
+void vpid_sync_vcpu_all(struct vcpu_vmx *vmx)
 {
 	if (vmx->vpid == 0)
 		return;
@@ -246,7 +246,7 @@ inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx)
 	__invvpid(VMX_VPID_EXTENT_SINGLE_CONTEXT, vmx->vpid, 0);
 }
 
-static inline void __invept(int ext, uint64_t eptp, gpa_t gpa)
+static void __invept(int ext, uint64_t eptp, gpa_t gpa)
 {
 	struct {
 		uint64_t eptp, gpa;
@@ -258,17 +258,17 @@ static inline void __invept(int ext, uint64_t eptp, gpa_t gpa)
 			: : "a" (&operand), "c" (ext) : "cc", "memory");
 }
 
-static inline int cpu_has_vmx_invept_context(void)
+static int cpu_has_vmx_invept_context(void)
 {
 	return !!(vmx_capability.ept & VMX_EPT_EXTENT_CONTEXT_BIT);
 }
 
-static inline int cpu_has_vmx_invept_global(void)
+static int cpu_has_vmx_invept_global(void)
 {
 	return !!(vmx_capability.ept & VMX_EPT_EXTENT_GLOBAL_BIT);
 }
 
-inline void ept_sync_global(void)
+void ept_sync_global(void)
 {
 	if (cpu_has_vmx_invept_global())
 		__invept(VMX_EPT_EXTENT_GLOBAL, 0, 0);
@@ -276,7 +276,7 @@ inline void ept_sync_global(void)
 
 int enable_ept = 1;   /*XXX*/
 
-static inline void ept_sync_context(uint64_t eptp)
+static void ept_sync_context(uint64_t eptp)
 {
 	if (enable_ept) {
 		if (cpu_has_vmx_invept_context())
@@ -315,7 +315,7 @@ void vmcs_write64(unsigned long field, uint64_t value)
 #endif
 }
 
-inline int is_pae(struct kvm_vcpu *vcpu);
+int is_pae(struct kvm_vcpu *vcpu);
 
 static void ept_load_pdptrs(struct kvm_vcpu *vcpu)
 {
@@ -400,7 +400,7 @@ static const struct trace_print_flags vmx_exit_reasons_str[] = {
 
 static int flexpriority_enabled = 1;
 
-static inline int report_flexpriority(void)
+static int report_flexpriority(void)
 {
 	return flexpriority_enabled;
 }
@@ -681,7 +681,7 @@ static void vmx_decache_cr4_guest_bits(struct kvm_vcpu *vcpu)
 	vcpu->arch.cr4 |= vmcs_readl(GUEST_CR4) & cr4_guest_owned_bits;
 }
 
-inline ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask)
+ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask)
 {
 	ulong tmask = mask & KVM_POSSIBLE_CR0_GUEST_BITS;
 
@@ -869,7 +869,7 @@ static void vmx_fpu_deactivate(struct kvm_vcpu *vcpu)
 struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
 					      uint32_t function, uint32_t index);
 
-static inline uint32_t bit(int bitno)
+static uint32_t bit(int bitno)
 {
 	return 1 << (bitno & 31);
 }
@@ -908,7 +908,7 @@ static void enable_irq_window(struct kvm_vcpu *vcpu)
 
 extern struct vmcs_config vmcs_config;
 
-static inline int cpu_has_virtual_nmis(void)
+static int cpu_has_virtual_nmis(void)
 {
 	return vmcs_config.pin_based_exec_ctrl & PIN_BASED_VIRTUAL_NMIS;
 }
@@ -964,7 +964,7 @@ static int vmx_nmi_allowed(struct kvm_vcpu *vcpu)
 			(GUEST_INTR_STATE_MOV_SS | GUEST_INTR_STATE_NMI));
 }
 
-static inline unsigned long kvm_register_read(struct kvm_vcpu *vcpu,
+static unsigned long kvm_register_read(struct kvm_vcpu *vcpu,
 					      enum kvm_reg reg)
 {
 	if (!test_bit(reg, (unsigned long *)&vcpu->arch.regs_avail))
@@ -973,7 +973,7 @@ static inline unsigned long kvm_register_read(struct kvm_vcpu *vcpu,
 	return vcpu->arch.regs[reg];
 }
 
-inline void kvm_register_write(struct kvm_vcpu *vcpu,
+void kvm_register_write(struct kvm_vcpu *vcpu,
 				      enum kvm_reg reg,
 				      unsigned long val)
 {
@@ -987,17 +987,17 @@ inline void kvm_register_write(struct kvm_vcpu *vcpu,
 #endif /*XXX*/
 }
 
-inline unsigned long kvm_rip_read(struct kvm_vcpu *vcpu)
+unsigned long kvm_rip_read(struct kvm_vcpu *vcpu)
 {
 	return kvm_register_read(vcpu, VCPU_REGS_RIP);
 }
 
-inline void kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val)
+void kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val)
 {
 	kvm_register_write(vcpu, VCPU_REGS_RIP, val);
 }
 
-static inline int kvm_exception_is_soft(unsigned int nr)
+static int kvm_exception_is_soft(unsigned int nr)
 {
 	return (nr == BP_VECTOR) || (nr == OF_VECTOR);
 }
@@ -1234,7 +1234,7 @@ static int adjust_vmx_controls(uint32_t ctl_min, uint32_t ctl_opt,
 }
 
 /* Pure 2^n version of get_order */
-static inline int get_order(unsigned long size)
+static int get_order(unsigned long size)
 {
 	int order;
 
@@ -1381,41 +1381,41 @@ void kvm_enable_efer_bits(uint64_t mask)
        efer_reserved_bits &= ~mask;
 }
 
-static inline int cpu_has_vmx_vpid(void)
+static int cpu_has_vmx_vpid(void)
 {
 	return vmcs_config.cpu_based_2nd_exec_ctrl &
 		SECONDARY_EXEC_ENABLE_VPID;
 }
 
-static inline int cpu_has_vmx_ept(void)
+static int cpu_has_vmx_ept(void)
 {
 	return vmcs_config.cpu_based_2nd_exec_ctrl &
 		SECONDARY_EXEC_ENABLE_EPT;
 }
-static inline int cpu_has_vmx_unrestricted_guest(void)
+static int cpu_has_vmx_unrestricted_guest(void)
 {
 	return vmcs_config.cpu_based_2nd_exec_ctrl &
 		SECONDARY_EXEC_UNRESTRICTED_GUEST;
 }
 
-inline int cpu_has_vmx_tpr_shadow(void)
+int cpu_has_vmx_tpr_shadow(void)
 {
 	return vmcs_config.cpu_based_exec_ctrl & CPU_BASED_TPR_SHADOW;
 }
 
-static inline int cpu_has_vmx_virtualize_apic_accesses(void)
+static int cpu_has_vmx_virtualize_apic_accesses(void)
 {
 	return vmcs_config.cpu_based_2nd_exec_ctrl &
 		SECONDARY_EXEC_VIRTUALIZE_APIC_ACCESSES;
 }
 
-static inline int cpu_has_vmx_flexpriority(void)
+static int cpu_has_vmx_flexpriority(void)
 {
 	return cpu_has_vmx_tpr_shadow() &&
 		cpu_has_vmx_virtualize_apic_accesses();
 }
 
-static inline int cpu_has_vmx_ept_2m_page(void)
+static int cpu_has_vmx_ept_2m_page(void)
 {
 	return !!(vmx_capability.ept & VMX_EPT_2MB_PAGE_BIT);
 }
@@ -1425,7 +1425,7 @@ void kvm_disable_largepages(void)
 	largepages_enabled = 0;
 }
 
-static inline int cpu_has_vmx_ple(void)
+static int cpu_has_vmx_ple(void)
 {
 	return vmcs_config.cpu_based_2nd_exec_ctrl &
 		SECONDARY_EXEC_PAUSE_LOOP_EXITING;
@@ -1547,7 +1547,7 @@ struct kvm_mmu_page *page_private(page_t *page)
 	return ((struct kvm_mmu_page *)page->p_private);
 }
 
-inline struct kvm_mmu_page *page_header(hpa_t shadow_page)
+struct kvm_mmu_page *page_header(hpa_t shadow_page)
 {
 	page_t *page = pfn_to_page(shadow_page >> PAGESHIFT);
 
@@ -2245,12 +2245,12 @@ struct kvm_mmu_page *kvm_mmu_get_page(struct kvm_vcpu *vcpu,
 	return sp;
 }
 
-inline int is_present_gpte(unsigned long pte)
+int is_present_gpte(unsigned long pte)
 {
 	return pte & PT_PRESENT_MASK;
 }
 
-extern inline uint64_t kvm_pdptr_read(struct kvm_vcpu *vcpu, int index);
+extern uint64_t kvm_pdptr_read(struct kvm_vcpu *vcpu, int index);
 
 gfn_t unalias_gfn_instantiation(struct kvm *kvm, gfn_t gfn)
 {
@@ -2875,7 +2875,7 @@ extern unsigned long vmx_io_bitmap_b[];
 extern unsigned long vmx_msr_bitmap_legacy[];
 extern unsigned long vmx_msr_bitmap_longmode[];
 
-static inline int cpu_has_vmx_msr_bitmap(void)
+static int cpu_has_vmx_msr_bitmap(void)
 {
 	return vmcs_config.cpu_based_exec_ctrl & CPU_BASED_USE_MSR_BITMAPS;
 }
@@ -3300,7 +3300,7 @@ static int hardware_enable_all(void)
 }
 
 #if defined(CONFIG_MMU_NOTIFIER) && defined(KVM_ARCH_WANT_MMU_NOTIFIER)
-static inline struct kvm *mmu_notifier_to_kvm(struct mmu_notifier *mn)
+static struct kvm *mmu_notifier_to_kvm(struct mmu_notifier *mn)
 {
 	return container_of(mn, struct kvm, mmu_notifier);
 }
@@ -4108,7 +4108,7 @@ find_kvm_id(int id)
 extern int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id,
 				    struct kvm_vcpu_ioc *kvm_vcpu, int *rval_p);
 
-static inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
+static void native_cpuid(unsigned int *eax, unsigned int *ebx,
 				unsigned int *ecx, unsigned int *edx)
 {
 	/* ecx is often an input as well as an output. */
@@ -4123,7 +4123,7 @@ static inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
 #define __cpuid			native_cpuid
 
 /* Some CPUID calls want 'count' to be placed in ecx */
-static inline void cpuid_count(unsigned int op, int count,
+static void cpuid_count(unsigned int op, int count,
 			       unsigned int *eax, unsigned int *ebx,
 			       unsigned int *ecx, unsigned int *edx)
 {
@@ -4154,7 +4154,7 @@ static int is_efer_nx(void)
 	return efer & EFER_NX;
 }
 
-static inline int cpu_has_vmx_ept_1g_page(void)
+static int cpu_has_vmx_ept_1g_page(void)
 {
 	return !!(vmx_capability.ept & VMX_EPT_1GB_PAGE_BIT);
 }
@@ -4168,7 +4168,7 @@ static int vmx_get_lpage_level(void)
 		return PT_PDPE_LEVEL;
 }
 
-static inline int cpu_has_vmx_rdtscp(void)
+static int cpu_has_vmx_rdtscp(void)
 {
 	return vmcs_config.cpu_based_2nd_exec_ctrl &
 		SECONDARY_EXEC_RDTSCP;
@@ -4424,7 +4424,7 @@ static void vmwrite_error(unsigned long field, unsigned long value)
 	       field, value, vmcs_read32(VM_INSTRUCTION_ERROR));
 }
 
-static inline void __vmwrite(unsigned long field, unsigned long value)
+static void __vmwrite(unsigned long field, unsigned long value)
 {
 	uint8_t err = 0;
 	__asm__ volatile ( ASM_VMX_VMWRITE_RAX_RDX "\n\t" "setna %0"
@@ -4494,7 +4494,7 @@ static void guest_write_tsc(uint64_t guest_tsc, uint64_t host_tsc)
 	vmcs_write64(TSC_OFFSET, guest_tsc - host_tsc);
 }
 
-static inline int cpu_has_secondary_exec_ctrls(void)
+static int cpu_has_secondary_exec_ctrls(void)
 {
 	return vmcs_config.cpu_based_exec_ctrl &
 		CPU_BASED_ACTIVATE_SECONDARY_CONTROLS;
@@ -4505,7 +4505,7 @@ int vm_need_virtualize_apic_accesses(struct kvm *kvm)
 	return flexpriority_enabled && irqchip_in_kernel(kvm);
 }
 
-inline int vm_need_tpr_shadow(struct kvm *kvm)
+int vm_need_tpr_shadow(struct kvm *kvm)
 {
 	return (cpu_has_vmx_tpr_shadow()) && (irqchip_in_kernel(kvm));
 }
@@ -4519,7 +4519,7 @@ inline int vm_need_tpr_shadow(struct kvm *kvm)
  */
 static unsigned long __force_order;
 
-static inline unsigned long native_read_cr0(void)
+static unsigned long native_read_cr0(void)
 {
 	unsigned long val;
 	__asm__ volatile("mov %%cr0,%0\n\t" : "=r" (val), "=m" (__force_order));
@@ -4528,7 +4528,7 @@ static inline unsigned long native_read_cr0(void)
 
 #define read_cr0()	(native_read_cr0())
 
-static inline unsigned long native_read_cr4(void)
+static unsigned long native_read_cr4(void)
 {
 	unsigned long val;
 	__asm__ volatile("mov %%cr4,%0\n\t" : "=r" (val), "=m" (__force_order));
@@ -4537,7 +4537,7 @@ static inline unsigned long native_read_cr4(void)
 
 #define read_cr4()	(native_read_cr4())
 
-static inline unsigned long native_read_cr3(void)
+static unsigned long native_read_cr3(void)
 {
 	unsigned long val;
 	__asm__ volatile("mov %%cr3,%0\n\t" : "=r" (val), "=m" (__force_order));
@@ -4546,7 +4546,7 @@ static inline unsigned long native_read_cr3(void)
 
 #define read_cr3()	(native_read_cr3())
 
-inline ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
+ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
 
 #ifdef XXX_KVM_DOESNTCOMPILE
 #include "vmcs_dump.h"
@@ -5045,7 +5045,7 @@ int is_long_mode(struct kvm_vcpu *vcpu)
 #endif
 }
 
-inline ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask)
+ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask)
 {
 	uint64_t tmask = mask & KVM_POSSIBLE_CR4_GUEST_BITS;
 
@@ -5055,7 +5055,7 @@ inline ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask)
 	return vcpu->arch.cr4 & mask;
 }
 
-inline int is_pae(struct kvm_vcpu *vcpu)
+int is_pae(struct kvm_vcpu *vcpu)
 {
 	return kvm_read_cr4_bits(vcpu, X86_CR4_PAE);
 }
@@ -5561,17 +5561,17 @@ int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 }
 
 
-inline ulong kvm_read_cr4(struct kvm_vcpu *vcpu)
+ulong kvm_read_cr4(struct kvm_vcpu *vcpu)
 {
 	return kvm_read_cr4_bits(vcpu, ~0UL);
 }
 
-inline ulong kvm_read_cr0(struct kvm_vcpu *vcpu)
+ulong kvm_read_cr0(struct kvm_vcpu *vcpu)
 {
 	return kvm_read_cr0_bits(vcpu, ~0UL);
 }
 
-extern inline uint32_t apic_get_reg(struct kvm_lapic *apic, int reg_off);
+extern uint32_t apic_get_reg(struct kvm_lapic *apic, int reg_off);
 
 uint64_t kvm_lapic_get_cr8(struct kvm_vcpu *vcpu)
 {
@@ -5666,7 +5666,7 @@ int kvm_mmu_reset_context(struct kvm_vcpu *vcpu)
 	return init_kvm_mmu(vcpu);
 }
 
-static inline void kvm_queue_interrupt(struct kvm_vcpu *vcpu, uint8_t vector,
+static void kvm_queue_interrupt(struct kvm_vcpu *vcpu, uint8_t vector,
 	int soft)
 {
 	vcpu->arch.interrupt.pending = 1;
@@ -5695,7 +5695,7 @@ struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
 	return NULL;
 }
 
-inline unsigned long bad_hva(void)
+unsigned long bad_hva(void)
 {
 	return PAGEOFFSET;
 }
@@ -5848,12 +5848,12 @@ static int find_highest_vector(void *bitmap)
 		return fls(word[word_offset << 2]) - 1 + (word_offset << 5);
 }
 
-static inline int apic_search_irr(struct kvm_lapic *apic)
+static int apic_search_irr(struct kvm_lapic *apic)
 {
 	return find_highest_vector(apic->regs + APIC_IRR);
 }
 
-static inline int apic_find_highest_irr(struct kvm_lapic *apic)
+static int apic_find_highest_irr(struct kvm_lapic *apic)
 {
 	int result;
 
@@ -6041,7 +6041,7 @@ void vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer)
 	setup_msrs(vmx);
 }
 
-static inline int is_protmode(struct kvm_vcpu *vcpu)
+static int is_protmode(struct kvm_vcpu *vcpu)
 {
 	return kvm_read_cr0_bits(vcpu, X86_CR0_PE);
 }
@@ -6481,7 +6481,7 @@ static int set_msr_mtrr(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 	return 0;
 }
 
-static inline int apic_x2apic_mode(struct kvm_lapic *apic)
+static int apic_x2apic_mode(struct kvm_lapic *apic)
 {
 	return apic->vcpu->arch.apic_base & X2APIC_ENABLE;
 }
@@ -6695,13 +6695,13 @@ static int kvm_hv_msr_partition_wide(uint32_t msr)
 
 	return r;
 }
-inline page_t *compound_head(page_t *page)
+page_t *compound_head(page_t *page)
 {
 	/* XXX - linux links page_t together. */
 	return page;
 }
 
-inline void get_page(page_t *page)
+void get_page(page_t *page)
 {
 	page = compound_head(page);
 }
@@ -6714,7 +6714,7 @@ extern pfn_t physmax;
 #define pfn_valid(pfn) (pfn != PFN_INVALID)
 #endif /*XXX*/
 
-inline int kvm_is_mmio_pfn(struct kvm *kvm, pfn_t pfn)
+int kvm_is_mmio_pfn(struct kvm *kvm, pfn_t pfn)
 {
 	if (pfn_valid(pfn)) {
 #ifdef XXX
@@ -7330,7 +7330,7 @@ static int do_set_msr(struct kvm_vcpu *vcpu, unsigned index, uint64_t *data)
 	return kvm_set_msr(vcpu, index, *data);
 }
 
-static inline int is_machine_check(uint32_t intr_info)
+static int is_machine_check(uint32_t intr_info)
 {
 	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK |
 			     INTR_INFO_VALID_MASK)) ==
@@ -7429,12 +7429,12 @@ void kvm_queue_exception_e(struct kvm_vcpu *vcpu, unsigned nr, uint32_t error_co
 	kvm_multiple_exception(vcpu, nr, 1, error_code);
 }
 
-static inline void kvm_clear_exception_queue(struct kvm_vcpu *vcpu)
+static void kvm_clear_exception_queue(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.exception.pending = 0;
 }
 
-static inline void kvm_clear_interrupt_queue(struct kvm_vcpu *vcpu)
+static void kvm_clear_interrupt_queue(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.interrupt.pending = 0;
 }
@@ -7847,7 +7847,7 @@ static int handle_machine_check(struct kvm_vcpu *vcpu)
 }
 
 
-static inline int is_page_fault(uint32_t intr_info)
+static int is_page_fault(uint32_t intr_info)
 {
 	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK |
 			     INTR_INFO_VALID_MASK)) ==
@@ -8649,27 +8649,27 @@ out:
 	return r;
 }
 
-static inline int is_no_device(uint32_t intr_info)
+static int is_no_device(uint32_t intr_info)
 {
 	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK |
 			     INTR_INFO_VALID_MASK)) ==
 		(INTR_TYPE_HARD_EXCEPTION | NM_VECTOR | INTR_INFO_VALID_MASK);
 }
 
-static inline int is_invalid_opcode(uint32_t intr_info)
+static int is_invalid_opcode(uint32_t intr_info)
 {
 	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK |
 			     INTR_INFO_VALID_MASK)) ==
 		(INTR_TYPE_HARD_EXCEPTION | UD_VECTOR | INTR_INFO_VALID_MASK);
 }
 
-static inline int is_external_interrupt(uint32_t intr_info)
+static int is_external_interrupt(uint32_t intr_info)
 {
 	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VALID_MASK))
 		== (INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
 }
 
-static inline int kvm_event_needs_reinjection(struct kvm_vcpu *vcpu)
+static int kvm_event_needs_reinjection(struct kvm_vcpu *vcpu)
 {
 	return vcpu->arch.exception.pending || vcpu->arch.interrupt.pending ||
 		vcpu->arch.nmi_injected;
@@ -9869,7 +9869,7 @@ void __init kvm_guest_init(void);
 #define kvm_guest_init() do { } while (0)
 #endif
 
-static inline int kvm_para_has_feature(unsigned int feature)
+static int kvm_para_has_feature(unsigned int feature)
 {
 	if (kvm_arch_para_features() & (1UL << feature))
 		return 1;
@@ -10007,7 +10007,7 @@ static int is_vm86_segment(struct kvm_vcpu *vcpu, int seg)
 		(kvm_get_rflags(vcpu) & X86_EFLAGS_VM);
 }
 
-static inline unsigned long get_desc_limit(const struct desc_struct *desc)
+static unsigned long get_desc_limit(const struct desc_struct *desc)
 {
 	return desc->c.b.limit0 | (desc->c.b.limit << 16);
 }
@@ -10726,7 +10726,7 @@ static uint64_t ept_rsvd_mask(uint64_t spte, int level)
 	return mask;
 }
 
-static inline int cpu_has_vmx_ept_execute_only(void)
+static int cpu_has_vmx_ept_execute_only(void)
 {
 	return !!(vmx_capability.ept & VMX_EPT_EXECUTE_ONLY_BIT);
 }
@@ -10812,7 +10812,7 @@ static int handle_invalid_op(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
-inline int apic_find_highest_isr(struct kvm_lapic *apic)
+int apic_find_highest_isr(struct kvm_lapic *apic)
 {
 	int result;
 
@@ -10839,7 +10839,7 @@ void apic_update_ppr(struct kvm_lapic *apic)
 	apic_set_reg(apic, APIC_PROCPRI, ppr);
 }
 
-extern inline int apic_enabled(struct kvm_lapic *apic);
+extern int apic_enabled(struct kvm_lapic *apic);
 
 int kvm_apic_has_interrupt(struct kvm_vcpu *vcpu)
 {
@@ -10857,7 +10857,7 @@ int kvm_apic_has_interrupt(struct kvm_vcpu *vcpu)
 	return highest_irr;
 }
 
-extern inline int apic_hw_enabled(struct kvm_lapic *apic);
+extern int apic_hw_enabled(struct kvm_lapic *apic);
 
 int kvm_apic_accept_pic_intr(struct kvm_vcpu *vcpu)
 {
@@ -10895,10 +10895,10 @@ int kvm_cpu_has_interrupt(struct kvm_vcpu *v)
 	return 1;
 }
 
-extern inline void apic_set_vector(int vec, caddr_t bitmap);
-extern inline void apic_clear_vector(int vec, caddr_t bitmap);
+extern void apic_set_vector(int vec, caddr_t bitmap);
+extern void apic_clear_vector(int vec, caddr_t bitmap);
 
-static inline void apic_clear_irr(int vec, struct kvm_lapic *apic)
+static void apic_clear_irr(int vec, struct kvm_lapic *apic)
 {
 	apic->irr_pending = 0;
 	apic_clear_vector(vec, apic->regs + APIC_IRR);
@@ -11071,7 +11071,7 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	return 0;
 }
 
-static inline void kvm_guest_exit(void)
+static void kvm_guest_exit(void)
 {
 #ifdef XXX
 	account_system_vtime(current);
@@ -11079,7 +11079,7 @@ static inline void kvm_guest_exit(void)
 #endif /*XXX*/
 }
 
-static inline void kvm_guest_enter(void)
+static void kvm_guest_enter(void)
 {
 #ifdef XXX
 	account_system_vtime(current);
@@ -11179,7 +11179,7 @@ void kvm_lapic_sync_to_vapic(struct kvm_vcpu *vcpu)
 #endif /*XXX*/
 }
 
-extern inline int  apic_sw_enabled(struct kvm_lapic *apic);
+extern int  apic_sw_enabled(struct kvm_lapic *apic);
 
 int kvm_apic_present(struct kvm_vcpu *vcpu)
 {
@@ -11240,7 +11240,7 @@ static void pic_clear_isr(struct kvm_kpic_state *s, int irq)
 /*
  * acknowledge interrupt 'irq'
  */
-static inline void pic_intack(struct kvm_kpic_state *s, int irq)
+static void pic_intack(struct kvm_kpic_state *s, int irq)
 {
 	s->isr |= 1 << irq;
 	/*
@@ -11261,7 +11261,7 @@ static inline void pic_intack(struct kvm_kpic_state *s, int irq)
  * return the highest priority found in mask (highest = smallest
  * number). Return 8 if no irq
  */
-static inline int get_priority(struct kvm_kpic_state *s, int mask)
+static int get_priority(struct kvm_kpic_state *s, int mask)
 {
 	int priority;
 	if (mask == 0)
@@ -11304,7 +11304,7 @@ static int pic_get_irq(struct kvm_kpic_state *s)
 /*
  * set irq level. If an edge is detected, then the IRR is set to 1
  */
-static inline int pic_set_irq1(struct kvm_kpic_state *s, int irq, int level)
+static int pic_set_irq1(struct kvm_kpic_state *s, int irq, int level)
 {
 	int mask, ret = 1;
 	mask = 1 << irq;
@@ -11461,7 +11461,7 @@ void kvm_load_guest_fpu(struct kvm_vcpu *vcpu)
 #endif /*XXX*/
 }
 
-static inline unsigned long native_get_debugreg(int regno)
+static unsigned long native_get_debugreg(int regno)
 {
 	unsigned long val = 0;	/* Damn you, gcc! */
 
@@ -11490,7 +11490,7 @@ static inline unsigned long native_get_debugreg(int regno)
 	return val;
 }
 
-static inline void native_set_debugreg(int regno, unsigned long value)
+static void native_set_debugreg(int regno, unsigned long value)
 {
 	switch (regno) {
 	case 0:
@@ -12103,7 +12103,7 @@ static int picdev_in_range(gpa_t addr)
 	}
 }
 
-static inline struct kvm_pic *to_pic(struct kvm_io_device *dev)
+static struct kvm_pic *to_pic(struct kvm_io_device *dev)
 {
 #ifdef XXX
 	return container_of(dev, struct kvm_pic, dev);
@@ -12648,7 +12648,7 @@ void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode)
 	mutex_exit(&ioapic->lock);
 }
 
-static inline struct kvm_ioapic *to_ioapic(struct kvm_io_device *dev)
+static struct kvm_ioapic *to_ioapic(struct kvm_io_device *dev)
 {
 #ifdef XXX
 	return container_of(dev, struct kvm_ioapic, dev);
@@ -12657,7 +12657,7 @@ static inline struct kvm_ioapic *to_ioapic(struct kvm_io_device *dev)
 #endif /*XXX*/
 }
 
-static inline int ioapic_in_range(struct kvm_ioapic *ioapic, gpa_t addr)
+static int ioapic_in_range(struct kvm_ioapic *ioapic, gpa_t addr)
 {
 	return ((addr >= ioapic->base_address &&
 		 (addr < ioapic->base_address + IOAPIC_MEM_LENGTH)));
@@ -12797,7 +12797,7 @@ void kvm_ioapic_destroy(struct kvm *kvm)
 	}
 }
 
-static inline int kvm_irq_line_state(unsigned long *irq_state,
+static int kvm_irq_line_state(unsigned long *irq_state,
 				     int irq_source_id, int level)
 {
 	/* Logical OR for level trig interrupt */

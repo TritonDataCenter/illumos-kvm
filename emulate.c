@@ -596,13 +596,13 @@ static uint32_t group2_table[] = {
 	(_type)_x;							\
 })
 
-static inline unsigned long ad_mask(struct decode_cache *c)
+static unsigned long ad_mask(struct decode_cache *c)
 {
 	return (1UL << (c->ad_bytes << 3)) - 1;
 }
 
 /* Access/update address held in a register, based on addressing mode. */
-static inline unsigned long
+static unsigned long
 address_mask(struct decode_cache *c, unsigned long reg)
 {
 	if (c->ad_bytes == sizeof(unsigned long))
@@ -611,13 +611,13 @@ address_mask(struct decode_cache *c, unsigned long reg)
 		return reg & ad_mask(c);
 }
 
-static inline unsigned long
+static unsigned long
 register_address(struct decode_cache *c, unsigned long base, unsigned long reg)
 {
 	return base + address_mask(c, reg);
 }
 
-static inline void
+static void
 register_address_increment(struct decode_cache *c, unsigned long *reg, int inc)
 {
 	if (c->ad_bytes == sizeof(unsigned long))
@@ -626,7 +626,7 @@ register_address_increment(struct decode_cache *c, unsigned long *reg, int inc)
 		*reg = (*reg & ~ad_mask(c)) | ((*reg + inc) & ad_mask(c));
 }
 
-static inline void jmp_rel(struct decode_cache *c, int rel)
+static void jmp_rel(struct decode_cache *c, int rel)
 {
 	register_address_increment(c, &c->eip, rel);
 }
@@ -1246,7 +1246,7 @@ done:
 	return (rc == X86EMUL_UNHANDLEABLE) ? -1 : 0;
 }
 
-static inline void emulate_push(struct x86_emulate_ctxt *ctxt)
+static void emulate_push(struct x86_emulate_ctxt *ctxt)
 {
 	struct decode_cache *c = &ctxt->decode;
 
@@ -1381,7 +1381,7 @@ static int emulate_popa(struct x86_emulate_ctxt *ctxt,
 	return rc;
 }
 
-static inline int emulate_grp1a(struct x86_emulate_ctxt *ctxt,
+static int emulate_grp1a(struct x86_emulate_ctxt *ctxt,
 				struct x86_emulate_ops *ops)
 {
 	struct decode_cache *c = &ctxt->decode;
@@ -1393,7 +1393,7 @@ static inline int emulate_grp1a(struct x86_emulate_ctxt *ctxt,
 	return 0;
 }
 
-static inline void emulate_grp2(struct x86_emulate_ctxt *ctxt)
+static void emulate_grp2(struct x86_emulate_ctxt *ctxt)
 {
 	struct decode_cache *c = &ctxt->decode;
 	switch (c->modrm_reg) {
@@ -1422,7 +1422,7 @@ static inline void emulate_grp2(struct x86_emulate_ctxt *ctxt)
 	}
 }
 
-static inline int emulate_grp3(struct x86_emulate_ctxt *ctxt,
+static int emulate_grp3(struct x86_emulate_ctxt *ctxt,
 			       struct x86_emulate_ops *ops)
 {
 	struct decode_cache *c = &ctxt->decode;
@@ -1446,7 +1446,7 @@ static inline int emulate_grp3(struct x86_emulate_ctxt *ctxt,
 	return rc;
 }
 
-static inline int emulate_grp45(struct x86_emulate_ctxt *ctxt,
+static int emulate_grp45(struct x86_emulate_ctxt *ctxt,
 			       struct x86_emulate_ops *ops)
 {
 	struct decode_cache *c = &ctxt->decode;
@@ -1476,7 +1476,7 @@ static inline int emulate_grp45(struct x86_emulate_ctxt *ctxt,
 	return 0;
 }
 
-static inline int emulate_grp9(struct x86_emulate_ctxt *ctxt,
+static int emulate_grp9(struct x86_emulate_ctxt *ctxt,
 			       struct x86_emulate_ops *ops,
 			       unsigned long memop)
 {
@@ -1526,7 +1526,7 @@ static int emulate_ret_far(struct x86_emulate_ctxt *ctxt,
 	return rc;
 }
 
-static inline int writeback(struct x86_emulate_ctxt *ctxt,
+static int writeback(struct x86_emulate_ctxt *ctxt,
 			    struct x86_emulate_ops *ops)
 {
 	int rc;
@@ -1592,7 +1592,7 @@ static void toggle_interruptibility(struct x86_emulate_ctxt *ctxt, uint32_t mask
 		ctxt->interruptibility = mask;
 }
 
-static inline void
+static void
 setup_syscalls_segments(struct x86_emulate_ctxt *ctxt,
 	struct kvm_segment *cs, struct kvm_segment *ss)
 {

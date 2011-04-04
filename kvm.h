@@ -1450,7 +1450,7 @@ extern unsigned int __invalid_size_argument_for_IOC;
 
 #define _IOC_TYPECHECK(t) (sizeof(t))
 
-static inline void native_load_tr_desc(void)
+static void native_load_tr_desc(void)
 {
 	__asm__ volatile("ltr %w0"::"q" (KTSS_SEL));
 }
@@ -1902,7 +1902,7 @@ struct vcpu_vmx {
 	char rdtscp_enabled;
 };
 
-static inline struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i)
+static struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i)
 {
 #ifdef XXX
 	smp_rmb();
@@ -1948,7 +1948,7 @@ void kvm_free_irq_routing(struct kvm *kvm);
 
 #else
 
-static inline void kvm_free_irq_routing(struct kvm *kvm) {}
+static void kvm_free_irq_routing(struct kvm *kvm) {}
 
 #endif /*CONFIG_HAVE_KVM_IRQCHIP*/
 
@@ -2061,7 +2061,7 @@ struct preempt_notifier {
 void preempt_notifier_register(struct preempt_notifier *notifier);
 void preempt_notifier_unregister(struct preempt_notifier *notifier);
 
-static inline void preempt_notifier_init(struct preempt_notifier *notifier,
+static void preempt_notifier_init(struct preempt_notifier *notifier,
 				     struct preempt_ops *ops)
 {
 	INIT_HLIST_NODE(&notifier->link);
@@ -2096,7 +2096,7 @@ int kvm_io_bus_register_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 int kvm_io_bus_unregister_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 			      struct kvm_io_device *dev);
 
-static inline unsigned long kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot)
+static unsigned long kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot)
 {
 	/* XXX */
 	/* 	return ALIGN(memslot->npages, BITS_PER_LONG) / 8; */
@@ -2250,30 +2250,30 @@ int kvm_assign_device(struct kvm *kvm,
 int kvm_deassign_device(struct kvm *kvm,
 			struct kvm_assigned_dev_kernel *assigned_dev);
 #else /* CONFIG_IOMMU_API */
-static inline int kvm_iommu_map_pages(struct kvm *kvm,
+static int kvm_iommu_map_pages(struct kvm *kvm,
 				      gfn_t base_gfn,
 				      unsigned long npages)
 {
 	return 0;
 }
 
-static inline int kvm_iommu_map_guest(struct kvm *kvm)
+static int kvm_iommu_map_guest(struct kvm *kvm)
 {
 	return -ENODEV;
 }
 
-static inline int kvm_iommu_unmap_guest(struct kvm *kvm)
+static int kvm_iommu_unmap_guest(struct kvm *kvm)
 {
 	return 0;
 }
 
-static inline int kvm_assign_device(struct kvm *kvm,
+static int kvm_assign_device(struct kvm *kvm,
 		struct kvm_assigned_dev_kernel *assigned_dev)
 {
 	return 0;
 }
 
-static inline int kvm_deassign_device(struct kvm *kvm,
+static int kvm_deassign_device(struct kvm *kvm,
 		struct kvm_assigned_dev_kernel *assigned_dev)
 {
 	return 0;

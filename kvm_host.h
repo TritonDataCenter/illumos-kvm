@@ -72,7 +72,7 @@ void kvm_put_kvm(struct kvm *kvm);
 
 #define HPA_MSB ((sizeof(hpa_t) * 8) - 1)
 #define HPA_ERR_MASK ((hpa_t)1 << HPA_MSB)
-static inline int is_error_hpa(hpa_t hpa) { return hpa >> HPA_MSB; }
+static int is_error_hpa(hpa_t hpa) { return hpa >> HPA_MSB; }
 page_t gva_to_page(struct kvm_vcpu *vcpu, gva_t gva);
 
 extern page_t *bad_page;
@@ -83,29 +83,29 @@ extern pfn_t bad_pfn;
 
 
 #ifdef XXX
-static inline void kvm_guest_enter(void)
+static void kvm_guest_enter(void)
 {
 	account_system_vtime(current);
 	current->flags |= PF_VCPU;
 }
 
-static inline void kvm_guest_exit(void)
+static void kvm_guest_exit(void)
 {
 	account_system_vtime(current);
 	current->flags &= ~PF_VCPU;
 }
 
-inline gpa_t gfn_to_gpa(gfn_t gfn)
+gpa_t gfn_to_gpa(gfn_t gfn)
 {
 	return (gpa_t)gfn << PAGESHIFT;
 }
 
-static inline hpa_t pfn_to_hpa(pfn_t pfn)
+static hpa_t pfn_to_hpa(pfn_t pfn)
 {
 	return (hpa_t)pfn << PAGESHIFT;
 }
 
-static inline void kvm_migrate_timers(struct kvm_vcpu *vcpu)
+static void kvm_migrate_timers(struct kvm_vcpu *vcpu)
 {
 	set_bit(KVM_REQ_MIGRATE_TIMER, &vcpu->requests);
 }
@@ -128,7 +128,7 @@ extern struct dentry *kvm_debugfs_dir;
 
 #ifdef XXX
 #ifdef KVM_ARCH_WANT_MMU_NOTIFIER
-static inline int mmu_notifier_retry(struct kvm_vcpu *vcpu, unsigned long mmu_seq)
+static int mmu_notifier_retry(struct kvm_vcpu *vcpu, unsigned long mmu_seq)
 {
 	if (unlikely(vcpu->kvm->mmu_notifier_count))
 		return 1;
@@ -161,15 +161,15 @@ int kvm_ioeventfd(struct kvm *kvm, struct kvm_ioeventfd *args);
 
 #else
 
-static inline void kvm_eventfd_init(struct kvm *kvm) {}
-static inline int kvm_irqfd(struct kvm *kvm, int fd, int gsi, int flags)
+static void kvm_eventfd_init(struct kvm *kvm) {}
+static int kvm_irqfd(struct kvm *kvm, int fd, int gsi, int flags)
 {
 	return -EINVAL;
 }
 
-static inline void kvm_irqfd_release(struct kvm *kvm) {}
+static void kvm_irqfd_release(struct kvm *kvm) {}
 #ifdef XXX
-static inline int kvm_ioeventfd(struct kvm *kvm, struct kvm_ioeventfd *args)
+static int kvm_ioeventfd(struct kvm *kvm, struct kvm_ioeventfd *args)
 {
 	return -ENOSYS;
 }
@@ -183,7 +183,7 @@ long kvm_vm_ioctl_assigned_device(struct kvm *kvm, unsigned ioctl,
 
 #else
 
-static inline long kvm_vm_ioctl_assigned_device(struct kvm *kvm, unsigned ioctl,
+static long kvm_vm_ioctl_assigned_device(struct kvm *kvm, unsigned ioctl,
 						unsigned long arg)
 {
 	return -ENOTTY;

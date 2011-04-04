@@ -823,49 +823,49 @@ struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn);
 
 #endif /*XXX*/
 
-static inline unsigned short kvm_read_fs(void)
+static unsigned short kvm_read_fs(void)
 {
 	unsigned short seg;
 	__asm__("mov %%fs, %0" : "=g"(seg));
 	return seg;
 }
 
-static inline unsigned short kvm_read_gs(void)
+static unsigned short kvm_read_gs(void)
 {
 	unsigned short seg;
 	__asm__("mov %%gs, %0" : "=g"(seg));
 	return seg;
 }
 
-static inline unsigned short kvm_read_ldt(void)
+static unsigned short kvm_read_ldt(void)
 {
 	unsigned short ldt;
 	__asm__("sldt %0" : "=g"(ldt));
 	return ldt;
 }
 
-static inline void kvm_load_fs(unsigned short sel)
+static void kvm_load_fs(unsigned short sel)
 {
 	__asm__("mov %0, %%fs" : : "rm"(sel));
 }
 
-static inline void kvm_load_gs(unsigned short sel)
+static void kvm_load_gs(unsigned short sel)
 {
 	__asm__("mov %0, %%gs" : : "rm"(sel));
 }
 
-static inline void kvm_load_ldt(unsigned short sel)
+static void kvm_load_ldt(unsigned short sel)
 {
 	__asm__("lldt %0" : : "rm"(sel));
 }
 
 
-static inline void kvm_get_idt(struct descriptor_table *table)
+static void kvm_get_idt(struct descriptor_table *table)
 {
 	__asm__("sidt %0" : "=m"(*table));
 }
 
-static inline void kvm_get_gdt(struct descriptor_table *table)
+static void kvm_get_gdt(struct descriptor_table *table)
 {
 	__asm__("sgdt %0" : "=m"(*table));
 }
@@ -893,14 +893,14 @@ struct desc_struct {
 	}c;
 } __attribute__((packed));
 
-static inline unsigned long get_desc_base(const struct desc_struct *desc)
+static unsigned long get_desc_base(const struct desc_struct *desc)
 {
 	return (unsigned)(desc->c.b.base0 | ((desc->c.b.base1) << 16) | ((desc->c.b.base2) << 24));
 }
 
 extern unsigned long segment_base(uint16_t selector);
 
-static inline unsigned long kvm_read_tr_base(void)
+static unsigned long kvm_read_tr_base(void)
 {
 	unsigned short tr;
 	__asm__("str %0" : "=g"(tr));
@@ -908,7 +908,7 @@ static inline unsigned long kvm_read_tr_base(void)
 }
 
 #ifdef CONFIG_X86_64
-static inline unsigned long read_msr(unsigned long msr)
+static unsigned long read_msr(unsigned long msr)
 {
 	uint64_t value;
 
@@ -917,27 +917,27 @@ static inline unsigned long read_msr(unsigned long msr)
 }
 #endif
 
-static inline void kvm_fx_save(struct i387_fxsave_struct *image)
+static void kvm_fx_save(struct i387_fxsave_struct *image)
 {
 	__asm__("fxsave (%0)":: "r" (image));
 }
 
-static inline void kvm_fx_restore(struct i387_fxsave_struct *image)
+static void kvm_fx_restore(struct i387_fxsave_struct *image)
 {
 	__asm__("fxrstor (%0)":: "r" (image));
 }
 
-static inline void kvm_fx_finit(void)
+static void kvm_fx_finit(void)
 {
 	__asm__("finit");
 }
 
-static inline uint32_t get_rdx_init_val(void)
+static uint32_t get_rdx_init_val(void)
 {
 	return 0x600; /* P6 family */
 }
 
-static inline void kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code)
+static void kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code)
 {
 	kvm_queue_exception_e(vcpu, GP_VECTOR, error_code);
 }
