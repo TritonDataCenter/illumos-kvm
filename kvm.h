@@ -110,6 +110,14 @@
 
 #define KVM_MAX_MCE_BANKS 32
 #define KVM_MCE_CAP_SUPPORTED MCG_CTL_P
+
+/* for ioctl KVM_X86_SETUP_MCE */
+struct mcg_cap_ioc {
+	int kvm_kvmid;
+	int kvm_cpu_index;
+	uint64_t mcg_cap;
+};
+
 #define KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
 	(X86_CR0_WP | X86_CR0_NE | X86_CR0_NW | X86_CR0_CD)
 #define KVM_GUEST_CR0_MASK						\
@@ -1542,7 +1550,7 @@ struct kvm_set_boot_cpu_id_ioc {
 #define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state_ioc)
 #define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state_ioc)
 /* MCE for x86 */
-#define KVM_X86_SETUP_MCE         _IOW(KVMIO,  0x9c, uint64_t)
+#define KVM_X86_SETUP_MCE         _IOW(KVMIO,  0x9c, struct mcg_cap_ioc)
 #define KVM_X86_GET_MCE_CAP_SUPPORTED _IOR(KVMIO,  0x9d, uint64_t)
 #define KVM_X86_SET_MCE           _IOW(KVMIO,  0x9e, struct kvm_x86_mce)
 

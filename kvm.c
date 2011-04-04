@@ -13380,6 +13380,29 @@ void kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, gpa_t vapic_addr)
 	vcpu->arch.apic->vapic_addr = vapic_addr;
 }
 
+static int kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu,
+					uint64_t mcg_cap)
+{
+	int rval;
+	unsigned bank_num = mcg_cap & 0xff, bank;
+
+	rval = -EINVAL;
+	if (!bank_num || bank_num >= KVM_MAX_MCE_BANKS)
+		goto out;
+	if (mcg_cap & ~(KVM_MCE_CAP_SUPPORTED | 0xff | 0xff0000))
+		goto out;
+	rval = 0;
+	vcpu->arch.mcg_cap = mcg_cap;
+	/* Init IA32_MCG_CTL to all 1s */
+	if (mcg_cap & MCG_CTL_P)
+		vcpu->arch.mcg_ctl = ~(uint64_t)0;
+	/* Init IA32_MCi_CTL to all 1s */
+	for (bank = 0; bank < bank_num; bank++)
+		vcpu->arch.mce_banks[bank*4] = ~(uint64_t)0;
+out:
+	return rval;
+}
+
 static int
 kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_p)
 {
@@ -13557,18 +13580,41 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	case KVM_CHECK_EXTENSION:
 		rval = kvm_dev_ioctl_check_extension_generic(arg, rval_p);
 		break;
-#ifdef XXX_KVM_DOESNTCOMPILE
+
 	case KVM_X86_GET_MCE_CAP_SUPPORTED: {
 		uint64_t mce_cap;
 
 		mce_cap = KVM_MCE_CAP_SUPPORTED;
 		rval = EFAULT;
-		if (ddi_copyout(&mce_cap, (caddr_t) argp, sizeof mce_cap))
-			goto out;
+		if (ddi_copyout(&mce_cap, (caddr_t) arg, sizeof mce_cap, mode))
+			break;
 		rval = 0;
 		break;
 	}
-#endif
+
+	case KVM_X86_SETUP_MCE: {
+	  struct mcg_cap_ioc mcg_cap_ioc;
+	  struct kvm *kvmp;
+	  struct kvm_vcpu *vcpu;
+
+	  rval = EFAULT;
+	  if (ddi_copyin((caddr_t)arg, &mcg_cap_ioc, sizeof mcg_cap_ioc, mode))
+		  break;
+
+	  kvmp = find_kvm_id(mcg_cap_ioc.kvm_kvmid);
+	  if (kvmp == NULL) {
+		  rval = EINVAL;
+		  break;
+	  }
+	  if (!kvmp || mcg_cap_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
+		  rval = EINVAL;
+		  break;
+	  }
+	  vcpu = kvmp->vcpus[mcg_cap_ioc.kvm_cpu_index];
+
+	  rval = kvm_vcpu_ioctl_x86_setup_mce(vcpu, mcg_cap_ioc.mcg_cap);
+	  break;
+	}
 
 	case KVM_GET_MSRS: {
 		struct kvm_msrs_ioc *kvm_msrs_ioc;
