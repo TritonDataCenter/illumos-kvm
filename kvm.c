@@ -7601,6 +7601,8 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		vmcs_writel(GUEST_RIP, vcpu->arch.regs[VCPU_REGS_RIP]);
 #endif /*XXX*/
 
+	DTRACE_PROBE1(kvm__vrun, unsigned long, vcpu->arch.regs[VCPU_REGS_RIP]);
+
 	/* When single-stepping over STI and MOV SS, we must clear the
 	 * corresponding interruptibility bits in the guest state. Otherwise
 	 * vmentry fails as it then expects bit 14 (BS) in pending debug
@@ -10998,6 +11000,11 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	uint32_t exit_reason = vmx->exit_reason;
 	uint32_t vectoring_info = vmx->idt_vectoring_info;
 	int rval;
+	unsigned long rip;
+
+	/* Always read the guest rip when exiting */
+	rip = vmcs_readl(GUEST_RIP);
+	DTRACE_PROBE1(kvm__vexit, unsigned long, rip);
 
 #ifdef DEBUG
 	cmn_err(CE_NOTE, "vmx_handle_exit: exit_reason = %d, vectoring_info = %x\n", exit_reason, vectoring_info);
