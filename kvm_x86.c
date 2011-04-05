@@ -41,6 +41,8 @@
 #include "ioapic.h"
 #include "irq.h"
 
+#undef DEBUG
+
 extern struct vmcs **vmxarea;
 
 static int vcpuid;
@@ -110,7 +112,7 @@ kvm_arch_create_vm(void)
 	return kvm;
 }
 
-gpa_t gfn_to_gpa(gfn_t gfn)
+inline gpa_t gfn_to_gpa(gfn_t gfn)
 {
 	return (gpa_t)gfn << PAGESHIFT;
 }
@@ -256,7 +258,7 @@ extern uint64_t shadow_dirty_mask;
 
 extern pfn_t hat_getpfnum(hat_t *hat, caddr_t addr);
 struct vmcs_config vmcs_config;
-extern void ept_sync_global(void);
+extern inline void ept_sync_global(void);
 
 int
 vmx_hardware_enable(void *garbage)
@@ -357,7 +359,7 @@ void kvm_arch_hardware_disable(void *garbage)
 #endif /*CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER*/
 }
 
-static int iommu_found(void)
+static inline int iommu_found(void)
 {
 	return 0;
 }
@@ -504,7 +506,7 @@ int kvm_mmu_create(struct kvm_vcpu *vcpu)
 	return alloc_mmu_pages(vcpu);
 }
 
-uint32_t apic_get_reg(struct kvm_lapic *apic, int reg_off)
+inline uint32_t apic_get_reg(struct kvm_lapic *apic, int reg_off)
 {
 	return *((uint32_t *) (apic->regs + reg_off));
 }
@@ -514,7 +516,7 @@ void apic_set_reg(struct kvm_lapic *apic, int reg_off, uint32_t val)
 	*((uint32_t *) (apic->regs + reg_off)) = val;
 }
 
-static int apic_x2apic_mode(struct kvm_lapic *apic)
+static inline int apic_x2apic_mode(struct kvm_lapic *apic)
 {
 	return apic->vcpu->arch.apic_base & X2APIC_ENABLE;
 }
@@ -558,7 +560,7 @@ static void __report_tpr_access(struct kvm_lapic *apic, int write)
 	run->tpr_access.is_write = write;
 }
 
-static void report_tpr_access(struct kvm_lapic *apic, int write)
+static inline void report_tpr_access(struct kvm_lapic *apic, int write)
 {
 	if (apic->vcpu->arch.tpr_access_reporting)
 		__report_tpr_access(apic, write);
@@ -605,7 +607,7 @@ static uint32_t __apic_read(struct kvm_lapic *apic, unsigned int offset)
 	return val;
 }
 
-static struct kvm_lapic *to_lapic(struct kvm_io_device *dev)
+static inline struct kvm_lapic *to_lapic(struct kvm_io_device *dev)
 {
 #ifdef XXX
 	return container_of(dev, struct kvm_lapic, dev);
@@ -649,7 +651,7 @@ int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
 	return 0;
 }
 
-int apic_hw_enabled(struct kvm_lapic *apic)
+inline int apic_hw_enabled(struct kvm_lapic *apic)
 {
 	return (apic)->vcpu->arch.apic_base & MSR_IA32_APICBASE_ENABLE;
 }
@@ -720,7 +722,7 @@ static void start_apic_timer(struct kvm_lapic *apic)
 #endif /*XXX*/
 }
 
-static int kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
+inline static int kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
 {
 #ifdef CONFIG_IA64
 	return irq->delivery_mode ==
@@ -733,7 +735,7 @@ static int kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
 #define VEC_POS(v) ((v) & (32 - 1))
 #define REG_POS(v) (((v) >> 5) << 4)
 
-void apic_clear_vector(int vec, caddr_t bitmap)
+inline void apic_clear_vector(int vec, caddr_t bitmap)
 {
 	clear_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
 }
@@ -765,12 +767,12 @@ void kvm_inject_nmi(struct kvm_vcpu *vcpu)
 	vcpu->arch.nmi_pending = 1;
 }
 
-void apic_set_vector(int vec, caddr_t bitmap)
+inline void apic_set_vector(int vec, caddr_t bitmap)
 {
 	set_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
 }
 
-static int apic_test_and_set_vector(int vec, caddr_t bitmap)
+static inline int apic_test_and_set_vector(int vec, caddr_t bitmap)
 {
 #ifndef XXX
 	return test_and_set_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
@@ -784,18 +786,18 @@ static int apic_test_and_set_vector(int vec, caddr_t bitmap)
 }
 
 
-static int apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
+static inline int apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
 {
 	apic->irr_pending = 1;
 	return apic_test_and_set_vector(vec, apic->regs + APIC_IRR);
 }
 
-int  apic_sw_enabled(struct kvm_lapic *apic)
+inline int  apic_sw_enabled(struct kvm_lapic *apic)
 {
 	return apic_get_reg(apic, APIC_SPIV) & APIC_SPIV_APIC_ENABLED;
 }
 
-int apic_enabled(struct kvm_lapic *apic)
+inline int apic_enabled(struct kvm_lapic *apic)
 {
 	return apic_sw_enabled(apic) &&	apic_hw_enabled(apic);
 }
@@ -1125,9 +1127,9 @@ static void __kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector,
 }
 
 extern void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode);
-extern int apic_find_highest_isr(struct kvm_lapic *apic);
+extern inline int apic_find_highest_isr(struct kvm_lapic *apic);
 
-static int apic_test_and_clear_vector(int vec, caddr_t bitmap)
+static inline int apic_test_and_clear_vector(int vec, caddr_t bitmap)
 {
 #ifndef XXX
 	return test_and_clear_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
@@ -1140,7 +1142,7 @@ static int apic_test_and_clear_vector(int vec, caddr_t bitmap)
 #endif /*XXX*/
 }
 
-static int apic_lvt_nmi_mode(uint32_t lvt_val)
+static inline int apic_lvt_nmi_mode(uint32_t lvt_val)
 {
 	return (lvt_val & (APIC_MODE_MASK | APIC_LVT_MASKED)) == APIC_DM_NMI;
 }
@@ -1813,7 +1815,7 @@ void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 		vcpu->arch.cr8 = cr8;
 }
 
-extern ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask);
+extern inline ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask);
 
 int is_paging(struct kvm_vcpu *vcpu)
 {
@@ -2228,10 +2230,10 @@ void fx_init(struct kvm_vcpu *vcpu)
 }
 
 
-extern void vpid_sync_vcpu_all(struct vcpu_vmx *vmx);
+extern inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx);
 extern void vmx_fpu_activate(struct kvm_vcpu *vcpu);
-extern int vm_need_tpr_shadow(struct kvm *kvm);
-extern int cpu_has_vmx_tpr_shadow(void);
+extern inline int vm_need_tpr_shadow(struct kvm *kvm);
+extern inline int cpu_has_vmx_tpr_shadow(void);
 
 #define page_to_phys(page) (page->p_pagenum << PAGESHIFT)
 
@@ -2575,7 +2577,7 @@ static int mapping_level(struct kvm_vcpu *vcpu, gfn_t large_gfn)
 
 
 extern page_t *bad_page;
-extern void get_page(page_t *page);
+extern inline void get_page(page_t *page);
 
 static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 {
@@ -2686,7 +2688,7 @@ unsigned long *gfn_to_rmap(struct kvm *kvm, gfn_t gfn, int level)
 	return &slot->lpage_info[level - 2][idx].rmap_pde;
 }
 
-extern unsigned long bad_hva(void);
+extern inline unsigned long bad_hva(void);
 extern page_t *page_numtopp_nolock(pfn_t pfn);
 
 page_t *pfn_to_page(pfn_t pfn)
@@ -3316,7 +3318,7 @@ void __kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 	}
 }
 
-void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
+inline void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 {
 	if (vcpu->kvm->arch.n_free_mmu_pages < KVM_MIN_FREE_MMU_PAGES)
 		__kvm_mmu_free_some_pages(vcpu);
@@ -3463,7 +3465,7 @@ int cpuid_maxphyaddr(struct kvm_vcpu *vcpu)
 	return 36;  /* from linux.  number of bits, perhaps? */
 }
 
-static uint64_t rsvd_bits(int s, int e)
+static inline uint64_t rsvd_bits(int s, int e)
 {
 	return ((1ULL << (e - s + 1)) - 1) << s;
 }
@@ -3656,7 +3658,7 @@ void kvm_flush_remote_tlbs(struct kvm *kvm)
 #endif /*XXX*/
 }
 
-uint64_t kvm_pdptr_read(struct kvm_vcpu *vcpu, int index)
+inline uint64_t kvm_pdptr_read(struct kvm_vcpu *vcpu, int index)
 {
 	if (!test_bit(VCPU_EXREG_PDPTR,
 		      (unsigned long *)&vcpu->arch.regs_avail))
@@ -3693,7 +3695,7 @@ gfn_t unalias_gfn(struct kvm *kvm, gfn_t gfn)
 	return gfn;
 }
 
-static int is_pse(struct kvm_vcpu *vcpu)
+static inline int is_pse(struct kvm_vcpu *vcpu)
 {
 	return kvm_read_cr4_bits(vcpu, X86_CR4_PSE);
 }
@@ -3706,7 +3708,7 @@ static int is_rsvd_bits_set(struct kvm_vcpu *vcpu, uint64_t gpte, int level)
 	return (gpte & vcpu->arch.mmu.rsvd_bits_mask[bit7][level-1]) != 0;
 }
 
-extern int is_pae(struct kvm_vcpu *vcpu);
+extern inline int is_pae(struct kvm_vcpu *vcpu);
 
 int is_dirty_gpte(unsigned long pte)
 {
@@ -4177,7 +4179,7 @@ int kvm_vm_ioctl_set_memory_region(struct kvm *kvm,
 	return kvm_set_memory_region(kvm, mem, user_alloc);
 }
 
-static struct kvm_coalesced_mmio_dev *to_mmio(struct kvm_io_device *dev)
+static inline struct kvm_coalesced_mmio_dev *to_mmio(struct kvm_io_device *dev)
 {
 #ifdef XXX
 	return container_of(dev, struct kvm_coalesced_mmio_dev, dev);
