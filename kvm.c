@@ -35,6 +35,7 @@
 #include "tss.h"
 #include "ioapic.h"
 #include "coalesced_mmio.h"
+#include "hyperv.h"
 
 int kvmid;  /* monotonically increasing, unique per vm */
 
@@ -9869,12 +9870,6 @@ void __init kvm_guest_init(void);
 #define kvm_guest_init() do { } while (0)
 #endif
 
-static int kvm_para_has_feature(unsigned int feature)
-{
-	if (kvm_arch_para_features() & (1UL << feature))
-		return 1;
-	return 0;
-}
 #endif /* _KERNEL */
 
 int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)

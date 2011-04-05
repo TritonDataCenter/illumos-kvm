@@ -29,7 +29,12 @@ void __init kvm_guest_init(void);
 #define kvm_guest_init() do { } while (0)
 #endif
 
-static inline int kvm_para_has_feature(unsigned int feature)
+static unsigned int kvm_arch_para_features(void)
+{
+	return cpuid_eax(KVM_CPUID_FEATURES);
+}
+
+static int kvm_para_has_feature(unsigned int feature)
 {
 	if (kvm_arch_para_features() & (1UL << feature))
 		return 1;

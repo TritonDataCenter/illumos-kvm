@@ -29,6 +29,7 @@
 #endif
 
 #include "kvm_types.h"
+#include "msr.h"
 
 #define KVM_PIO_PAGE_OFFSET 0
 #define KVM_COALESCED_MMIO_PAGE_OFFSET 0
