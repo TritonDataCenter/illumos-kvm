@@ -43,7 +43,6 @@ qemu-monitor.texi
 *.toc
 *.tp
 *.vr
-*.d
 *.o
 *.i
 .pc
@@ -53,3 +52,4 @@ pc-bios/vgabios-pq/status
 pc-bios/optionrom/multiboot.bin
 pc-bios/optionrom/multiboot.raw
 .stgit-*
+cscope.*

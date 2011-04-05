@@ -11006,7 +11006,7 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 
 	/* Always read the guest rip when exiting */
 	rip = vmcs_readl(GUEST_RIP);
-	DTRACE_PROBE1(kvm__vexit, unsigned long, rip);
+	DTRACE_PROBE2(kvm__vexit, unsigned long, rip, uint32_t, exit_reason);
 
 #ifdef DEBUG
 	cmn_err(CE_NOTE, "vmx_handle_exit: exit_reason = %d, vectoring_info = %x\n", exit_reason, vectoring_info);
