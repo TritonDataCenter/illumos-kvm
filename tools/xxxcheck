@@ -1,7 +1,17 @@
 #!/bin/bash
 
+#
+# We prefer "new" AWK unless of course there isn't one, in which case we
+# assume that awk is new AWK.
+#
+awk=`which nawk`
+
+if [[ -z $awk ]]; then
+	awk=`which awk`
+fi
+
 for file in $*; do
-	cat $file | nawk "\
+	cat $file | $awk "\
 		/#ifdef/{ if (inif) { nest++; } }
 		/#ifdef XXX/{
 			if (inif) {
@@ -11,6 +21,7 @@ for file in $*; do
 			inif = 1;
 			nest = 0;
 		}
+		/#ifdef XXX_KVM_STAT/{ inif = 0 }
 		/#ifdef XXX_KVM_TRACE/{ inif = 0 }
 		/#ifdef XXX_KVM_DOESNTCOMPILE/{ inif = 0 }
 		/#ifdef XXX_KVM_DECLARATION/{ inif = 0 }

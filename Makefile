@@ -30,7 +30,7 @@ install: kvm
 	@pfexec cp kvm.conf /usr/kernel/drv
 
 check:
-	@./tools/xxxcheck kvm_x86.c
+	@./tools/xxxcheck kvm_x86.c kvm.c
 
 load: install
 	@echo "==> Loading kvm module"

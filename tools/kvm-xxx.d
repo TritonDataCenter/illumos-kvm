@@ -4,10 +4,11 @@
 
 kvm-xxx
 {
-	@[stringof(arg0), arg1] = count();
+	@[stringof(arg0), probefunc, arg1] = count();
 }
 
 tick-10sec
 {
+	printf("%-12s %-40s %-8s %8s\n", "FILE", "FUNCTION", "LINE", "COUNT");
 	printa("%20s %8d %@8d\n", @);
 }
