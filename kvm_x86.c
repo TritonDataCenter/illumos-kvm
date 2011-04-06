@@ -1408,12 +1408,14 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	else
 		vcpu->arch.mp_state = KVM_MP_STATE_UNINITIALIZED;
 
-	page = alloc_page(PAGESIZE, KM_SLEEP);
+	/*	page = alloc_page(PAGESIZE, KM_SLEEP);
 	if (!page) {
 		r = ENOMEM;
 		goto fail;
 	}
 	vcpu->arch.pio_data = page_address(page);
+	*/
+	vcpu->arch.pio_data = vcpu->run + (KVM_PIO_PAGE_OFFSET*PAGESIZE);
 
 	r = kvm_mmu_create(vcpu);
 	if (r < 0)
@@ -1447,8 +1449,8 @@ fail_mmu_destroy:
 	XXX_KVM_PROBE;
 #endif /*XXX*/
 fail_free_pio_data:
-	kmem_free(page, PAGESIZE);
-	vcpu->arch.pio_data = 0;
+	/*	kmem_free(page, PAGESIZE);
+		vcpu->arch.pio_data = 0;*/
 fail:
 	return r;
 }
@@ -1476,7 +1478,7 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, struct kvm_vcpu_ioc *arg, 
 #ifdef NOTNOW
 	init_waitqueue_head(&vcpu->wq);
 #endif
-	page = alloc_page(PAGESIZE, KM_SLEEP);
+	page = alloc_page(PAGESIZE*3, KM_SLEEP);
 	if (!page) {
 		r = ENOMEM;
 		goto fail;

@@ -4611,20 +4611,17 @@ static inline unsigned long native_read_cr3(void)
 
 inline ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
 
-#ifdef XXX_KVM_DOESNTCOMPILE
+#ifdef XXX_KVM_DEBUG
 #include "vmcs_dump.h"
-#endif
 
 #define VMCS_DUMP_ENTRIES 1024
-#ifdef XXX_KVM_DOESNTCOMPILE
+
 struct vmcs_dump_area dumparea[VMCS_DUMP_ENTRIES];
-#endif
 int vmcs_dump_idx = 0;
 
 void
 kvm_vmcs_dump(int where)
 {
-#ifdef XXX_KVM_DOESNTCOMPILE
 	dumparea[vmcs_dump_idx].where = where;
 	dumparea[vmcs_dump_idx].virtual_processor_id = vmcs_read16(VIRTUAL_PROCESSOR_ID);
 	dumparea[vmcs_dump_idx].guest_es_selector = vmcs_read16(GUEST_ES_SELECTOR);
@@ -4775,9 +4772,9 @@ kvm_vmcs_dump(int where)
 	dumparea[vmcs_dump_idx].host_ia32_sysenter_eip = vmcs_readl(HOST_IA32_SYSENTER_EIP);
 	dumparea[vmcs_dump_idx].host_rsp = vmcs_readl(HOST_RSP);
 	dumparea[vmcs_dump_idx].host_rip = vmcs_readl(HOST_RIP);
-#endif
 }
 
+#endif /*XXX_KVM_DEBUG*/
 
 /*
  * Sets up the vmcs for emulated real mode.
@@ -4943,12 +4940,13 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 
 	guest_write_tsc(0, tsc_base);
 	
+#ifdef XXX_KVM_DEBUG
 	/*XXX - debugging */
 	if (vmcs_dump_idx < VMCS_DUMP_ENTRIES) {
 		kvm_vmcs_dump(0);
 		vmcs_dump_idx++;
 	}
-
+#endif /*XXX_KVM_DEBUG*/
 	return 0;
 }
 
@@ -7709,12 +7707,13 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	 */
 	vmcs_writel(HOST_CR0, read_cr0());
 
+#ifdef XXX_KVM_DEBUG
 	/*XXX - debugging */
 	if (vmcs_dump_idx < VMCS_DUMP_ENTRIES) {
 		kvm_vmcs_dump(1);
 		vmcs_dump_idx++;
 	}
-
+#endif /*XXX_KVM_DEBUG*/
 
 	__asm__(
 		/* Store host registers */
@@ -7820,11 +7819,13 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 #endif
 	      );
 
+#ifdef XXX_KVM_DEBUG
 	/*XXX - debugging */
 	if (vmcs_dump_idx < VMCS_DUMP_ENTRIES) {
 		kvm_vmcs_dump(2);
 		vmcs_dump_idx++;
 	}
+#endif /*XXX_KVM_DEBUG*/
 	
 	vcpu->arch.regs_avail = ~((1 << VCPU_REGS_RIP) | (1 << VCPU_REGS_RSP)
 				  | (1 << VCPU_EXREG_PDPTR));
@@ -14558,7 +14559,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			rval = EINVAL;
 			break;
 		}
-		*rval_p = ptob(1);
+		*rval_p = ptob(3);  /*XXX initially 1*/
 		break;
 	case KVM_SET_TSS_ADDR:
 	{
