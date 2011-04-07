@@ -51,17 +51,7 @@
 #ifndef _ASM_X86_KVM_X86_EMULATE_H
 #define _ASM_X86_KVM_X86_EMULATE_H
 
-
-
 struct x86_emulate_ctxt;
-
-struct x86_exception {
-	u8 vector;
-	bool error_code_valid;
-	u16 error_code;
-	bool nested_page_fault;
-	u64 address; /* cr2 or nested page fault gpa */
-};
 
 /*
  * x86_emulate_ops:
@@ -99,10 +89,8 @@ struct x86_exception {
 #define X86EMUL_UNHANDLEABLE    1
 /* Terminate emulation but return success to the caller. */
 #define X86EMUL_PROPAGATE_FAULT 2 /* propagate a generated fault to guest */
-#define X86EMUL_RETRY_INSTR     3 /* retry the instruction for some reason */
-#define X86EMUL_CMPXCHG_FAILED  4 /* cmpxchg did not see expected value */
-#define X86EMUL_IO_NEEDED       5 /* IO is needed to complete emulation */
-
+#define X86EMUL_RETRY_INSTR     2 /* retry the instruction for some reason */
+#define X86EMUL_CMPXCHG_FAILED  2 /* cmpxchg did not see expected value */
 struct x86_emulate_ops {
 	/*
 	 * read_std: Read bytes of standard (non-emulated/special) memory.
@@ -112,19 +100,8 @@ struct x86_emulate_ops {
 	 *  @bytes: [IN ] Number of bytes to read from memory.
 	 */
 	int (*read_std)(unsigned long addr, void *val,
-			unsigned int bytes, struct kvm_vcpu *vcpu,
-			struct x86_exception *fault);
+			unsigned int bytes, struct kvm_vcpu *vcpu, u32 *error);
 
-	/*
-	 * write_std: Write bytes of standard (non-emulated/special) memory.
-	 *            Used for descriptor writing.
-	 *  @addr:  [IN ] Linear address to which to write.
-	 *  @val:   [OUT] Value write to memory, zero-extended to 'u_long'.
-	 *  @bytes: [IN ] Number of bytes to write to memory.
-	 */
-	int (*write_std)(unsigned long addr, void *val,
-			 unsigned int bytes, struct kvm_vcpu *vcpu,
-			 struct x86_exception *fault);
 	/*
 	 * fetch: Read bytes of standard (non-emulated/special) memory.
 	 *        Used for instruction fetch.
@@ -133,8 +110,7 @@ struct x86_emulate_ops {
 	 *  @bytes: [IN ] Number of bytes to read from memory.
 	 */
 	int (*fetch)(unsigned long addr, void *val,
-		     unsigned int bytes, struct kvm_vcpu *vcpu,
-		     struct x86_exception *fault);
+			unsigned int bytes, struct kvm_vcpu *vcpu, u32 *error);
 
 	/*
 	 * read_emulated: Read bytes from emulated/special memory area.
@@ -145,7 +121,6 @@ struct x86_emulate_ops {
 	int (*read_emulated)(unsigned long addr,
 			     void *val,
 			     unsigned int bytes,
-			     struct x86_exception *fault,
 			     struct kvm_vcpu *vcpu);
 
 	/*
@@ -158,7 +133,6 @@ struct x86_emulate_ops {
 	int (*write_emulated)(unsigned long addr,
 			      const void *val,
 			      unsigned int bytes,
-			      struct x86_exception *fault,
 			      struct kvm_vcpu *vcpu);
 
 	/*
@@ -173,64 +147,20 @@ struct x86_emulate_ops {
 				const void *old,
 				const void *new,
 				unsigned int bytes,
-				struct x86_exception *fault,
 				struct kvm_vcpu *vcpu);
 
-	int (*pio_in_emulated)(int size, unsigned short port, void *val,
-			       unsigned int count, struct kvm_vcpu *vcpu);
-
-	int (*pio_out_emulated)(int size, unsigned short port, const void *val,
-				unsigned int count, struct kvm_vcpu *vcpu);
-
-	bool (*get_cached_descriptor)(struct kvm_desc_struct *desc,
-				      int seg, struct kvm_vcpu *vcpu);
-	void (*set_cached_descriptor)(struct kvm_desc_struct *desc,
-				      int seg, struct kvm_vcpu *vcpu);
-	u16 (*get_segment_selector)(int seg, struct kvm_vcpu *vcpu);
-	void (*set_segment_selector)(u16 sel, int seg, struct kvm_vcpu *vcpu);
-	unsigned long (*get_cached_segment_base)(int seg, struct kvm_vcpu *vcpu);
-	void (*get_gdt)(struct kvm_desc_ptr *dt, struct kvm_vcpu *vcpu);
-	void (*get_idt)(struct kvm_desc_ptr *dt, struct kvm_vcpu *vcpu);
-	ulong (*get_cr)(int cr, struct kvm_vcpu *vcpu);
-	int (*set_cr)(int cr, ulong val, struct kvm_vcpu *vcpu);
-	int (*cpl)(struct kvm_vcpu *vcpu);
-	int (*get_dr)(int dr, unsigned long *dest, struct kvm_vcpu *vcpu);
-	int (*set_dr)(int dr, unsigned long value, struct kvm_vcpu *vcpu);
-	int (*set_msr)(struct kvm_vcpu *vcpu, u32 msr_index, u64 data);
-	int (*get_msr)(struct kvm_vcpu *vcpu, u32 msr_index, u64 *pdata);
 };
 
 /* Type, address-of, and value of an instruction's operand. */
 struct operand {
 	enum { OP_REG, OP_MEM, OP_IMM, OP_NONE } type;
 	unsigned int bytes;
-	union {
-		unsigned long orig_val;
-		u64 orig_val64;
-	};
-	union {
-		unsigned long *reg;
-		struct segmented_address {
-			ulong ea;
-			unsigned seg;
-		} mem;
-	} addr;
-	union {
-		unsigned long val;
-		u64 val64;
-		char valptr[sizeof(unsigned long) + 2];
-	};
+	unsigned long val, orig_val, *ptr;
 };
 
 struct fetch_cache {
 	u8 data[15];
 	unsigned long start;
-	unsigned long end;
-};
-
-struct read_cache {
-	u8 data[1024];
-	unsigned long pos;
 	unsigned long end;
 };
 
@@ -248,40 +178,35 @@ struct decode_cache {
 	bool has_seg_override;
 	u8 seg_override;
 	unsigned int d;
-	int (*execute)(struct x86_emulate_ctxt *ctxt);
 	unsigned long regs[NR_VCPU_REGS];
-	unsigned long eip;
+	unsigned long eip, eip_orig;
 	/* modrm */
 	u8 modrm;
 	u8 modrm_mod;
 	u8 modrm_reg;
 	u8 modrm_rm;
-	u8 modrm_seg;
+	u8 use_modrm_ea;
 	bool rip_relative;
+	unsigned long modrm_ea;
+	void *modrm_ptr;
+	unsigned long modrm_val;
 	struct fetch_cache fetch;
-	struct read_cache io_read;
-	struct read_cache mem_read;
 };
 
-struct x86_emulate_ctxt {
-	struct x86_emulate_ops *ops;
+#define X86_SHADOW_INT_MOV_SS  1
+#define X86_SHADOW_INT_STI     2
 
+struct x86_emulate_ctxt {
 	/* Register state before/after emulation. */
 	struct kvm_vcpu *vcpu;
 
 	unsigned long eflags;
-	unsigned long eip; /* eip before instruction emulation */
 	/* Emulated execution mode, represented by an X86EMUL_MODE value. */
 	int mode;
 	u32 cs_base;
 
 	/* interruptibility state, as a result of execution of STI or MOV SS */
 	int interruptibility;
-
-	bool perm_ok; /* do not check permissions if true */
-
-	bool have_exception;
-	struct x86_exception exception;
 
 	/* decode cache */
 	struct decode_cache decode;
@@ -305,14 +230,9 @@ struct x86_emulate_ctxt {
 #define X86EMUL_MODE_HOST X86EMUL_MODE_PROT64
 #endif
 
-int x86_decode_insn(struct x86_emulate_ctxt *ctxt, void *insn, int insn_len);
-#define EMULATION_FAILED -1
-#define EMULATION_OK 0
-#define EMULATION_RESTART 1
-int x86_emulate_insn(struct x86_emulate_ctxt *ctxt);
-int emulator_task_switch(struct x86_emulate_ctxt *ctxt,
-			 u16 tss_selector, int reason,
-			 bool has_error_code, u32 error_code);
-int emulate_int_real(struct x86_emulate_ctxt *ctxt,
-		     struct x86_emulate_ops *ops, int irq);
+int x86_decode_insn(struct x86_emulate_ctxt *ctxt,
+		    struct x86_emulate_ops *ops);
+int x86_emulate_insn(struct x86_emulate_ctxt *ctxt,
+		     struct x86_emulate_ops *ops);
+
 #endif /* _ASM_X86_KVM_X86_EMULATE_H */
