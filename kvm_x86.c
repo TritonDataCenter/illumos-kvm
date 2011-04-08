@@ -1408,14 +1408,16 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	else
 		vcpu->arch.mp_state = KVM_MP_STATE_UNINITIALIZED;
 
-	/*	page = alloc_page(PAGESIZE, KM_SLEEP);
-	if (!page) {
-		r = ENOMEM;
-		goto fail;
-	}
-	vcpu->arch.pio_data = page_address(page);
-	*/
-	vcpu->arch.pio_data = vcpu->run + (KVM_PIO_PAGE_OFFSET*PAGESIZE);
+	/*
+	 * page = alloc_page(PAGESIZE, KM_SLEEP);
+	 * if (!page) {
+	 *	r = ENOMEM;
+	 *	goto fail;
+	 * }
+	 * vcpu->arch.pio_data = page_address(page);
+	 */
+	vcpu->arch.pio_data = (caddr_t)vcpu->run +
+	    (KVM_PIO_PAGE_OFFSET*PAGESIZE);
 
 	r = kvm_mmu_create(vcpu);
 	if (r < 0)
@@ -1427,12 +1429,14 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 			goto fail_mmu_destroy;
 	}
 
-	vcpu->arch.mce_banks = kmem_zalloc(KVM_MAX_MCE_BANKS * sizeof(uint64_t) * 4,
-				       KM_SLEEP);
+	vcpu->arch.mce_banks = kmem_zalloc(KVM_MAX_MCE_BANKS *
+	    sizeof (uint64_t) * 4, KM_SLEEP);
+
 	if (!vcpu->arch.mce_banks) {
 		r = ENOMEM;
 		goto fail_free_lapic;
 	}
+
 	vcpu->arch.mcg_cap = KVM_MAX_MCE_BANKS;
 
 	return 0;
@@ -1449,8 +1453,10 @@ fail_mmu_destroy:
 	XXX_KVM_PROBE;
 #endif /*XXX*/
 fail_free_pio_data:
-	/*	kmem_free(page, PAGESIZE);
-		vcpu->arch.pio_data = 0;*/
+	/*
+	 * kmem_free(page, PAGESIZE);
+	 * vcpu->arch.pio_data = 0;
+	 */
 fail:
 	return r;
 }
