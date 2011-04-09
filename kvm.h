@@ -1902,18 +1902,12 @@ struct vcpu_vmx {
 	char rdtscp_enabled;
 };
 
-static struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i)
-{
-#ifdef XXX
-	smp_rmb();
-#endif /*XXX*/
-	return kvm->vcpus[i];
-}
-
 #define kvm_for_each_vcpu(idx, vcpup, kvm) \
 	for (idx = 0, vcpup = kvm_get_vcpu(kvm, idx); \
 	     idx < kvm->online_vcpus && vcpup; /* XXX - need protection */ \
 	     vcpup = kvm_get_vcpu(kvm, ++idx))
+
+extern struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i);
 
 #ifdef XXX
 struct kvm_irq_mask_notifier {
@@ -2060,13 +2054,8 @@ struct preempt_notifier {
 
 void preempt_notifier_register(struct preempt_notifier *notifier);
 void preempt_notifier_unregister(struct preempt_notifier *notifier);
-
-static void preempt_notifier_init(struct preempt_notifier *notifier,
-				     struct preempt_ops *ops)
-{
-	INIT_HLIST_NODE(&notifier->link);
-	notifier->ops = ops;
-}
+void preempt_notifier_init(struct preempt_notifier *notifier,
+    struct preempt_ops *ops);
 
 #endif /*XXX*/
 #endif /*CONFIG_PREEMPT_NOTIFIERS*/
@@ -2096,12 +2085,7 @@ int kvm_io_bus_register_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 int kvm_io_bus_unregister_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 			      struct kvm_io_device *dev);
 
-static unsigned long kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot)
-{
-	/* XXX */
-	/* 	return ALIGN(memslot->npages, BITS_PER_LONG) / 8; */
-	return ((BT_BITOUL(memslot->npages)) / 8);
-}
+extern unsigned long kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot);
 
 int kvm_set_memory_region(struct kvm *kvm,
 			  struct kvm_userspace_memory_region *mem,
@@ -2241,7 +2225,6 @@ void kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, bool mask);
 #endif /*XXX*/
 
-#ifdef CONFIG_IOMMU_API
 int kvm_iommu_map_pages(struct kvm *kvm, struct kvm_memory_slot *slot);
 int kvm_iommu_map_guest(struct kvm *kvm);
 int kvm_iommu_unmap_guest(struct kvm *kvm);
@@ -2249,36 +2232,6 @@ int kvm_assign_device(struct kvm *kvm,
 		      struct kvm_assigned_dev_kernel *assigned_dev);
 int kvm_deassign_device(struct kvm *kvm,
 			struct kvm_assigned_dev_kernel *assigned_dev);
-#else /* CONFIG_IOMMU_API */
-static int kvm_iommu_map_pages(struct kvm *kvm,
-				      gfn_t base_gfn,
-				      unsigned long npages)
-{
-	return 0;
-}
-
-static int kvm_iommu_map_guest(struct kvm *kvm)
-{
-	return -ENODEV;
-}
-
-static int kvm_iommu_unmap_guest(struct kvm *kvm)
-{
-	return 0;
-}
-
-static int kvm_assign_device(struct kvm *kvm,
-		struct kvm_assigned_dev_kernel *assigned_dev)
-{
-	return 0;
-}
-
-static int kvm_deassign_device(struct kvm *kvm,
-		struct kvm_assigned_dev_kernel *assigned_dev)
-{
-	return 0;
-}
-#endif /* CONFIG_IOMMU_API */
 
 #define for_each_unsync_children(bitmap, idx)		\
 	for (idx = bt_getlowbit(bitmap, 0, 512);	\
