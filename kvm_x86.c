@@ -1415,7 +1415,7 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	}
 	vcpu->arch.pio_data = page_address(page);
 	*/
-	vcpu->arch.pio_data = vcpu->run + (KVM_PIO_PAGE_OFFSET*PAGESIZE);
+	vcpu->arch.pio_data = (void *) ((caddr_t)vcpu->run + (KVM_PIO_PAGE_OFFSET*PAGESIZE));
 
 	r = kvm_mmu_create(vcpu);
 	if (r < 0)
@@ -1492,6 +1492,10 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, struct kvm_vcpu_ioc *arg, 
 	r = kvm_arch_vcpu_init(vcpu);
 	if (r != 0)
 		goto fail_free_run;
+#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET  /*XXX moved */
+	kvm_coalesced_mmio_init(kvm, vcpu);
+#endif
+
 	return 0;
 
 fail_free_run:
@@ -4062,6 +4066,12 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int32_t id, struct kvm_vcpu_ioc *arg, 
 	/* XXX need to protect online_vcpus */
 	kvm->vcpus[kvm->online_vcpus] = vcpu;
 
+#ifdef XXX_MOVED
+#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
+	kvm_coalesced_mmio_init(kvm);
+#endif
+#endif /*XXX_MOVED*/
+
 #ifdef XXX
 	smp_wmb();
 #else
@@ -4327,17 +4337,21 @@ static void coalesced_mmio_destructor(struct kvm_io_device *this)
 		kmem_free(dev, sizeof(struct kvm_coalesced_mmio_dev));
 }
 
-int kvm_coalesced_mmio_init(struct kvm *kvm)
+int kvm_coalesced_mmio_init(struct kvm *kvm, struct kvm_vcpu *vcpu)
 {
 	struct kvm_coalesced_mmio_dev *dev;
 	page_t *page;
 	int ret;
 
+	/*
 	ret = -ENOMEM;
 	page = alloc_page(PAGESIZE, KM_SLEEP);
 	if (!page)
 		goto out_err;
 	kvm->coalesced_mmio_ring = (struct kvm_coalesced_mmio_ring *)page_address(page);
+	*/
+	if (!kvm->coalesced_mmio_ring)
+		kvm->coalesced_mmio_ring = (struct kvm_coalesced_mmio_ring *)((caddr_t)vcpu->run + (KVM_COALESCED_MMIO_PAGE_OFFSET*PAGESIZE));
 
 	ret = -ENOMEM;
 	dev = kmem_zalloc(sizeof(struct kvm_coalesced_mmio_dev), KM_SLEEP);

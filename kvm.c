@@ -3636,9 +3636,11 @@ kvm_create_vm(void)
 	kvmp->users_count = 1;
 	list_insert_tail(&vm_list, kvmp);
 	mutex_exit(&kvm_lock);
+#ifdef KVM_MOVED
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	kvm_coalesced_mmio_init(kvmp);
 #endif
+#endif /*KVM_MOVED*/
 
 	return (kvmp);
 }
