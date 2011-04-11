@@ -1429,12 +1429,14 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 			goto fail_mmu_destroy;
 	}
 
-	vcpu->arch.mce_banks = kmem_zalloc(KVM_MAX_MCE_BANKS * sizeof(uint64_t) * 4,
-				       KM_SLEEP);
+	vcpu->arch.mce_banks = kmem_zalloc(KVM_MAX_MCE_BANKS *
+	    sizeof (uint64_t) * 4, KM_SLEEP);
+
 	if (!vcpu->arch.mce_banks) {
 		r = ENOMEM;
 		goto fail_free_lapic;
 	}
+
 	vcpu->arch.mcg_cap = KVM_MAX_MCE_BANKS;
 
 	return 0;

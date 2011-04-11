@@ -41,13 +41,7 @@ struct msr_regs_info {
 	int err;
 };
 
-static unsigned long long native_read_tscp(unsigned int *aux)
-{
-	unsigned long low, high;
-	__asm__ volatile(".byte 0x0f,0x01,0xf9"
-		     : "=a" (low), "=d" (high), "=c" (*aux));
-	return low | ((uint64_t)high << 32);
-}
+extern unsigned long long native_read_tscp(unsigned int *aux);
 
 /*
  * both i386 and x86_64 returns 64-bit value in edx:eax, but gcc's "A"
@@ -67,38 +61,13 @@ static unsigned long long native_read_tscp(unsigned int *aux)
 #define EAX_EDX_RET(val, low, high)	"=A" (val)
 #endif
 
-#ifndef XXX
-/* change to function, i.e., not inline.  want to dtrace this */
-/* doing this for most read/write msr inlines */
-static unsigned long long native_read_msr(unsigned int msr)
-#else
-static unsigned long long native_read_msr(unsigned int msr)
-#endif /*XXX*/
-{
-	DECLARE_ARGS(val, low, high);
-
-	__asm__ volatile("rdmsr" : EAX_EDX_RET(val, low, high) : "c" (msr));
-	return EAX_EDX_VAL(val, low, high);
-}
-
-
-extern uint64_t native_read_msr_safe(unsigned int msr,
-				     int *err);
+extern unsigned long long native_read_msr(unsigned int msr);
+extern uint64_t native_read_msr_safe(unsigned int msr, int *err);
 extern int native_write_msr_safe(unsigned int msr,
 				 unsigned low, unsigned high);
 
-
-#ifndef XXX
-static void native_write_msr(unsigned int msr,
-				    unsigned low, unsigned high)
-#else
-static void native_write_msr(unsigned int msr,
-				    unsigned low, unsigned high)
-#endif /*XXX*/
-{
-	__asm__ volatile("wrmsr" : : "c" (msr), "a"(low), "d" (high) : "memory");
-}
-
+extern void native_write_msr(unsigned int msr,
+				    unsigned low, unsigned high);
 
 extern unsigned long long native_read_tsc(void);
 
@@ -107,22 +76,8 @@ extern int native_rdmsr_safe_regs(uint32_t regs[8]);
 extern int native_wrmsr_safe_regs(uint32_t regs[8]);
 #endif /*NOTNOW*/
 
-static unsigned long long __native_read_tsc(void)
-{
-	DECLARE_ARGS(val, low, high);
-
-	__asm__ volatile("rdtsc" : EAX_EDX_RET(val, low, high));
-
-	return EAX_EDX_VAL(val, low, high);
-}
-
-static unsigned long long native_read_pmc(int counter)
-{
-	DECLARE_ARGS(val, low, high);
-
-	__asm__ volatile("rdpmc" : EAX_EDX_RET(val, low, high) : "c" (counter));
-	return EAX_EDX_VAL(val, low, high);
-}
+extern unsigned long long __native_read_tsc(void);
+extern unsigned long long native_read_pmc(int counter);
 
 #ifdef CONFIG_PARAVIRT
 #include <asm/paravirt.h>
@@ -144,14 +99,7 @@ do {								\
 	(val2) = (uint32_t)(__val >> 32);				\
 } while (0)
 
-#ifndef XXX
-static void wrmsr(unsigned msr, unsigned low, unsigned high)
-#else
-static void wrmsr(unsigned msr, unsigned low, unsigned high)
-#endif /*XXX*/
-{
-	native_write_msr(msr, low, high);
-}
+extern void wrmsr(unsigned msr, unsigned low, unsigned high);
 
 #define rdmsrl(msr, val)			\
 	((val) = native_read_msr((msr)))
@@ -159,16 +107,9 @@ static void wrmsr(unsigned msr, unsigned low, unsigned high)
 #define wrmsrl(msr, val)						\
 	native_write_msr((msr), (uint32_t)((uint64_t)(val)), (uint32_t)((uint64_t)(val) >> 32))
 
-#ifndef XXX
 /* see comment above for wrmsr() */
 /* wrmsr with exception handling */
-static int wrmsr_safe(unsigned msr, unsigned low, unsigned high)
-#else
-static int wrmsr_safe(unsigned msr, unsigned low, unsigned high)
-#endif /*XXX*/
-{
-	return native_write_msr_safe(msr, low, high);
-}
+extern int wrmsr_safe(unsigned msr, unsigned low, unsigned high);
 
 /* rdmsr with exception handling */
 #define rdmsr_safe(msr, p1, p2)					\
@@ -180,75 +121,10 @@ static int wrmsr_safe(unsigned msr, unsigned low, unsigned high)
 	__err;							\
 })
 
-#ifndef XXX
-static int rdmsrl_safe(unsigned msr, unsigned long long *p)
-#else
-static int rdmsrl_safe(unsigned msr, unsigned long long *p)
-#endif /*XXX*/
-{
-	int err;
+extern int rdmsrl_safe(unsigned msr, unsigned long long *p);
 
-	*p = native_read_msr_safe(msr, &err);
-	return err;
-}
-
-#ifdef NOTNOW
-#ifndef XXX
-static int rdmsrl_amd_safe(unsigned msr, unsigned long long *p)
-#else
-static int rdmsrl_amd_safe(unsigned msr, unsigned long long *p)
-#endif /*XXX*/
-{
-	uint32_t gprs[8] = { 0 };
-	int err;
-
-	gprs[1] = msr;
-	gprs[7] = 0x9c5a203a;
-
-	err = native_rdmsr_safe_regs(gprs);
-
-	*p = gprs[0] | ((uint64_t)gprs[2] << 32);
-
-	return err;
-}
-
-#ifndef XXX
-static int wrmsrl_amd_safe(unsigned msr, unsigned long long val)
-#else
-static int wrmsrl_amd_safe(unsigned msr, unsigned long long val)
-#endif /*XXX*/
-{
-	uint32_t gprs[8] = { 0 };
-
-	gprs[0] = (uint32_t)val;
-	gprs[1] = msr;
-	gprs[2] = val >> 32;
-	gprs[7] = 0x9c5a203a;
-
-	return native_wrmsr_safe_regs(gprs);
-}
-#endif /*NOTNOW*/
-
-#ifdef NOTNOW
-#ifndef XXX
-/* wtf are native_rdmsr_safe_regs/native_wrmsr_safe_regs??? */
-/* possibly built from paravirt.c..., but we don't use them */
-static int rdmsr_safe_regs(uint32_t regs[8])
-#else
-static int rdmsr_safe_regs(uint32_t regs[8])
-#endif /*XXX*/
-{
-	return native_rdmsr_safe_regs(regs);
-}
-#ifndef XXX
-static int wrmsr_safe_regs(uint32_t regs[8])
-#else
-static int wrmsr_safe_regs(uint32_t regs[8])
-#endif /*XXX*/
-{
-	return native_wrmsr_safe_regs(regs);
-}
-#endif /*NOTNOW*/
+extern int rdmsrl_amd_safe(unsigned msr, unsigned long long *p);
+extern int wrmsrl_amd_safe(unsigned msr, unsigned long long val);
 
 #define rdtscl(low)						\
 	((low) = (uint32_t)__native_read_tsc())
@@ -285,93 +161,11 @@ do {                                                            \
 struct msr *msrs_alloc(void);
 void msrs_free(struct msr *msrs);
 
-#ifdef CONFIG_SMP
-int rdmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t *l, uint32_t *h);
-int wrmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t l, uint32_t h);
-#ifdef XXX
-void rdmsr_on_cpus(const struct cpumask *mask, uint32_t msr_no, struct msr *msrs);
-void wrmsr_on_cpus(const struct cpumask *mask, uint32_t msr_no, struct msr *msrs);
-#endif /*XXX*/
-int rdmsr_safe_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t *l, uint32_t *h);
-int wrmsr_safe_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t l, uint32_t h);
-#ifdef XXX
-int rdmsr_safe_regs_on_cpu(unsigned int cpu, uint32_t regs[8]);
-int wrmsr_safe_regs_on_cpu(unsigned int cpu, uint32_t regs[8]);
-#endif /*XXX*/
-#else  /*  CONFIG_SMP  */
-#ifndef XXX
-static int rdmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t *l, uint32_t *h)
-#else
-static int rdmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t *l, uint32_t *h)
-#endif /*XXX*/
-{
-	rdmsr(msr_no, *l, *h);
-	return 0;
-}
+extern int rdmsr_on_cpu(unsigned int cpu,
+    uint32_t msr_no, uint32_t *l, uint32_t *h);
+extern int wrmsr_on_cpu(unsigned int cpu,
+    uint32_t msr_no, uint32_t l, uint32_t h);
 
-#ifndef XXX
-static int wrmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t l, uint32_t h)
-#else
-static int wrmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t l, uint32_t h)
-#endif /*XXX*/
-{
-	wrmsr(msr_no, l, h);
-	return 0;
-}
-#ifdef XXX
-static void rdmsr_on_cpus(const struct cpumask *m, uint32_t msr_no,
-				struct msr *msrs)
-{
-       rdmsr_on_cpu(0, msr_no, &(msrs[0].l), &(msrs[0].h));
-}
-
-static void wrmsr_on_cpus(const struct cpumask *m, uint32_t msr_no,
-				struct msr *msrs)
-{
-       wrmsr_on_cpu(0, msr_no, msrs[0].l, msrs[0].h);
-}
-#endif /*XXX*/
-
-#ifndef XXX
-static int rdmsr_safe_on_cpu(unsigned int cpu, uint32_t msr_no,
-				    uint32_t *l, uint32_t *h)
-#else
-static int rdmsr_safe_on_cpu(unsigned int cpu, uint32_t msr_no,
-				    uint32_t *l, uint32_t *h)
-#endif /*XXX*/
-{
-	return rdmsr_safe(msr_no, l, h);
-}
-
-#ifndef XXX
-static int wrmsr_safe_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t l, uint32_t h)
-#else
-static int wrmsr_safe_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t l, uint32_t h)
-#endif /*XXX*/
-{
-	return wrmsr_safe(msr_no, l, h);
-}
-
-#ifdef NOTNOW
-#ifndef XXX
-static int rdmsr_safe_regs_on_cpu(unsigned int cpu, uint32_t regs[8])
-#else
-static int rdmsr_safe_regs_on_cpu(unsigned int cpu, uint32_t regs[8])
-#endif /*XXX*/
-{
-	return rdmsr_safe_regs(regs);
-}
-
-#ifndef XXX
-static int wrmsr_safe_regs_on_cpu(unsigned int cpu, uint32_t regs[8])
-#else
-static int wrmsr_safe_regs_on_cpu(unsigned int cpu, uint32_t regs[8])
-#endif /*XXX*/
-{
-	return wrmsr_safe_regs(regs);
-}
-#endif /*NOTNOW*/
-#endif  /* CONFIG_SMP */
 #endif /* _KERNEL */
 #endif /* __ASSEMBLY__ */
 #endif /* _ASM_X86_MSR_H */

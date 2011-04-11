@@ -900,48 +900,15 @@ static unsigned long get_desc_base(const struct desc_struct *desc)
 }
 
 extern unsigned long segment_base(uint16_t selector);
+extern unsigned long kvm_read_tr_base(void);
 
-static unsigned long kvm_read_tr_base(void)
-{
-	unsigned short tr;
-	__asm__("str %0" : "=g"(tr));
-	return segment_base(tr);
-}
+extern unsigned long read_msr(unsigned long msr);
 
-#ifdef CONFIG_X86_64
-static unsigned long read_msr(unsigned long msr)
-{
-	uint64_t value;
-
-	rdmsrl(msr, value);
-	return value;
-}
-#endif
-
-static void kvm_fx_save(struct i387_fxsave_struct *image)
-{
-	__asm__("fxsave (%0)":: "r" (image));
-}
-
-static void kvm_fx_restore(struct i387_fxsave_struct *image)
-{
-	__asm__("fxrstor (%0)":: "r" (image));
-}
-
-static void kvm_fx_finit(void)
-{
-	__asm__("finit");
-}
-
-static uint32_t get_rdx_init_val(void)
-{
-	return 0x600; /* P6 family */
-}
-
-static void kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code)
-{
-	kvm_queue_exception_e(vcpu, GP_VECTOR, error_code);
-}
+extern void kvm_fx_save(struct i387_fxsave_struct *image);
+extern void kvm_fx_restore(struct i387_fxsave_struct *image);
+extern void kvm_fx_finit(void);
+extern uint32_t get_rdx_init_val(void);
+extern void kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code);
 
 #define TSS_IOPB_BASE_OFFSET 0x66
 #define TSS_BASE_SIZE 0x68
