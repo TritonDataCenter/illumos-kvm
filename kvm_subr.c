@@ -116,10 +116,12 @@ native_read_pmc(int counter)
 	return EAX_EDX_VAL(val, low, high);
 }
 
+#ifdef XXX_KVM_DOESNOTLINK
 void wrmsr(unsigned msr, unsigned low, unsigned high)
 {
 	native_write_msr(msr, low, high);
 }
+#endif /* XXX_KVM_DOESNOTLINK*/
 
 int
 wrmsr_safe(unsigned msr, unsigned low, unsigned high)
