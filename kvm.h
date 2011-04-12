@@ -1286,6 +1286,16 @@ struct kvm_run {
 	uint64_t psw_addr; /* psw lower half */
 #endif
 	union {
+		/*
+		 * As a temporary hack, we set the PFNs for programmed I/O and
+		 * memory-mapped I/O upon initialization to allow them to be
+		 * mmap'd after the kvm_run structure.
+		 */
+                struct {
+                        uint64_t xxx_pio_paddr;
+                        uint64_t xxx_mmio_paddr;
+                } xxx_paddrs;
+	
 		/* KVM_EXIT_UNKNOWN */
 		struct {
 			uint64_t hardware_exit_reason;

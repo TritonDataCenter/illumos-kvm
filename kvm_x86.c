@@ -1492,7 +1492,16 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, struct kvm_vcpu_ioc *arg, 
 	vcpu->run = (struct kvm_run *)page_address(page);
 	kvm_run = (caddr_t)vcpu->run;
 
-	arg->kvm_run_addr = (hat_getpfnum(kas.a_hat, kvm_run)<<PAGESHIFT)|((uint64_t)kvm_run&PAGEOFFSET);
+	arg->kvm_run_addr =
+	    (hat_getpfnum(kas.a_hat, kvm_run) << PAGESHIFT) |
+	    ((uint64_t)kvm_run & PAGEOFFSET);
+
+	vcpu->run->xxx_paddrs.xxx_pio_paddr =
+	    hat_getpfnum(kas.a_hat, kvm_run + PAGESIZE) << PAGESHIFT;
+
+	vcpu->run->xxx_paddrs.xxx_mmio_paddr =
+	    hat_getpfnum(kas.a_hat, kvm_run + (2 * PAGESIZE)) << PAGESHIFT;
+
 	arg->kvm_vcpu_addr = (uint64_t)vcpu;
 
 	r = kvm_arch_vcpu_init(vcpu);
