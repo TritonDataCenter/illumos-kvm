@@ -1844,6 +1844,8 @@ int emulate_invlpg(struct kvm_vcpu *vcpu, gva_t address)
 {
 #ifdef XXX
 	kvm_mmu_invlpg(vcpu, address);
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX*/
 	return X86EMUL_CONTINUE;
 }
@@ -1853,6 +1855,8 @@ void realmode_lgdt(struct kvm_vcpu *vcpu, uint16_t limit, unsigned long base)
 	struct descriptor_table dt = { limit, base };
 #ifdef XXX
 	kvm_x86_ops->set_gdt(vcpu, &dt);
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX*/
 }
 
@@ -1861,6 +1865,8 @@ void realmode_lidt(struct kvm_vcpu *vcpu, uint16_t limit, unsigned long base)
 	struct descriptor_table dt = { limit, base };
 #ifdef XXX
 	kvm_x86_ops->set_idt(vcpu, &dt);
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX*/
 }
 
@@ -1869,6 +1875,8 @@ void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
 {
 #ifdef XXX
 	kvm_lmsw(vcpu, msw);
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX*/
 	*rflags = kvm_get_rflags(vcpu);
 }
@@ -1890,6 +1898,7 @@ int kvm_fix_hypercall(struct kvm_vcpu *vcpu)
 
 	return emulator_write_emulated(rip, instruction, 3, vcpu);
 #else
+	XXX_KVM_PROBE;
 	return 1;
 #endif /*XXX*/
 }
@@ -2110,6 +2119,8 @@ int kvm_emulate_pio_string(struct kvm_vcpu *vcpu, int in,
 		 */
 #ifdef XXX
 		pr_unimpl(vcpu, "guest string pio down\n");
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX*/
 		kvm_inject_gp(vcpu, 0);
 		return 1;
@@ -2844,6 +2855,8 @@ twobyte_insn:
 		rc = emulator_get_dr(ctxt, c->modrm_reg, &c->regs[c->modrm_rm]);
 		if (rc)
 			goto cannot_emulate;
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX*/
 		c->dst.type = OP_NONE;	/* no writeback */
 		break;
@@ -2862,6 +2875,8 @@ twobyte_insn:
 				     c->regs[c->modrm_rm]);
 		if (rc)
 			goto cannot_emulate;
+#else
+		XXX_KVM_PROBE;
 #endif /*XXX*/
 		c->dst.type = OP_NONE;	/* no writeback */
 		break;
