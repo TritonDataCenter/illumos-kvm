@@ -1853,21 +1853,15 @@ int emulate_invlpg(struct kvm_vcpu *vcpu, gva_t address)
 void realmode_lgdt(struct kvm_vcpu *vcpu, uint16_t limit, unsigned long base)
 {
 	struct descriptor_table dt = { limit, base };
-#ifdef XXX
+
 	kvm_x86_ops->set_gdt(vcpu, &dt);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
 }
 
 void realmode_lidt(struct kvm_vcpu *vcpu, uint16_t limit, unsigned long base)
 {
 	struct descriptor_table dt = { limit, base };
-#ifdef XXX
+
 	kvm_x86_ops->set_idt(vcpu, &dt);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
 }
 
 void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,

@@ -1753,7 +1753,7 @@ static void kvm_mmu_free_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 #endif /*XXX*/
 	list_remove(&kvm->arch.active_mmu_pages, sp);
 	if (sp)
-		kmem_free(sp, sizeof(struct kvm_mmu_page));
+		kmem_cache_free(mmu_page_header_cache, sp);
 	++kvm->arch.n_free_mmu_pages;
 }
 
@@ -3134,6 +3134,7 @@ _fini(void)
 {
 	int e;
 
+	return (EBUSY);
 	if ((e = mod_remove(&modlinkage)) != 0)  {
 		return (e);
 	}
@@ -3196,6 +3197,8 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 {
 	int instance;
 	register kvm_devstate_t *rsp;
+
+	return (EBUSY);
 
 	switch (cmd) {
 
@@ -12294,7 +12297,7 @@ static inline struct kvm_pic *to_pic(struct kvm_io_device *dev)
 #ifdef XXX_KVM_DOESNTCOMPILE
 	return container_of(dev, struct kvm_pic, dev);
 #else
-	return (struct kvm_pic *) ((caddr_t)dev)-offsetof(struct kvm_pic, dev);
+	return (struct kvm_pic *) ((caddr_t)dev-offsetof(struct kvm_pic, dev));
 #endif /*XXX*/
 }
 
