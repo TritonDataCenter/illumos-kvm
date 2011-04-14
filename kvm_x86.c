@@ -3834,7 +3834,7 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, int write, gfn_t gfn)
 	return r;
 
 out_unlock:
-	mutex_enter(&vcpu->kvm->mmu_lock);
+	mutex_exit(&vcpu->kvm->mmu_lock);
 	kvm_release_pfn_clean(pfn);
 	return 0;
 }

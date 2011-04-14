@@ -3396,16 +3396,26 @@ void kvm_mmu_zap_all(struct kvm *kvm)
 {
 	struct kvm_mmu_page *sp, *node;
 
+	/*
+	 * In the following loop, sp may be freed and deleted
+	 * from the list indirectly from kvm_mmu_zap_page.  
+	 * So we hold onto the next element before zapping.
+	 */
 	mutex_enter(&kvm->mmu_lock);
-	for (sp = list_head(&kvm->arch.active_mmu_pages); sp;
-	     sp = list_next(&kvm->arch.active_mmu_pages, sp)) {
+	sp = list_head(&kvm->arch.active_mmu_pages);
+	if (sp)
+		nsp = list_next(&kvm->arch.active_mmu_pages, sp);
+
+	while (sp) {
 #ifdef DEBUG
 		cmn_err(CE_NOTE, "kvm_mmu_zap_all: zapping sp = %lx\n", sp);
 #endif /*DEBUG*/
-		if (kvm_mmu_zap_page(kvm, sp))
-			/* XXX ?*/
-			node = container_of(kvm->arch.active_mmu_pages.next,
-					    struct kvm_mmu_page, link);
+		(void) kvm_mmu_zap_page(kvm, sp);
+		sp = nsp;
+		if (sp == list_head(&kvm->arch.active_mmu_pages))
+			break;
+		if (sp)
+			nsp = list_next(&kvm->arch.active_mmu_pages, sp);
 	}
 	mutex_exit(&kvm->mmu_lock);
 #ifdef DEBUG
@@ -3574,16 +3584,30 @@ static int kvm_init_mmu_notifier(struct kvm *kvm)
 
 void kvm_mmu_zap_all(struct kvm *kvm)
 {
-	struct kvm_mmu_page *sp, *node;
+	struct kvm_mmu_page *sp, *nsp;
 
+	/*
+	 * In the following loop, sp may be freed and deleted
+	 * from the list indirectly from kvm_mmu_zap_page.  
+	 * So we hold onto the next element before zapping.
+	 */
 	mutex_enter(&kvm->mmu_lock);
-	for (sp = list_head(&kvm->arch.active_mmu_pages); sp;
-	     sp = list_next(&kvm->arch.active_mmu_pages, sp)) {
+	sp = list_head(&kvm->arch.active_mmu_pages);
+	if (sp)
+		nsp = list_next(&kvm->arch.active_mmu_pages, sp);
+
+	while (sp) {
 #ifdef DEBUG
-		cmn_err(CE_NOTE, "kvm_mmu_zap_all (2): zapping sp = %p\n", sp);
+		cmn_err(CE_NOTE, "kvm_mmu_zap_all: zapping sp = %lx\n", sp);
 #endif /*DEBUG*/
-		kvm_mmu_zap_page(kvm, sp);
+		(void) kvm_mmu_zap_page(kvm, sp);
+		sp = nsp;
+		if (sp == list_head(&kvm->arch.active_mmu_pages))
+			break;
+		if (sp)
+			nsp = list_next(&kvm->arch.active_mmu_pages, sp);
 	}
+
 	mutex_exit(&kvm->mmu_lock);
 #ifdef DEBUG
 	cmn_err(CE_NOTE, "kvm_mmu_zap_all (2): flushing remote tlbs\n");
