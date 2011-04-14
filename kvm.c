@@ -12898,12 +12898,14 @@ void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode)
 	mutex_exit(&ioapic->lock);
 }
 
-static inline struct kvm_ioapic *to_ioapic(struct kvm_io_device *dev)
+static inline struct kvm_ioapic *
+to_ioapic(struct kvm_io_device *dev)
 {
 #ifdef XXX_KVM_DOESNTCOMPILE
 	return container_of(dev, struct kvm_ioapic, dev);
 #else
-	return (struct kvm_ioapic *)((caddr_t)dev) - offsetof(struct kvm_ioapic, dev);
+	return (struct kvm_ioapic *)(((caddr_t)dev) -
+	    offsetof(struct kvm_ioapic, dev));
 #endif /*XXX*/
 }
 
