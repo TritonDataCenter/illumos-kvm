@@ -404,7 +404,9 @@ struct kvm_vcpu {
   /*#endif*/
 
 	struct kvm_vcpu_arch arch;
+	ddi_umem_cookie_t cookie;
 };
+typedef struct kvm_vcpu kvm_vcpu_t;
 
 
 #define KVM_NR_SHARED_MSRS 16
@@ -1223,6 +1225,7 @@ struct kvm {
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	struct kvm_coalesced_mmio_dev *coalesced_mmio_dev;
 	struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
+	ddi_umem_cookie_t mmio_cookie;
 #endif
 
 	kmutex_t irq_lock;

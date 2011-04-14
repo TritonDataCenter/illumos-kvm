@@ -1471,11 +1471,9 @@ static const struct kvm_io_device_ops coalesced_mmio_ops = {
 };
 
 int
-kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned id)
+kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
 {
-	page_t *page;
 	int r;
-	caddr_t kvm_run;
 
 	mutex_init(&vcpu->mutex, NULL, MUTEX_DRIVER, 0);
 	vcpu->cpu = -1;
@@ -1484,44 +1482,17 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, struct kvm_vcpu_ioc *arg, 
 #ifdef NOTNOW
 	init_waitqueue_head(&vcpu->wq);
 #endif
-	page = alloc_page(PAGESIZE*3, KM_SLEEP);
-	if (!page) {
-		r = ENOMEM;
-		goto fail;
-	}
-	vcpu->run = (struct kvm_run *)page_address(page);
-	kvm_run = (caddr_t)vcpu->run;
-
-	arg->kvm_run_addr =
-	    (hat_getpfnum(kas.a_hat, kvm_run) << PAGESHIFT) |
-	    ((uint64_t)kvm_run & PAGEOFFSET);
-
-	vcpu->run->xxx_paddrs.xxx_pio_paddr =
-	    hat_getpfnum(kas.a_hat, kvm_run + PAGESIZE) << PAGESHIFT;
-
-	vcpu->run->xxx_paddrs.xxx_mmio_paddr =
-	    hat_getpfnum(kas.a_hat, kvm_run + (2 * PAGESIZE)) << PAGESHIFT;
-
-	arg->kvm_vcpu_addr = (uint64_t)vcpu;
+	vcpu->run = ddi_umem_alloc(PAGESIZE * 2, DDI_UMEM_SLEEP, &vcpu->cookie);
 
 	r = kvm_arch_vcpu_init(vcpu);
-	if (r != 0)
-		goto fail_free_run;
-#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET  /*XXX moved */
-	kvm_coalesced_mmio_init(kvm, vcpu);
-#endif
 
-	return 0;
+	if (r != 0) {
+		vcpu->run = NULL;
+		ddi_umem_free(&vcpu->cookie);
+		return (r);
+	}
 
-fail_free_run:
-#ifdef XXX
-	free_page((unsigned long)vcpu->run);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
-	vcpu->run = 0;
-fail:
-	return r;
+	return (0);
 }
 
 /*
@@ -1662,7 +1633,7 @@ out:
 }
 
 struct kvm_vcpu *
-vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
+vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 {
 	int err;
 	struct vcpu_vmx *vmx = kmem_cache_alloc(kvm_vcpu_cache, KM_SLEEP);
@@ -1672,7 +1643,7 @@ vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
 		return NULL;
 
 	allocate_vpid(vmx);
-	err = kvm_vcpu_init(&vmx->vcpu, kvm, arg, id);
+	err = kvm_vcpu_init(&vmx->vcpu, kvm, id);
 	if (err) {
 #ifdef NOTNOW
 		goto free_vcpu;
@@ -1741,12 +1712,12 @@ free_vcpu:
 }
 
 struct kvm_vcpu *
-kvm_arch_vcpu_create(struct kvm *kvm, struct kvm_vcpu_ioc *arg, unsigned int id)
+kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 {
 	/* for right now, assume always on x86 */
 	/* later, if needed, we'll add something here */
 	/* to call architecture dependent routine */
-	return vmx_create_vcpu(kvm, arg, id);
+	return vmx_create_vcpu(kvm, id);
 }
 
 void update_exception_bitmap(struct kvm_vcpu *vcpu)
@@ -4034,12 +4005,12 @@ void kvm_get_kvm(struct kvm *kvm)
  * Creates some virtual cpus.  Good luck creating more than one.
  */
 int
-kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int32_t id, struct kvm_vcpu_ioc *arg, int *rval_p)
+kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int32_t id, int *rval_p)
 {
 	int r;
 	struct kvm_vcpu *vcpu, *v;
 
-	vcpu = kvm_arch_vcpu_create(kvm, arg, id);
+	vcpu = kvm_arch_vcpu_create(kvm, id);
 	if (vcpu == NULL)
 		return EINVAL;
 
@@ -4352,24 +4323,18 @@ static void coalesced_mmio_destructor(struct kvm_io_device *this)
 		kmem_free(dev, sizeof(struct kvm_coalesced_mmio_dev));
 }
 
-int kvm_coalesced_mmio_init(struct kvm *kvm, struct kvm_vcpu *vcpu)
+int
+kvm_coalesced_mmio_init(struct kvm *kvm)
 {
 	struct kvm_coalesced_mmio_dev *dev;
 	page_t *page;
 	int ret;
 
-	/*
-	ret = -ENOMEM;
-	page = alloc_page(PAGESIZE, KM_SLEEP);
-	if (!page)
-		goto out_err;
-	kvm->coalesced_mmio_ring = (struct kvm_coalesced_mmio_ring *)page_address(page);
-	*/
-	if (!kvm->coalesced_mmio_ring)
-		kvm->coalesced_mmio_ring = (struct kvm_coalesced_mmio_ring *)((caddr_t)vcpu->run + (KVM_COALESCED_MMIO_PAGE_OFFSET*PAGESIZE));
+	kvm->coalesced_mmio_ring = ddi_umem_alloc(PAGESIZE, DDI_UMEM_SLEEP,
+	    &kvm->mmio_cookie); 
 
 	ret = -ENOMEM;
-	dev = kmem_zalloc(sizeof(struct kvm_coalesced_mmio_dev), KM_SLEEP);
+	dev = kmem_zalloc(sizeof (struct kvm_coalesced_mmio_dev), KM_SLEEP);
 	if (!dev)
 		goto out_free_page;
 	mutex_init(&dev->lock, NULL, MUTEX_DRIVER, 0);
@@ -4383,18 +4348,18 @@ int kvm_coalesced_mmio_init(struct kvm *kvm, struct kvm_vcpu *vcpu)
 	if (ret < 0)
 		goto out_free_dev;
 
-	return ret;
+	return (ret);
 
 out_free_dev:
-	kmem_free(dev, sizeof(struct kvm_coalesced_mmio_dev));
+	kmem_free(dev, sizeof (struct kvm_coalesced_mmio_dev));
 out_free_page:
 #ifdef XXX
 	kmem_free(page, PAGESIZE);
 #else
 	XXX_KVM_PROBE;
 #endif /*XXX*/
-out_err:
-	return ret;
+	ddi_umem_free(kvm->mmio_cookie);
+	return (ret);
 }
 
 void kvm_coalesced_mmio_free(struct kvm *kvm)

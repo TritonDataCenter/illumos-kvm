@@ -19,6 +19,12 @@
 #include <sys/spl.h>
 #include <sys/cpuvar.h>
 #include <sys/segments.h>
+#include <sys/cred.h>
+#include <sys/devops.h>
+#include <sys/file.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/vm.h>
 
 #include "vmx.h"
 #include "msr-index.h"
@@ -38,41 +44,24 @@
 
 #undef DEBUG
 
-int kvmid;  /* monotonically increasing, unique per vm */
+/*
+ * The entire state of the kvm device.
+ */
+typedef struct {
+	struct kvm	*kds_kvmp;
+} kvm_devstate_t;
 
 /*
- * Find the first cleared bit in a memory region.
+ * Internal driver-wide values
  */
-unsigned long find_first_zero_bit(const unsigned long *addr, unsigned long size)
-{
-	const unsigned long *p = addr;
-	unsigned long result = 0;
-	unsigned long tmp;
+static void *kvm_state;		/* DDI state */
+static vmem_t *kvm_minor;	/* minor number arena */
+static dev_info_t *kvm_dip;	/* global devinfo hanlde */
+static minor_t kvm_base_minor;	/* The only minor device that can be opened */
 
-	while (size & ~(64-1)) {
-		if (~(tmp = *(p++)))
-			goto found;
-		result += 64;
-		size -= 64;
-	}
-	if (!size)
-		return result;
-
-	tmp = (*p) | (~0UL << size);
-	if (tmp == ~0UL)	/* Are any bits zero? */
-		return result + size;	/* Nope. */
-found:
-	return result + ffz(tmp);
-}
+int kvmid;  /* monotonically increasing, unique per vm */
 
 int largepages_enabled = 1;
-
-extern struct kvm *kvm_arch_create_vm(void);
-extern void kvm_arch_destroy_vm(struct kvm *kvmp);
-extern int kvm_arch_hardware_enable(void *garbage);
-extern void kvm_arch_hardware_disable(void *garbage);
-extern long kvm_vm_ioctl(struct kvm *kvmp, unsigned int ioctl, unsigned long arg, int mode);
-
 static cpuset_t cpus_hardware_enabled;
 static volatile uint32_t hardware_enable_failed;
 static int kvm_usage_count;
@@ -81,26 +70,25 @@ kmutex_t kvm_lock;
 kmem_cache_t *kvm_cache;
 struct vmx_capability  vmx_capability;
 
-/*
- * The entire state of the kvm device.
- */
-typedef struct {
-	dev_info_t	*dip;		/* my devinfo handle */
-} kvm_devstate_t;
 
 /*
- * An opaque handle where the kvm device state lives
+ * Driver forward declarations
  */
-static void *kvm_state;
-
 static int kvm_open(dev_t *devp, int flag, int otyp, cred_t *cred);
 static int kvm_close(dev_t dev, int flag, int otyp, cred_t *cred);
 static int kvm_read(dev_t dev, struct uio *uiop, cred_t *credp);
 static int kvm_write(dev_t dev, struct uio *uiop, cred_t *credp);
 static int kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode,
-		     cred_t *cred_p, int *rval_p);
+    cred_t *cred_p, int *rval_p);
 static int kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off,
-		      size_t len, size_t *maplen, uint_t model);
+    size_t len, size_t *maplen, uint_t model);
+static int kvm_segmap(dev_t, off_t, struct as *, caddr_t *, off_t,
+    unsigned int, unsigned int, unsigned int, cred_t *);
+static int kvm_getinfo(dev_info_t *dip, ddi_info_cmd_t infocmd, void *arg,
+    void **result);
+static int kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd);
+static int kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd);
+
 
 static struct cb_ops kvm_cb_ops = {
 	kvm_open,
@@ -113,18 +101,12 @@ static struct cb_ops kvm_cb_ops = {
 	kvm_ioctl,
 	kvm_devmap,
 	nodev,		/* mmap */
-	nodev,		/* segmap */
+	kvm_segmap,	/* segmap */
 	nochpoll,	/* poll */
 	ddi_prop_op,
 	NULL,
-	D_NEW | D_MP
+	D_NEW | D_MP | D_DEVMAP
 };
-
-static int kvm_getinfo(dev_info_t *dip, ddi_info_cmd_t infocmd, void *arg,
-    void **result);
-static int kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd);
-static int kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd);
-
 static struct dev_ops kvm_ops = {
 	DEVO_REV,
 	0,
@@ -153,6 +135,11 @@ static struct modlinkage modlinkage = {
 	0
 };
 
+extern struct kvm *kvm_arch_create_vm(void);
+extern void kvm_arch_destroy_vm(struct kvm *kvmp);
+extern int kvm_arch_hardware_enable(void *garbage);
+extern void kvm_arch_hardware_disable(void *garbage);
+extern long kvm_vm_ioctl(struct kvm *kvmp, unsigned int ioctl, unsigned long arg, int mode);
 static void hardware_enable(void *junk);
 static void hardware_disable(void *junk);
 extern struct kvm_vcpu *vmx_create_vcpu(struct kvm *kvm, struct kvm_vcpu_ioc *arg,
@@ -179,16 +166,6 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, uint32_t msr_index, uint64_t data)
 static void vmx_vcpu_run(struct kvm_vcpu *vcpu);
 static void vmx_save_host_state(struct kvm_vcpu *vcpu);
 
-struct vcpu_vmx *to_vmx(struct kvm_vcpu *vcpu)
-{
-#ifdef XXX_KVM_DOESNTCOMPILE
-	return container_of(vcpu, struct vcpu_vmx, vcpu);
-#else
-	/* assumes vcpu is first field in vcpu_vmx */
-	/* because gcc with kernel flags complains about container_of */
-	return (struct vcpu_vmx *)vcpu;
-#endif /*XXX*/
-}
 
 static int vmx_handle_exit(struct kvm_vcpu *vcpu);
 int vmx_interrupt_allowed(struct kvm_vcpu *vcpu);
@@ -221,6 +198,42 @@ void vmx_fpu_activate(struct kvm_vcpu *vcpu);
 
 int get_ept_level(void);
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
+
+struct vcpu_vmx *to_vmx(struct kvm_vcpu *vcpu)
+{
+#ifdef XXX_KVM_DOESNTCOMPILE
+	return container_of(vcpu, struct vcpu_vmx, vcpu);
+#else
+	/* assumes vcpu is first field in vcpu_vmx */
+	/* because gcc with kernel flags complains about container_of */
+	return (struct vcpu_vmx *)vcpu;
+#endif /*XXX*/
+}
+
+/*
+ * Find the first cleared bit in a memory region.
+ */
+unsigned long find_first_zero_bit(const unsigned long *addr, unsigned long size)
+{
+	const unsigned long *p = addr;
+	unsigned long result = 0;
+	unsigned long tmp;
+
+	while (size & ~(64-1)) {
+		if (~(tmp = *(p++)))
+			goto found;
+		result += 64;
+		size -= 64;
+	}
+	if (!size)
+		return result;
+
+	tmp = (*p) | (~0UL << size);
+	if (tmp == ~0UL)	/* Are any bits zero? */
+		return result + size;	/* Nope. */
+found:
+	return result + ffz(tmp);
+}
 
 static inline void __invvpid(int ext, uint16_t vpid, gva_t gva)
 {
@@ -3151,68 +3164,52 @@ _info(struct modinfo *modinfop)
 static int
 kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 {
-	int instance;
-	kvm_devstate_t *rsp;
+	minor_t instance;
 
-	switch (cmd) {
-
-	case DDI_ATTACH:
-
-		instance = ddi_get_instance(dip);
-
-		if (ddi_soft_state_zalloc(kvm_state, instance) != DDI_SUCCESS) {
-			cmn_err(CE_CONT, "%s%d: can't allocate state\n",
-			    ddi_get_name(dip), instance);
-			return (DDI_FAILURE);
-		} else
-			rsp = ddi_get_soft_state(kvm_state, instance);
-
-		kvm_cache = kmem_cache_create("kvm_cache", KVM_VM_DATA_SIZE,
-					      ptob(1),  NULL, NULL, NULL, NULL, NULL, 0);
-		list_create(&vm_list, sizeof(struct kvm), offsetof(struct kvm, vm_list));
-		if (ddi_create_minor_node(dip, "kvm", S_IFCHR,
-		    instance, DDI_PSEUDO, 0) == DDI_FAILURE) {
-			ddi_remove_minor_node(dip, NULL);
-			goto attach_failed;
-		}
-
-		rsp->dip = dip;
-		ddi_report_dev(dip);
-
-		return (DDI_SUCCESS);
-
-	default:
+	if (cmd != DDI_ATTACH)
 		return (DDI_FAILURE);
-	}
 
-attach_failed:
-	if (kvm_cache)
-		kmem_cache_destroy(kvm_cache);
-	(void) kvm_detach(dip, DDI_DETACH);
-	return (DDI_FAILURE);
+	if (kvm_dip != NULL)
+		return (DDI_FAILURE);
+
+	instance = ddi_get_instance(dip);
+	if (ddi_create_minor_node(dip, "kvm", S_IFCHR, instance, DDI_PSEUDO, 0)
+	    == DDI_FAILURE)
+		return (DDI_FAILURE);
+
+	kvm_dip = dip;
+	kvm_base_minor = instance;
+
+	kvm_cache = kmem_cache_create("kvm_cache", KVM_VM_DATA_SIZE,
+	    ptob(1),  NULL, NULL, NULL, NULL, NULL, 0);
+	list_create(&vm_list, sizeof(struct kvm), offsetof(struct kvm, vm_list));
+	kvm_minor = vmem_create("kvm_minor", (void *)1, UINT32_MAX - 1, 1,
+	    NULL, NULL, NULL, 0, VM_SLEEP | VMC_IDENTIFIER);
+
+	ddi_report_dev(dip);
+
+	return (DDI_SUCCESS);
 }
 
 static int
 kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 {
 	int instance;
-	register kvm_devstate_t *rsp;
 
-	return (EBUSY);
-
-	switch (cmd) {
-
-	case DDI_DETACH:
-		ddi_prop_remove_all(dip);
-		instance = ddi_get_instance(dip);
-		rsp = ddi_get_soft_state(kvm_state, instance);
-		ddi_remove_minor_node(dip, NULL);
-		ddi_soft_state_free(kvm_state, instance);
-		return (DDI_SUCCESS);
-
-	default:
+	if (cmd != DDI_DETACH)
 		return (DDI_FAILURE);
-	}
+
+	VERIFY(kvm_dip != NULL && kvm_dip == dip);
+	instance = ddi_get_instance(dip);
+	VERIFY(instance == kvm_base_minor);
+	ddi_prop_remove_all(dip);
+	ddi_remove_minor_node(dip, NULL);
+	kmem_cache_destroy(kvm_cache);
+	list_destroy(&vm_list);
+	vmem_destroy(kvm_minor);
+	kvm_dip = NULL;
+
+	return (DDI_SUCCESS);
 }
 
 /*ARGSUSED*/
@@ -3224,12 +3221,7 @@ kvm_getinfo(dev_info_t *dip, ddi_info_cmd_t infocmd, void *arg, void **result)
 
 	switch (infocmd) {
 	case DDI_INFO_DEVT2DEVINFO:
-		if ((rsp = ddi_get_soft_state(kvm_state,
-		    getminor((dev_t)arg))) != NULL) {
-			*result = rsp->dip;
-			error = DDI_SUCCESS;
-		} else
-			*result = NULL;
+		*result = kvm_dip;
 		break;
 
 	case DDI_INFO_DEVT2INSTANCE:
@@ -3247,13 +3239,40 @@ kvm_getinfo(dev_info_t *dip, ddi_info_cmd_t infocmd, void *arg, void **result)
 
 /*ARGSUSED*/
 static int
-kvm_open(dev_t *devp, int flag, int otyp, cred_t *cred)
+kvm_open(dev_t *devp, int flag, int otype, cred_t *credp)
 {
-	if (otyp != OTYP_BLK && otyp != OTYP_CHR)
+
+	minor_t minor;
+	kvm_devstate_t *ksp;
+
+	if (flag & FEXCL || flag & FNDELAY)
 		return (EINVAL);
 
-	if (ddi_get_soft_state(kvm_state, getminor(*devp)) == NULL)
+	if (otype != OTYP_CHR)
+		return (EINVAL);
+
+	/*
+	 * XXX This should be its own privilage
+	 */
+	if (drv_priv(credp) != 0)
+		return (EPERM);
+
+	if (!(flag & FREAD && flag & FWRITE))
+		return (EINVAL);
+
+	if (getminor(*devp) != kvm_base_minor)
 		return (ENXIO);
+
+	minor = (minor_t)(uintptr_t)vmem_alloc(kvm_minor, 1, VM_BESTFIT | VM_SLEEP);
+
+	if (ddi_soft_state_zalloc(kvm_state, minor) != 0) {
+		vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
+		return (ENXIO);
+	}
+
+	*devp = makedevice(getmajor(*devp), minor);
+	ksp = ddi_get_soft_state(kvm_state, minor);
+	VERIFY(ksp != NULL);
 
 	return (0);
 }
@@ -3262,6 +3281,19 @@ kvm_open(dev_t *devp, int flag, int otyp, cred_t *cred)
 static int
 kvm_close(dev_t dev, int flag, int otyp, cred_t *cred)
 {
+	kvm_devstate_t *ksp;
+	minor_t minor = getminor(dev);
+
+	VERIFY(getminor(dev) != kvm_base_minor);
+	ksp = ddi_get_soft_state(kvm_state, minor);
+	/*
+	 * XXX We need to clean up the vcpus / kvm structs we allocated.
+	 */
+	if (ksp->kds_kvmp != NULL)
+		list_remove(&vm_list, ksp->kds_kvmp);
+	ddi_soft_state_free(kvm_state, minor);
+	vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
+
 	return (0);
 }
 
@@ -3639,26 +3671,26 @@ kvm_create_vm(void)
 	kvmp->users_count = 1;
 	list_insert_tail(&vm_list, kvmp);
 	mutex_exit(&kvm_lock);
-#ifdef KVM_MOVED
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	kvm_coalesced_mmio_init(kvmp);
 #endif
-#endif /*KVM_MOVED*/
 
 	return (kvmp);
 }
 	
 static int
-kvm_dev_ioctl_create_vm(intptr_t arg, int mode, int *rval_p)
+kvm_dev_ioctl_create_vm(kvm_devstate_t *ksp, intptr_t arg, int mode,
+    int *rval_p)
 {
-	struct kvm *kvmp;
+	if (ksp->kds_kvmp != NULL)
+		return (EINVAL);
 
-	kvmp = kvm_create_vm();
-	if (kvmp == NULL) {
+	ksp->kds_kvmp = kvm_create_vm();
+	if (ksp->kds_kvmp == NULL) {
 		cmn_err(CE_WARN, "Could not create new vm\n");
 		return (EIO);
 	}
-	*rval_p = kvmp->kvmid;
+	*rval_p = ksp->kds_kvmp->kvmid;
 	return (DDI_SUCCESS);
 }
 
@@ -4167,8 +4199,7 @@ find_kvm_id(int id)
 	return (kvmp);
 }
 
-extern int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id,
-				    struct kvm_vcpu_ioc *kvm_vcpu, int *rval_p);
+extern int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p);
 
 static inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
 				unsigned int *ecx, unsigned int *edx)
@@ -13629,6 +13660,14 @@ static int
 kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_p)
 {
 	int rval = DDI_SUCCESS;
+	minor_t minor;
+	kvm_devstate_t *ksp;
+
+	minor = getminor(dev);
+	ksp = ddi_get_soft_state(kvm_state, minor);
+	if (ksp == NULL)
+		return (ENXIO);
+
 	union {
 		struct kvm_pit_state ps;
 		struct kvm_pit_state2 ps2;
@@ -13648,7 +13687,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		*rval_p = KVM_API_VERSION;
 		break;
 	case KVM_CREATE_VM:
-		rval = kvm_dev_ioctl_create_vm(arg, mode, rval_p);
+		rval = kvm_dev_ioctl_create_vm(ksp, arg, mode, rval_p);
 		break;
 	case KVM_CREATE_PIT:
 	{
@@ -14004,39 +14043,14 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	}
 
  	case KVM_CREATE_VCPU: {
-		struct kvm_vcpu_ioc *kvm_vcpu;
-		struct kvm *kvmp;
+		uint32_t id;
 
-		if ((kvm_vcpu = kmem_zalloc(sizeof(struct kvm_vcpu_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
-		
-		if (ddi_copyin((const void *)arg, kvm_vcpu,
-			       sizeof(struct kvm_vcpu_ioc), mode) != 0) {
-			rval = EFAULT;
-			kmem_free(kvm_vcpu, sizeof(struct kvm_vcpu_ioc));
-			break;
-		}
+		id = (uintptr_t)arg;
 
-		rval = EINVAL;
-		kvmp = find_kvm_id(kvm_vcpu->kvmid);
-		if (kvmp == NULL) {
-			kmem_free(kvm_vcpu, sizeof(struct kvm_vcpu_ioc));
-			break;
-		}
-
- 		rval = kvm_vm_ioctl_create_vcpu(kvmp, kvm_vcpu->id, kvm_vcpu, rval_p); 
- 		if (rval != 0) {
+ 		rval = kvm_vm_ioctl_create_vcpu(ksp->kds_kvmp, id, rval_p); 
+ 		if (rval != 0)
 			rval = EINVAL;
-			kmem_free(kvm_vcpu, sizeof(struct kvm_vcpu_ioc));
-			break;
-		}
 		
-		if (ddi_copyout(kvm_vcpu, (void *)arg,
-				sizeof(struct kvm_vcpu_ioc), mode) != 0)
-			rval = EFAULT;
-		kmem_free(kvm_vcpu, sizeof(struct kvm_vcpu_ioc));
  		break; 
 	}
 
@@ -14564,7 +14578,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			rval = EINVAL;
 			break;
 		}
-		*rval_p = ptob(3);  /*XXX initially 1*/
+		*rval_p = ptob(KVM_VCPU_MMAP_LENGTH);
 		break;
 	case KVM_SET_TSS_ADDR:
 	{
@@ -14872,9 +14886,112 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	return (rval);
 }
 
+/*
+ * mmap(2), segmap(9E), and devmap(9E)
+ *
+ * Users call mmap(2). For each call to mmap(2) there is a corresponding call to
+ * segmap(9E). segmap(9E) is responsible for making sure that the various
+ * requests in the mmap call make sense from the question of protection,
+ * offsets, lengths, etc. It then ends by calling the ddi_devmap_segmap() which
+ * is what is responsible for making all of the actual mappings.
+ *
+ * The devmap entry point is called a variable number of times. It is called a
+ * number of times until all the maplen values equal the original length of the
+ * requested mapping. This allows us to make several different mappings by not
+ * honoring the full requested mapping the first time. Each subsequent time it
+ * is called with an updated offset and length.
+ */
+
+
+/*
+ * We can only create one mapping per dhp. We know whether this is the first
+ * time or the second time in based on the requested offset / length. If we only
+ * have one page worth, then it's always looking for the shared mmio page. If it
+ * is asking for KVM_VCPU_MMAP_LENGTH pages, then it's asking for the shared
+ * vcpu pages.
+ */
 static int
-kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off,
-		      size_t len, size_t *maplen, uint_t model)
+kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off, size_t len,
+    size_t *maplen, uint_t model)
 {
-	return (ENOTSUP);
+	int res, vpi;
+	minor_t instance;
+	kvm_devstate_t *ksp;
+	kvm_vcpu_t *vcpu;
+
+	instance = getminor(dev);
+	ksp = ddi_get_soft_state(kvm_state, instance);
+	if (ksp == NULL)
+		return (ENXIO);
+
+	/*
+	 * Enforce that only 64-bit guests are allowed.
+	 */
+	if (ddi_model_convert_from(model) == DDI_MODEL_ILP32)
+		return (EINVAL);
+
+	if (ksp->kds_kvmp == NULL)
+		return (EINVAL);
+
+	if (len == PAGESIZE) {
+		res = devmap_umem_setup(dhp, kvm_dip, NULL,
+		    ksp->kds_kvmp->mmio_cookie, 0, len, PROT_READ | PROT_WRITE |
+		    PROT_USER, DEVMAP_DEFAULTS, NULL);
+		*maplen = len;
+		return (res);
+	}
+
+	vpi = btop(off) / 3;
+	VERIFY(vpi < ksp->kds_kvmp->online_vcpus);
+	vcpu = ksp->kds_kvmp->vcpus[vpi];
+	VERIFY(vcpu != NULL);
+
+	res = devmap_umem_setup(dhp, kvm_dip, NULL, vcpu->cookie, 0,
+	    PAGESIZE*2, PROT_READ | PROT_WRITE | PROT_USER, DEVMAP_DEFAULTS,
+	    NULL);
+
+	*maplen = PAGESIZE*2;
+
+	return (res);
+}
+
+/*
+ * We determine which vcpu we're trying to mmap in based upon the requested
+ * offset. For a given vcpu n the offset to specify it is
+ * n*KVM_VCPU_MMAP_LENGTH. Thus the first vcpu is at offset 0. 
+ */
+static int
+kvm_segmap(dev_t dev, off_t off, struct as *asp, caddr_t *addrp, off_t len,
+    unsigned int prot, unsigned int maxprot, unsigned int flags,
+    cred_t *credp)
+{
+	kvm_devstate_t *ksp;
+	off_t poff;
+
+	if ((ksp = ddi_get_soft_state(kvm_state, getminor(dev))) == NULL)
+		return (ENXIO);
+
+	if (prot & PROT_EXEC)
+		return (EINVAL);
+
+	if (!(prot & PROT_USER))
+	    return (EINVAL);
+
+	if (len != ptob(KVM_VCPU_MMAP_LENGTH))
+		return (EINVAL);
+
+	poff = btop(off);
+	if (poff % 3 != 0)
+		return (EINVAL);
+
+	/*
+	 * Currently vcpus can only be turned on, they cannot be offlined. As a
+	 * result we can safely check that we have a request for a valid cpu
+	 * because it is within this range.
+	 */
+	if (poff / 3 + 1 > ksp->kds_kvmp->online_vcpus)
+		return (EINVAL);
+
+	return (ddi_devmap_segmap(dev, off, asp, addrp, len, prot, maxprot,
+	    flags, credp));
 }
