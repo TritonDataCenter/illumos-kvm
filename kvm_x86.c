@@ -446,7 +446,7 @@ int irqchip_in_kernel(struct kvm *kvm)
 #ifdef XXX
 	smp_rmb();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif
 	return ret;
 }
@@ -2239,7 +2239,7 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 #ifdef XXX
 	idx = srcu_read_lock(&vcpu->kvm->srcu);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 
 	if (!init_rmode(vmx->vcpu.kvm)) {
@@ -2360,7 +2360,7 @@ out:
 #ifdef XXX
 	srcu_read_unlock(&vcpu->kvm->srcu, idx);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	return ret;
 }
@@ -4061,7 +4061,7 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int32_t id, int *rval_p)
 #ifdef XXX
 	smp_wmb();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	atomic_inc_32(&kvm->online_vcpus);
 
@@ -4283,7 +4283,7 @@ int kvm_io_bus_unregister_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 	rcu_assign_pointer(kvm->buses[bus_idx], new_bus);
 	synchronize_srcu_expedited(&kvm->srcu);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif
 	kmem_free(bus, sizeof(struct kvm_io_bus));
 	return r;
@@ -4308,7 +4308,7 @@ static int coalesced_mmio_write(struct kvm_io_device *this,
 #ifdef XXX
 	smp_wmb();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	ring->last = (ring->last + 1) % KVM_COALESCED_MMIO_MAX;
 	mutex_exit(&dev->lock);

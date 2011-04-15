@@ -2295,7 +2295,7 @@ gfn_t unalias_gfn_instantiation(struct kvm *kvm, gfn_t gfn)
 #ifdef XXX
 	aliases = rcu_dereference(kvm->arch.aliases);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 	aliases = kvm->arch.aliases;
 #endif /*XXX*/
 
@@ -2481,7 +2481,7 @@ static void mmu_sync_children(struct kvm_vcpu *vcpu,
 #ifdef XXX
 		cond_resched_lock(&vcpu->mutex);
 #else
-		XXX_KVM_PROBE;
+		XXX_KVM_SYNC_PROBE;
 		mutex_enter(&vcpu->kvm->mmu_lock);
 #endif /*XXX*/
 		kvm_mmu_pages_init(parent, &parents, &pages);
@@ -2989,7 +2989,7 @@ void kvm_define_shared_msr(unsigned slot, uint32_t msr)
 	/* we need ensured the shared_msr_global have been updated */
 	smp_wmb();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 }
 
@@ -4099,7 +4099,7 @@ skip_lpage:
 		rcu_assign_pointer(kvmp->memslots, slots);
 		synchronize_srcu_expedited(&kvm->srcu);
 #else
-		XXX_KVM_PROBE;
+		XXX_KVM_SYNC_PROBE;
 		kvmp->memslots = slots;
 #endif /*XXX*/
 		/* From this point no new shadow pages pointing to a deleted
@@ -4149,7 +4149,7 @@ skip_lpage:
 	rcu_assign_pointer(kvmp->memslots, slots);
 	synchronize_srcu_expedited(&kvmp->srcu);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 	kvmp->memslots = slots;
 #endif /*XXX*/
 
@@ -5006,6 +5006,8 @@ int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 		kvm_vmcs_dump(0);
 		vmcs_dump_idx++;
 	}
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX_KVM_DEBUG*/
 	return 0;
 }
@@ -7278,7 +7280,7 @@ static int __msr_io(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs,
 #ifdef XXX
 	idx = srcu_read_lock(&vcpu->kvm->srcu);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif
 	for (i = 0; i < msrs->nmsrs; ++i)
 		if (do_msr(vcpu, entries[i].index, &entries[i].data))
@@ -7286,7 +7288,7 @@ static int __msr_io(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs,
 #ifdef XXX
 	srcu_read_unlock(&vcpu->kvm->srcu, idx);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif
 	vcpu_put(vcpu);
 
@@ -7773,6 +7775,8 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		kvm_vmcs_dump(1);
 		vmcs_dump_idx++;
 	}
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX_KVM_DEBUG*/
 
 	__asm__(
@@ -7885,6 +7889,8 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		kvm_vmcs_dump(2);
 		vmcs_dump_idx++;
 	}
+#else
+	XXX_KVM_PROBE;
 #endif /*XXX_KVM_DEBUG*/
 	
 	vcpu->arch.regs_avail = ~((1 << VCPU_REGS_RIP) | (1 << VCPU_REGS_RSP)
@@ -11400,7 +11406,7 @@ void kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin)
 
 	gsi = rcu_dereference(kvm->irq_routing)->chip[irqchip][pin];
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	gsi = (kvm->irq_routing)->chip[irqchip][pin];
 #ifdef XXX
@@ -11411,7 +11417,7 @@ void kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin)
 				kian->irq_acked(kian);
 	rcu_read_unlock();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 
 }
@@ -11994,14 +12000,14 @@ static void vapic_exit(struct kvm_vcpu *vcpu)
 #ifdef XXX
 	idx = srcu_read_lock(&vcpu->kvm->srcu);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	kvm_release_page_dirty(apic->vapic_page);
 	mark_page_dirty(vcpu->kvm, apic->vapic_addr >> PAGESHIFT);
 #ifdef XXX
 	srcu_read_unlock(&vcpu->kvm->srcu, idx);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 }
 
@@ -12085,7 +12091,7 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 #ifdef XXX
 	vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	vapic_enter(vcpu);
 
@@ -12097,13 +12103,13 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 #ifdef XXX
 			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
 #else
-			XXX_KVM_PROBE;
+			XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 			kvm_vcpu_block(vcpu);
 #ifdef XXX
 			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
 #else
-			XXX_KVM_PROBE;
+			XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 			if (test_and_clear_bit(KVM_REQ_UNHALT, &vcpu->requests))
 			{
@@ -12155,20 +12161,20 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 #ifdef XXX
 			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
 #else
-			XXX_KVM_PROBE;
+			XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 			kvm_resched(vcpu);
 #ifdef XXX
 			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
 #else
-			XXX_KVM_PROBE;
+			XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 		}
 	}
 #ifdef XXX
 	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	post_kvm_run_save(vcpu);
 	vapic_exit(vcpu);
@@ -12204,13 +12210,13 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 #ifdef XXX
 		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
 #else
-		XXX_KVM_PROBE;
+		XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 		r = complete_pio(vcpu);
 #ifdef XXX
 		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
 #else
-		XXX_KVM_PROBE;
+		XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 		if (r)
 			goto out;
@@ -12222,14 +12228,14 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 #ifdef XXX
 		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
 #else
-		XXX_KVM_PROBE;
+		XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 		r = emulate_instruction(vcpu, vcpu->arch.mmio_fault_cr2, 0,
 					EMULTYPE_NO_DECODE);
 #ifdef XXX
 		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
 #else
-		XXX_KVM_PROBE;
+		XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 		if (r == EMULATE_DO_MMIO) {
 			/*
@@ -12753,7 +12759,7 @@ static void update_handled_vectors(struct kvm_ioapic *ioapic)
 #ifdef XXX
 	smp_wmb();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 }
 
@@ -12889,7 +12895,7 @@ void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode)
 #ifdef XXX
 	smp_rmb();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	if (!test_bit(vector, ioapic->handled_vectors))
 		return;
@@ -13263,14 +13269,14 @@ int kvm_set_irq_routing(struct kvm *kvm,
 #ifdef XXX
 	rcu_assign_pointer(kvm->irq_routing, new);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 	kvm->irq_routing = new;
 #endif /*XXX*/
 	mutex_exit(&kvm->irq_lock);
 #ifdef XXX
 	synchronize_rcu();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 
 	new = old;
@@ -13405,7 +13411,7 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 #ifdef XXX
 	raw_spin_lock_init(&pit->pit_state.inject_lock);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 	mutex_init(&pit->pit_state.inject_lock, NULL, MUTEX_DRIVER, 0);
 #endif /*XXX*/
 	kvm->arch.vpit = pit;
@@ -13610,7 +13616,7 @@ int kvm_set_irq(struct kvm *kvm, int irq_source_id, uint32_t irq, int level)
 	rcu_read_lock();
 	irq_rt = rcu_dereference(kvm->irq_routing);
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 	irq_rt = kvm->irq_routing;
 #endif /*XXX*/
 	if (irq < irq_rt->nr_rt_entries) {
@@ -13620,7 +13626,7 @@ int kvm_set_irq(struct kvm *kvm, int irq_source_id, uint32_t irq, int level)
 #ifdef XXX
 	rcu_read_unlock();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 
 	while(i--) {
@@ -13811,13 +13817,13 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 #ifdef XXX
 		smp_wmb();
 #else
-		XXX_KVM_PROBE;
+		XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 		kvmp->arch.vpic = vpic;
 #ifdef XXX
 		smp_wmb();
 #else
-		XXX_KVM_PROBE;
+		XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 		rval = kvm_setup_default_irq_routing(kvmp);
 		if (rval) {

@@ -12,6 +12,8 @@
 
 #define XXX_KVM_PROBE DTRACE_PROBE2(kvm__xxx, \
 	char *, __FILE__, int, __LINE__)
+#define XXX_KVM_SYNC_PROBE DTRACE_PROBE2(kvm__xxx__sync, \
+	char *, __FILE__, int, __LINE__)
 
 #ifdef _KERNEL
 #include "bitops.h"

@@ -27,6 +27,7 @@ for file in $*; do
 		/#ifdef XXX_KVM_DECLARATION/{ inif = 0 }
 		/#else/{ if (inif && !nest) { foundelse = 1; } }
 		/XXX_KVM_PROBE;/{ if (inif && foundelse) { foundprobe = 1; } }
+		/XXX_KVM_SYNC_PROBE;/{ if (inif && foundelse) { foundprobe = 1; } }
 		/#endif/{
 			if (inif && nest) {
 				nest--;
