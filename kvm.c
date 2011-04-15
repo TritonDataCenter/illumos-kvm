@@ -11428,9 +11428,9 @@ static void pic_clear_isr(struct kvm_kpic_state *s, int irq)
 	 * Other interrupt may be delivered to PIC while lock is dropped but
 	 * it should be safe since PIC state is already updated at this stage.
 	 */
-	mutex_enter(&s->pics_state->lock);
-	kvm_notify_acked_irq(s->pics_state->kvm, SELECT_PIC(irq), irq);
 	mutex_exit(&s->pics_state->lock);
+	kvm_notify_acked_irq(s->pics_state->kvm, SELECT_PIC(irq), irq);
+	mutex_enter(&s->pics_state->lock);
 }
 
 /*
