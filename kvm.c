@@ -1689,7 +1689,7 @@ static void mmu_page_add_parent_pte(struct kvm_vcpu *vcpu,
 		pte_chain = mmu_alloc_pte_chain(vcpu);
 		list_create(&sp->parent_ptes, sizeof(struct kvm_pte_chain),
 			    offsetof(struct kvm_pte_chain, link));
-		list_insert_head(&sp->parent_ptes, &pte_chain);
+		list_insert_head(&sp->parent_ptes, pte_chain);
 		pte_chain->parent_ptes[0] = old;
 	}
 	for(pte_chain = list_head(&sp->parent_ptes); pte_chain;
@@ -1880,7 +1880,7 @@ mmu_zap_unsync_children(struct kvm *kvm, struct kvm_mmu_page *parent)
 static void mmu_free_pte_chain(struct kvm_pte_chain *pc)
 {
 	if (pc)
-		kmem_free(pc, sizeof(struct kvm_pte_chain));
+		kmem_cache_free(pte_chain_cache, pc);
 }
 
 void mmu_page_remove_parent_pte(struct kvm_mmu_page *sp,
