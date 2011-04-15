@@ -1932,15 +1932,15 @@ static void kvm_mmu_unlink_parents(struct kvm *kvm, struct kvm_mmu_page *sp)
 {
 	uint64_t *parent_pte;
 
-#ifdef XXX
+#ifndef XXX
 	while (sp->multimapped || sp->parent_pte) {
 		if (!sp->multimapped)
 			parent_pte = sp->parent_pte;
 		else {
 			struct kvm_pte_chain *chain;
 
-			chain = container_of(list_head(&sp->parent_ptes),
-					     struct kvm_pte_chain, link);
+			chain = list_head(&sp->parent_ptes);
+
 			parent_pte = chain->parent_ptes[0];
 		}
 
