@@ -2047,7 +2047,8 @@ int kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 		kvm_mmu_free_page(kvm, sp);
 	} else {
 		sp->role.invalid = 1;
-		list_insert_tail(&kvm->arch.active_mmu_pages, sp);
+		if (!list_link_active(&sp->link))
+			list_insert_tail(&kvm->arch.active_mmu_pages, sp);
 #ifdef XXX
 		kvm_reload_remote_mmus(kvm);
 #else
@@ -3412,8 +3413,6 @@ void kvm_mmu_zap_all(struct kvm *kvm)
 #endif /*DEBUG*/
 		(void) kvm_mmu_zap_page(kvm, sp);
 		sp = nsp;
-		if (sp == list_head(&kvm->arch.active_mmu_pages))
-			break;
 		if (sp)
 			nsp = list_next(&kvm->arch.active_mmu_pages, sp);
 	}

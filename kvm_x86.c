@@ -2775,7 +2775,9 @@ void rmap_remove(struct kvm *kvm, uint64_t *spte)
 	if (!*rmapp) {
 		cmn_err(CE_WARN, "rmap_remove: %p %lx 0->BUG\n", spte, *spte);
 	} else if (!(*rmapp & 1)) {
+#ifdef DEBUG
 		cmn_err(CE_NOTE, "rmap_remove:  %p %lx 1->0\n", spte, *spte);
+#endif /*DEBUG*/
 		if ((uint64_t *)*rmapp != spte) {
 			cmn_err(CE_WARN, "rmap_remove:  %p %lx 1->BUG\n",
 			       spte, *spte);
