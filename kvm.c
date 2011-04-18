@@ -2048,7 +2048,7 @@ int kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 	} else {
 		sp->role.invalid = 1;
 		if (!list_link_active(&sp->link))
-			list_insert_tail(&kvm->arch.active_mmu_pages, sp);
+			list_insert_head(&kvm->arch.active_mmu_pages, sp);
 #ifdef XXX
 		kvm_reload_remote_mmus(kvm);
 #else
