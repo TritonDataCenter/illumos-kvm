@@ -2620,15 +2620,19 @@ uint64_t native_read_msr_safe(unsigned int msr,
 	DECLARE_ARGS(val, low, high);
 
 #ifdef CONFIG_SOLARIS
+	uint64_t ret;
 	{
 		on_trap_data_t otd;
 
 		if (on_trap(&otd, OT_DATA_ACCESS) == 0) {
-			native_read_msr(msr);
+			ret = native_read_msr(msr);
+			*err = 0;
 		} else {
 			*err = EINVAL; /* XXX probably not right... */
 		}
 		no_trap();
+
+		return (ret);
 	}
 #else
 	__asm__ volatile("2: rdmsr ; xor %[err],%[err]\n"
