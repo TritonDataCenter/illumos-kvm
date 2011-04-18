@@ -9667,6 +9667,8 @@ static int handle_cr(struct kvm_vcpu *vcpu)
 #endif /*DEBUG*/
 	cr = exit_qualification & 15;
 	reg = (exit_qualification >> 8) & 15;
+	DTRACE_PROBE3(kvm__cr, int, cr, int, reg, int,
+	    (exit_qualification >> 4) & 3);
 	switch ((exit_qualification >> 4) & 3) {
 	case 0: /* mov to cr */
 		val = kvm_register_read(vcpu, reg);
