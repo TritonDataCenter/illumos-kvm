@@ -11931,7 +11931,8 @@ void kvm_lapic_reset(struct kvm_vcpu *vcpu)
 	hrtimer_cancel(&apic->lapic_timer.timer);
 #else
 	mutex_enter(&cpu_lock);
-	cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
+	if (apic->lapic_timer.active)
+		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
 	mutex_exit(&cpu_lock);
 	XXX_KVM_PROBE;
 #endif /*XXX*/

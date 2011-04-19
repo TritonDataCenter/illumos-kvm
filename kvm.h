@@ -344,10 +344,11 @@ struct kvm_timer {
 #else
 	cyclic_id_t kvm_cyclic_id;
 	cyc_handler_t kvm_cyc_handler;
-	cyc_time_t kvm_cyc_when;	
+	cyc_time_t kvm_cyc_when;
+	int active;
 #endif /*XXX*/
 	int64_t period; 				/* unit: ns */
-	int32_t pending;			/* accumulated triggered timers */
+	uint32_t pending;			/* accumulated triggered timers */
 	int reinject;
 	struct kvm_timer_ops *t_ops;
 	struct kvm *kvm;
