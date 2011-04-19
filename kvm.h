@@ -7,7 +7,10 @@
 #include <sys/ddi.h>
 #include <sys/sunddi.h>
 #include <sys/sdt.h>
-
+#undef _ASM  /* cyclic.h expects this not defined */
+#include <sys/cyclic.h>
+#define _ASM
+#include <sys/atomic.h>
 #include "kvm_types.h"
 
 #define XXX_KVM_PROBE DTRACE_PROBE2(kvm__xxx, \
@@ -296,38 +299,15 @@ struct fxsave {
 	 | X86_CR4_OSXMMEXCPT | X86_CR4_PGE)
 
 
+#ifndef CONFIG_X86_64
+#define mod_64(x, y) ((x) - (y) * div64_u64(x, y))
+#else
+#define mod_64(x, y) ((x) % (y))
+#endif
+
 #ifdef _KERNEL
 #include "kvm_emulate.h"
 
-/*
- * These structs MUST NOT be changed.
- * They are the ABI between hypervisor and guest OS.
- * Both Xen and KVM are using this.
- *
- * pvclock_vcpu_time_info holds the system time and the tsc timestamp
- * of the last update. So the guest can use the tsc delta to get a
- * more precise system time.  There is one per virtual cpu.
- *
- * pvclock_wall_clock references the point in time when the system
- * time was zero (usually boot time), thus the guest calculates the
- * current wall clock by adding the system time.
- *
- * Protocol for the "version" fields is: hypervisor raises it (making
- * it uneven) before it starts updating the fields and raises it again
- * (making it even) when it is done.  Thus the guest can make sure the
- * time values it got are consistent by checking the version before
- * and after reading them.
- */
-
-struct pvclock_vcpu_time_info {
-	uint32_t   version;
-	uint32_t   pad0;
-	uint64_t   tsc_timestamp;
-	uint64_t   system_time;
-	uint32_t   tsc_to_system_mul;
-	char    tsc_shift;
-	unsigned char    pad[3];
-} __attribute__((__packed__)); /* 32 bytes */
 
 #endif /*_KERNEL*/
 
@@ -357,12 +337,31 @@ struct pvclock_vcpu_time_info {
 	 APIC_LVT_REMOTE_IRR | APIC_LVT_LEVEL_TRIGGER)
 
 #ifdef _KERNEL
+
+struct kvm_timer {
+#ifdef XXX
+	struct hrtimer timer;
+#else
+	cyclic_id_t kvm_cyclic_id;
+	cyc_handler_t kvm_cyc_handler;
+	cyc_time_t kvm_cyc_when;	
+#endif /*XXX*/
+	int64_t period; 				/* unit: ns */
+	int32_t pending;			/* accumulated triggered timers */
+	int reinject;
+	struct kvm_timer_ops *t_ops;
+	struct kvm *kvm;
+	struct kvm_vcpu *vcpu;
+};
+
+struct kvm_timer_ops {
+        int (*is_periodic)(struct kvm_timer *);
+};
+
 struct kvm_lapic {
 	unsigned long base_address;
 	struct kvm_io_device dev;
-#ifdef XXX
 	struct kvm_timer lapic_timer;
-#endif /*XXX*/
 	uint32_t divide_count;
 	struct kvm_vcpu *vcpu;
 	int irr_pending;
@@ -1798,6 +1797,9 @@ struct kvm_tpr_acl_ioc {
 /* Available with KVM_CAP_VAPIC */
 #define KVM_SET_VAPIC_ADDR        _IOW(KVMIO,  0x93, struct kvm_vapic_addr)
 
+#define APIC_BUS_CYCLE_NS 1
+#define NSEC_PER_MSEC 1000000L
+#define NSEC_PER_SEC 1000000000L
 
 /* for kvm_memory_region::flags */
 #define KVM_MEM_LOG_DIRTY_PAGES  1UL
@@ -1991,17 +1993,13 @@ struct kvm_kpit_channel_state {
 	uint8_t mode;
 	uint8_t bcd; /* not supported */
 	uint8_t gate; /* timer start */
-#ifdef XXX
-	ktime_t count_load_time;
-#endif /*XXX*/
+	hrtime_t count_load_time;
 };
 
 struct kvm_kpit_state {
 	struct kvm_kpit_channel_state channels[3];
 	uint32_t flags;
-#ifdef XXX
 	struct kvm_timer pit_timer;
-#endif /*XXX*/
 	int is_periodic;
 	uint32_t    speaker_data_on;
 	kmutex_t lock;
@@ -2022,6 +2020,18 @@ struct kvm_pit {
 	struct kvm_irq_mask_notifier mask_notifier;
 #endif /*XXX*/
 };
+
+#define KVM_PIT_BASE_ADDRESS	    0x40
+#define KVM_SPEAKER_BASE_ADDRESS    0x61
+#define KVM_PIT_MEM_LENGTH	    4
+#define KVM_PIT_FREQ		    1193181
+#define KVM_MAX_PIT_INTR_INTERVAL   HZ / 100
+#define KVM_PIT_CHANNEL_MASK	    0x3
+
+#define RW_STATE_LSB 1
+#define RW_STATE_MSB 2
+#define RW_STATE_WORD0 3
+#define RW_STATE_WORD1 4
 
 #define page_to_pfn(page) (page->p_pagenum)
 #define set_page_private(page, v)	((page)->p_private = (v))

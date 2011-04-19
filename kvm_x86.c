@@ -692,6 +692,11 @@ static unsigned int apic_lvt_mask[APIC_LVT_NUM] = {
 	LVT_MASK		/* LVTERR */
 };
 
+static int apic_lvtt_period(struct kvm_lapic *apic)
+{
+	return apic_get_reg(apic, APIC_LVTT) & APIC_LVT_TIMER_PERIODIC;
+}
+
 static void start_apic_timer(struct kvm_lapic *apic)
 {
 #ifdef XXX
@@ -718,6 +723,26 @@ static void start_apic_timer(struct kvm_lapic *apic)
 		      HRTIMER_MODE_ABS);
 
 #else
+	hrtime_t now = gethrtime();
+
+	apic->lapic_timer.period = (uint64_t)apic_get_reg(apic, APIC_TMICT) *
+		    APIC_BUS_CYCLE_NS * apic->divide_count;
+
+	if (!apic->lapic_timer.period)
+		return;
+	/*
+	 * Do not allow the guest to program periodic timers with small
+	 * interval, since the hrtimers are not throttled by the host
+	 * scheduler.
+	 */
+	if (apic_lvtt_period(apic)) {
+		if (apic->lapic_timer.period < NSEC_PER_MSEC/2)
+			apic->lapic_timer.period = NSEC_PER_MSEC/2;
+	}
+	mutex_enter(&cpu_lock);
+	apic->lapic_timer.kvm_cyclic_id = cyclic_add(&apic->lapic_timer.kvm_cyc_handler,
+						     &apic->lapic_timer.kvm_cyc_when);
+	mutex_exit(&cpu_lock);
 	XXX_KVM_PROBE;
 #endif /*XXX*/
 }
@@ -1238,11 +1263,8 @@ int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 				apic_set_reg(apic, APIC_LVTT + 0x10 * i,
 					     lvt_val | APIC_LVT_MASKED);
 			}
-#ifdef XXX
-			atomic_set(&apic->lapic_timer.pending, 0);
-#else
-			XXX_KVM_PROBE;
-#endif
+			/* XXX pending needs protection ?*/
+			apic->lapic_timer.pending = 0;
 		}
 		break;
 	}
@@ -1278,6 +1300,9 @@ int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 #ifdef XXX
 		hrtimer_cancel(&apic->lapic_timer.timer);
 #else
+		mutex_enter(&cpu_lock);
+		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
+		mutex_exit(&cpu_lock);
 		XXX_KVM_PROBE;
 #endif
 		apic_set_reg(apic, APIC_TMICT, val);
@@ -1343,6 +1368,70 @@ static const struct kvm_io_device_ops apic_mmio_ops = {
 	.write    = apic_mmio_write,
 };
 
+static int __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
+{
+	int restart_timer = 0;
+#ifdef XXX
+	wait_queue_head_t *q = &vcpu->wq;
+#else
+	XXX_KVM_PROBE;
+#endif /*XXX*/
+
+	/*
+	 * There is a race window between reading and incrementing, but we do
+	 * not care about potentially loosing timer events in the !reinject
+	 * case anyway.
+	 */
+	/* XXX may need protectionn on pending */
+	if (ktimer->reinject || !ktimer->pending) {
+	  atomic_add_32(&ktimer->pending, 1);
+		/* FIXME: this code should not know anything about vcpus */
+		set_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
+	}
+
+#ifdef XXX
+	if (waitqueue_active(q))
+		wake_up_interruptible(q);
+#else
+	XXX_KVM_PROBE;
+#endif /*XXX*/
+
+	if (ktimer->t_ops->is_periodic(ktimer)) {
+#ifdef XXX
+		kvm_hrtimer_add_expires_ns(&ktimer->timer, ktimer->period);
+#else
+		XXX_KVM_PROBE;
+#endif /*XXX*/
+		restart_timer = 1;
+	}
+
+	return restart_timer;
+}
+
+void kvm_timer_fn(void *arg)
+{
+	struct kvm_timer *ktimer = (struct kvm_timer *)arg;
+	int restart_timer;
+	struct kvm_vcpu *vcpu;
+
+	vcpu = ktimer->vcpu;
+	if (!vcpu)
+		return;
+
+	restart_timer = __kvm_timer_fn(vcpu, ktimer);
+}
+
+static int lapic_is_periodic(struct kvm_timer *ktimer)
+{
+	struct kvm_lapic *apic = (struct kvm_lapic *)((caddr_t)ktimer
+						      - offsetof(struct kvm_lapic, lapic_timer));
+	return apic_lvtt_period(apic);
+}
+
+static struct kvm_timer_ops lapic_timer_ops = {
+	.is_periodic = lapic_is_periodic,
+};
+
 int kvm_create_lapic(struct kvm_vcpu *vcpu)
 {
 	struct kvm_lapic *apic;
@@ -1369,12 +1458,17 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
 	hrtimer_init(&apic->lapic_timer.timer, CLOCK_MONOTONIC,
 		     HRTIMER_MODE_ABS);
 	apic->lapic_timer.timer.function = kvm_timer_fn;
+#else
+	apic->lapic_timer.kvm_cyc_handler.cyh_func = kvm_timer_fn;
+	apic->lapic_timer.kvm_cyc_handler.cyh_arg = &apic->lapic_timer;
+	apic->lapic_timer.kvm_cyc_handler.cyh_level = CY_HIGH_LEVEL;
+	XXX_KVM_PROBE;
+#endif /*XXX*/
+
 	apic->lapic_timer.t_ops = &lapic_timer_ops;
 	apic->lapic_timer.kvm = vcpu->kvm;
 	apic->lapic_timer.vcpu = vcpu;
-#else
-	XXX_KVM_PROBE;
-#endif
+
 	apic->base_address = APIC_DEFAULT_PHYS_BASE;
 	vcpu->arch.apic_base = APIC_DEFAULT_PHYS_BASE;
 
