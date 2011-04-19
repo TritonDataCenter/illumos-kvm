@@ -751,8 +751,11 @@ static void start_apic_timer(struct kvm_lapic *apic)
 			apic->lapic_timer.period = NSEC_PER_MSEC/2;
 	}
 	mutex_enter(&cpu_lock);
+	apic->lapic_timer.kvm_cyc_when.cyt_when = 0;
+	apic->lapic_timer.kvm_cyc_when.cyt_interval = apic->lapic_timer.period;
 	apic->lapic_timer.kvm_cyclic_id = cyclic_add(&apic->lapic_timer.kvm_cyc_handler,
 						     &apic->lapic_timer.kvm_cyc_when);
+	apic->lapic_timer.active = 1;
 	mutex_exit(&cpu_lock);
 	XXX_KVM_PROBE;
 #endif /*XXX*/

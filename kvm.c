@@ -13566,7 +13566,8 @@ static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_per
 
 	mutex_enter(&cpu_lock);
 	/* TODO The new value only affected after the retriggered */
-	cyclic_remove(pt->kvm_cyclic_id);
+	if (pt->active)
+		cyclic_remove(pt->kvm_cyclic_id);
 	pt->period = interval;
 	ps->is_periodic = is_period;
 
@@ -13583,7 +13584,10 @@ static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_per
 	pt->pending = 0;  /*XXX need protection?*/
 	ps->irq_ack = 1;
 
+	pt->kvm_cyc_when.cyt_when = 0;
+	pt->kvm_cyc_when.cyt_interval = pt->period;
 	cyclic_add(&pt->kvm_cyc_handler, &pt->kvm_cyc_when);
+	pt->active = 1;
 	mutex_exit(&cpu_lock);
 }
 
@@ -13779,6 +13783,7 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 	XXX_KVM_PROBE;
 #endif /*XXX*/
 	pit_state->pit_timer.reinject = 1;
+	pit_state->pit_timer.active = 0;
 
 	mutex_exit(&pit->pit_state.lock);
 
