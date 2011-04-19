@@ -4054,12 +4054,6 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int32_t id, int *rval_p)
 	/* XXX need to protect online_vcpus */
 	kvm->vcpus[kvm->online_vcpus] = vcpu;
 
-#ifdef XXX_MOVED
-#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
-	kvm_coalesced_mmio_init(kvm);
-#endif
-#endif /*XXX_MOVED*/
-
 #ifdef XXX
 	smp_wmb();
 #else

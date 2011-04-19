@@ -39,7 +39,7 @@ install: kvm
 	@pfexec cp kvm.conf /usr/kernel/drv
 
 check:
-	@$(CSTYLE) kvm_mdb.c
+	@$(CSTYLE) kvm_mdb.c emulate.c
 	@./tools/xxxcheck kvm_x86.c kvm.c
 
 load: install
