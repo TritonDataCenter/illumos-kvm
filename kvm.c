@@ -205,6 +205,8 @@ extern int mmu_topup_memory_caches(struct kvm_vcpu *vcpu);
 extern int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 				    struct kvm_lapic_irq *irq);
 extern int sigprocmask(int, const sigset_t *, sigset_t *);
+extern void cli(void);
+extern void sti(void);
 
 
 int get_ept_level(void);
@@ -11726,11 +11728,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	if (vcpu->fpu_active)
 		kvm_load_guest_fpu(vcpu);
 
-#ifdef XXX
 	cli();
-#else
-	XXX_KVM_PROBE;
-#endif
 
 	clear_bit(KVM_REQ_KICK, &vcpu->requests);
 #ifdef XXX
@@ -11741,11 +11739,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 	if (vcpu->requests || need_resched() /* || signal_pending(current)*/) {
 		set_bit(KVM_REQ_KICK, &vcpu->requests);
-#ifdef XXX
 		sti();
-#else
-		XXX_KVM_PROBE;
-#endif
 		kpreempt_enable();
 		r = 1;
 		goto out;
@@ -11796,11 +11790,8 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	XXX_KVM_PROBE;
 #endif /*XXX*/
 	set_bit(KVM_REQ_KICK, &vcpu->requests);
-#ifdef XXX
+
 	sti();
-#else
-	XXX_KVM_PROBE;
-#endif
 
 #ifdef XXX
 	local_irq_enable();  /* XXX - should be ok with kpreempt_enable below */
