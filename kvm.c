@@ -13572,7 +13572,7 @@ static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_per
 	ps->is_periodic = is_period;
 
 	pt->kvm_cyc_handler.cyh_func = kvm_timer_fn;
-	pt->kvm_cyc_handler.cyh_level = CY_HIGH_LEVEL;
+	pt->kvm_cyc_handler.cyh_level = CY_LOW_LEVEL;
 	pt->kvm_cyc_handler.cyh_arg = pt;
 #ifdef XXX
 	hrtimer_data_pointer(&pt->timer);

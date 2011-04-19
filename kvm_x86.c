@@ -1475,7 +1475,7 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
 #else
 	apic->lapic_timer.kvm_cyc_handler.cyh_func = kvm_timer_fn;
 	apic->lapic_timer.kvm_cyc_handler.cyh_arg = &apic->lapic_timer;
-	apic->lapic_timer.kvm_cyc_handler.cyh_level = CY_HIGH_LEVEL;
+	apic->lapic_timer.kvm_cyc_handler.cyh_level = CY_LOW_LEVEL;
 	apic->lapic_timer.active = 0;
 	XXX_KVM_PROBE;
 #endif /*XXX*/
