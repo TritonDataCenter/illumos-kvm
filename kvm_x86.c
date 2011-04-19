@@ -52,6 +52,17 @@ extern int native_write_msr_safe(unsigned int msr,
 				 unsigned low, unsigned high);
 
 extern unsigned long find_first_zero_bit(const unsigned long *addr, unsigned long size);
+extern int kvm_apic_present(struct kvm_vcpu *vcpu);
+extern int kvm_lapic_enabled(struct kvm_vcpu *vcpu);
+extern void kvm_lapic_reset(struct kvm_vcpu *vcpu);
+extern int vm_need_virtualize_apic_accesses(struct kvm *kvm);
+extern uint32_t vmcs_read32(unsigned long field);
+extern uint16_t vmcs_read16(unsigned long field);
+extern ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
+extern void kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val);
+extern int kvm_is_mmio_pfn(pfn_t pfn);
+extern ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask);
+extern int is_long_mode(struct kvm_vcpu *vcpu);
 
 unsigned long segment_base(uint16_t selector)
 {
@@ -2821,7 +2832,7 @@ static void rmap_desc_remove_entry(unsigned long *rmapp,
 	mmu_free_rmap_desc(desc);
 }
 
-void kvm_set_pfn_dirty(struct kvm *kvm, pfn_t pfn)
+void kvm_set_pfn_dirty(pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn)) {
@@ -2864,7 +2875,7 @@ void rmap_remove(struct kvm *kvm, uint64_t *spte)
 	if (*spte & shadow_accessed_mask)
 		kvm_set_pfn_accessed(kvm, pfn);
 	if (is_writable_pte(*spte))
-		kvm_set_pfn_dirty(kvm, pfn);
+		kvm_set_pfn_dirty(pfn);
 	rmapp = gfn_to_rmap(kvm, sp->gfns[spte - sp->spt], sp->role.level);
 	if (!*rmapp) {
 		cmn_err(CE_WARN, "rmap_remove: %p %lx 0->BUG\n", spte, *spte);
@@ -2992,9 +3003,9 @@ static void page_header_update_slot(struct kvm *kvm, void *pte, gfn_t gfn)
 }
 
 
-void kvm_release_pfn_dirty(struct kvm_vcpu *vcpu, pfn_t pfn)
+void kvm_release_pfn_dirty(pfn_t pfn)
 {
-	kvm_set_pfn_dirty(vcpu->kvm, pfn);
+	kvm_set_pfn_dirty(pfn);
 	kvm_release_pfn_clean(pfn);
 }
 
@@ -3278,7 +3289,7 @@ static void mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
 		cmn_err(CE_CONT, "mmu_set_spte: releasing pfn = %lx, was_writable = %x\n", pfn, was_writable);
 #endif /*DEBUG*/
 		if (was_writable)
-			kvm_release_pfn_dirty(vcpu, pfn);
+			kvm_release_pfn_dirty(pfn);
 		else
 			kvm_release_pfn_clean(pfn);
 	}

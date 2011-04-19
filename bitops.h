@@ -123,7 +123,11 @@ clear_bit(int nr, volatile unsigned long *addr)
  */
 static inline void clear_bit_unlock(unsigned nr, volatile unsigned long *addr)
 {
+#ifdef XXX
 	barrier();
+#else
+	XXX_KVM_SYNC_PROBE;
+#endif
 	clear_bit(nr, addr);
 }
 
@@ -147,7 +151,11 @@ static inline void __clear_bit(int nr, volatile unsigned long *addr)
  */
 static inline void __clear_bit_unlock(unsigned nr, volatile unsigned long *addr)
 {
+#ifdef XXX
 	barrier();
+#else
+	XXX_KVM_SYNC_PROBE;
+#endif
 	__clear_bit(nr, addr);
 }
 

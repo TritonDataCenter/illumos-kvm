@@ -131,8 +131,7 @@ static struct modldrv modldrv = {
 
 static struct modlinkage modlinkage = {
 	MODREV_1,
-	&modldrv,
-	0
+	{ &modldrv, NULL }
 };
 
 extern struct kvm *kvm_arch_create_vm(void);
@@ -195,6 +194,18 @@ static void vmx_fpu_deactivate(struct kvm_vcpu *vcpu);
 static void vmx_decache_cr0_guest_bits(struct kvm_vcpu *vcpu);
 static void vmx_decache_cr4_guest_bits(struct kvm_vcpu *vcpu);
 void vmx_fpu_activate(struct kvm_vcpu *vcpu);
+void kvm_set_pfn_dirty(pfn_t);
+extern int irqchip_in_kernel(struct kvm *kvm);
+extern void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8);
+extern void kvm_set_apic_base(struct kvm_vcpu *vcpu, uint64_t data);
+extern void kvm_release_pfn_dirty(pfn_t pfn);
+extern void kvm_release_pfn_clean(pfn_t pfn);
+extern void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu);
+extern int mmu_topup_memory_caches(struct kvm_vcpu *vcpu);
+extern int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
+				    struct kvm_lapic_irq *irq);
+extern int sigprocmask(int, const sigset_t *, sigset_t *);
+
 
 int get_ept_level(void);
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
@@ -331,6 +342,8 @@ void vmcs_write64(unsigned long field, uint64_t value)
 }
 
 inline int is_pae(struct kvm_vcpu *vcpu);
+extern int is_paging(struct kvm_vcpu *);
+extern int is_long_mode(struct kvm_vcpu *);
 
 static void ept_load_pdptrs(struct kvm_vcpu *vcpu)
 {
@@ -1852,6 +1865,8 @@ static int mmu_pages_next(struct kvm_mmu_pages *pvec,
 			i < pvec.nr && ({ sp = pvec.page[i].sp; 1;});	\
 			i = mmu_pages_next(&pvec, &parents, i))
 
+int kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp);
+
 static int 
 mmu_zap_unsync_children(struct kvm *kvm, struct kvm_mmu_page *parent)
 {
@@ -2620,7 +2635,7 @@ uint64_t native_read_msr_safe(unsigned int msr,
 	DECLARE_ARGS(val, low, high);
 
 #ifdef CONFIG_SOLARIS
-	uint64_t ret;
+	uint64_t ret = 0;
 	{
 		on_trap_data_t otd;
 
@@ -2651,7 +2666,7 @@ uint64_t native_read_msr_safe(unsigned int msr,
 int native_write_msr_safe(unsigned int msr,
 				 unsigned low, unsigned high)
 {
-	int err;
+	int err = 0;
 #ifdef CONFIG_SOLARIS
 	{
 		on_trap_data_t otd;
@@ -3863,7 +3878,7 @@ void kvm_arch_commit_memory_region(struct kvm *kvm,
 		mem, user_alloc);
 #endif /*DEBUG*/
 	if (!user_alloc && !old.user_alloc && old.rmap && !npages) {
-		int ret;
+		int ret = 0;
 
 #ifdef XXX
 		down_write(&current->mm->mmap_sem);
@@ -6683,7 +6698,7 @@ extern pfn_t physmax;
 #define pfn_valid(pfn) (pfn != PFN_INVALID)
 #endif /*XXX*/
 
-inline int kvm_is_mmio_pfn(struct kvm *kvm, pfn_t pfn)
+inline int kvm_is_mmio_pfn(pfn_t pfn)
 {
 	if (pfn_valid(pfn)) {
 #ifdef XXX
@@ -6709,7 +6724,7 @@ page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn)
 	cmn_err(CE_CONT, "gfn_to_page: pfn = %lx\n", pfn);
 #endif /*DEBUG*/
 
-	if (!kvm_is_mmio_pfn(kvm, pfn)) {
+	if (!kvm_is_mmio_pfn(pfn)) {
 		page = pfn_to_page(pfn);
 #ifdef DEBUG
 		cmn_err(CE_CONT, "gfn_to_page: page = %p\n", page);
@@ -9869,6 +9884,16 @@ void __init kvm_guest_init(void);
 #define kvm_guest_init() do { } while (0)
 #endif
 
+static unsigned int kvm_arch_para_features(void)
+{
+#ifdef XXX
+	return cpuid_eax(KVM_CPUID_FEATURES);
+#else
+	XXX_KVM_PROBE;
+	return (0);
+#endif
+}
+
 static inline int kvm_para_has_feature(unsigned int feature)
 {
 	if (kvm_arch_para_features() & (1UL << feature))
@@ -9917,6 +9942,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		r = kvm_pv_mmu_op(vcpu, a0, hc_gpa(vcpu, a1, a2), &ret);
 #else
 		XXX_KVM_PROBE;
+		ret = -ENOSYS;
 #endif /*XXX*/
 		break;
 	default:
@@ -11096,8 +11122,6 @@ static inline void kvm_guest_enter(void)
 #endif /*XXX*/
 }
 
-int mmu_topup_memory_caches(struct kvm_vcpu *vcpu);
-
 int kvm_mmu_load(struct kvm_vcpu *vcpu)
 {
 	int r;
@@ -11702,7 +11726,11 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	if (vcpu->fpu_active)
 		kvm_load_guest_fpu(vcpu);
 
+#ifdef XXX
 	cli();
+#else
+	XXX_KVM_PROBE;
+#endif
 
 	clear_bit(KVM_REQ_KICK, &vcpu->requests);
 #ifdef XXX
@@ -11713,7 +11741,11 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 	if (vcpu->requests || need_resched() /* || signal_pending(current)*/) {
 		set_bit(KVM_REQ_KICK, &vcpu->requests);
+#ifdef XXX
 		sti();
+#else
+		XXX_KVM_PROBE;
+#endif
 		kpreempt_enable();
 		r = 1;
 		goto out;
@@ -11764,7 +11796,11 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	XXX_KVM_PROBE;
 #endif /*XXX*/
 	set_bit(KVM_REQ_KICK, &vcpu->requests);
+#ifdef XXX
 	sti();
+#else
+	XXX_KVM_PROBE;
+#endif
 
 #ifdef XXX
 	local_irq_enable();  /* XXX - should be ok with kpreempt_enable below */
@@ -12596,9 +12632,6 @@ static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 }
 
 extern int kvm_apic_set_irq(struct kvm_vcpu *vcpu, struct kvm_lapic_irq *irq);
-
-extern int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
-				    struct kvm_lapic_irq *irq);
 
 static int ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
 {
@@ -13625,9 +13658,11 @@ static int pit_ioport_write(struct kvm_io_device *this,
 
 	mutex_enter(&pit_state->lock);
 
+#ifdef KVM_DEBUG
 	if (val != 0)
 		pr_debug("pit: " "write addr is 0x%x, len is %d, val is 0x%x\n",
 			 (unsigned int)addr, len, val);
+#endif
 
 	if (addr == 3) {
 		channel = val >> 6;
@@ -15178,17 +15213,21 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	}
 	case KVM_SET_VAPIC_ADDR: {
 		struct kvm_vapic_ioc kvm_vapic_ioc;
-		struct kvm *kvmp;
+		struct kvm *kvmp = ksp->kds_kvmp;
 		struct kvm_vcpu *vcpu;
 
+		if (kvmp == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
 		rval = EINVAL;
-		if (!irqchip_in_kernel(vcpu->kvm))
+		if (!irqchip_in_kernel(kvmp))
 			break;
 		rval = EFAULT;
 		if (ddi_copyin((caddr_t)arg, &kvm_vapic_ioc, sizeof (struct kvm_vapic_ioc), mode))
 			break;
 
-		kvmp = find_kvm_id(kvm_vapic_ioc.kvm_kvmid);
 		if (!kvmp || kvm_vapic_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			break;
