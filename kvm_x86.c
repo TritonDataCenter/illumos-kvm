@@ -766,6 +766,7 @@ start_apic_timer(struct kvm_lapic *apic)
 	apic->lapic_timer.kvm_cyclic_id =
 	    cyclic_add(&apic->lapic_timer.kvm_cyc_handler,
 	    &apic->lapic_timer.kvm_cyc_when);
+	apic->lapic_timer.start = gethrtime();
 	apic->lapic_timer.active = 1;
 	mutex_exit(&cpu_lock);
 }
@@ -1446,6 +1447,7 @@ __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
 		set_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
 	}
 
+	ktimer->intervals++;
 #ifdef XXX
 	if (waitqueue_active(q))
 		wake_up_interruptible(q);

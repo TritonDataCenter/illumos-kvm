@@ -13287,14 +13287,15 @@ static void kvm_pit_ack_irq(struct kvm_irq_ack_notifier *kian)
 #endif /*XXX*/
 }
 
-static int64_t __kpit_elapsed(struct kvm *kvm)
+static int64_t
+__kpit_elapsed(struct kvm *kvm)
 {
 	int64_t elapsed;
-	hrtime_t remaining;
+	hrtime_t remaining, now;
 	struct kvm_kpit_state *ps = &kvm->arch.vpit->pit_state;
 
 	if (!ps->pit_timer.period)
-		return 0;
+		return (0);
 
 	/*
 	 * The Counter does not stop when it reaches zero. In
@@ -13305,17 +13306,13 @@ static int64_t __kpit_elapsed(struct kvm *kvm)
 	 * itself with the initial count and continues counting
 	 * from there.
 	 */
-#ifdef XXX
-	remaining = hrtimer_get_remaining(&ps->pit_timer.timer);
-	elapsed = ps->pit_timer.period - ktime_to_ns(remaining);
-#else
-	remaining = 0;  /* XXX assumes timer always expires */
-	elapsed = ps->pit_timer.period;
-	XXX_KVM_PROBE;
-#endif /*XXX*/
+	now = gethrtime();
+	remaining = now - ps->pit_timer.start -
+	    ps->pit_timer.period * ps->pit_timer.intervals;
+	elapsed = ps->pit_timer.period - remaining;
 	elapsed = mod_64(elapsed, ps->pit_timer.period);
 
-	return elapsed;
+	return (elapsed);
 }
 
 static int64_t kpit_elapsed(struct kvm *kvm, struct kvm_kpit_channel_state *c,
@@ -13590,6 +13587,7 @@ static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_per
 	pt->kvm_cyc_when.cyt_when = 0;
 	pt->kvm_cyc_when.cyt_interval = pt->period;
 	pt->kvm_cyclic_id = cyclic_add(&pt->kvm_cyc_handler, &pt->kvm_cyc_when);
+	pt->start = gethrtime();
 	pt->active = 1;
 	mutex_exit(&cpu_lock);
 }

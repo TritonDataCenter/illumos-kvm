@@ -346,6 +346,8 @@ struct kvm_timer {
 	cyc_handler_t kvm_cyc_handler;
 	cyc_time_t kvm_cyc_when;
 	int active;
+	int intervals;
+	hrtime_t start;
 #endif /*XXX*/
 	int64_t period; 				/* unit: ns */
 	uint32_t pending;			/* accumulated triggered timers */
