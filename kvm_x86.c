@@ -32,9 +32,9 @@
 #include "kvm_x86host.h"
 #include "iodev.h"
 
-#define PER_CPU_ATTRIBUTES
-#define PER_CPU_DEF_ATTRIBUTES
-#define PER_CPU_BASE_SECTION ".data"
+#define	PER_CPU_ATTRIBUTES
+#define	PER_CPU_DEF_ATTRIBUTES
+#define	PER_CPU_BASE_SECTION ".data"
 #include "percpu-defs.h"
 #include "coalesced_mmio.h"
 #include "kvm.h"
@@ -46,12 +46,11 @@
 extern struct vmcs **vmxarea;
 
 static int vcpuid;
-extern uint64_t native_read_msr_safe(unsigned int msr,
-				     int *err);
-extern int native_write_msr_safe(unsigned int msr,
-				 unsigned low, unsigned high);
+extern uint64_t native_read_msr_safe(unsigned int msr, int *err);
+extern int native_write_msr_safe(unsigned int msr, unsigned low, unsigned high);
 
-extern unsigned long find_first_zero_bit(const unsigned long *addr, unsigned long size);
+extern unsigned long find_first_zero_bit(const unsigned long *addr,
+    unsigned long size);
 extern int kvm_apic_present(struct kvm_vcpu *vcpu);
 extern int kvm_lapic_enabled(struct kvm_vcpu *vcpu);
 extern void kvm_lapic_reset(struct kvm_vcpu *vcpu);
@@ -64,7 +63,8 @@ extern int kvm_is_mmio_pfn(pfn_t pfn);
 extern ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask);
 extern int is_long_mode(struct kvm_vcpu *vcpu);
 
-unsigned long segment_base(uint16_t selector)
+unsigned long
+segment_base(uint16_t selector)
 {
 	struct descriptor_table gdt;
 	struct desc_struct *d;
@@ -72,12 +72,12 @@ unsigned long segment_base(uint16_t selector)
 	unsigned long v;
 
 	if (selector == 0)
-		return 0;
+		return (0);
 
 	kvm_get_gdt(&gdt);
 	table_base = gdt.base;
 
-	if (selector & 4) {           /* from ldt */
+	if (selector & 4) {		/* from ldt */
 		uint16_t ldt_selector = kvm_read_ldt();
 
 		table_base = segment_base(ldt_selector);
@@ -86,67 +86,70 @@ unsigned long segment_base(uint16_t selector)
 	v = get_desc_base(d);
 
 #ifdef CONFIG_X86_64
-	if (d->c.b.s == 0 && (d->c.b.type == 2 || d->c.b.type == 9 || d->c.b.type == 11))
+	if (d->c.b.s == 0 &&
+	    (d->c.b.type == 2 || d->c.b.type == 9 || d->c.b.type == 11))
 		v |= ((unsigned long)((struct ldttss_desc64 *)d)->base3) << 32;
 #endif
 
-	return v;
+	return (v);
 }
 
 
 struct  kvm *
 kvm_arch_create_vm(void)
 {
-	struct kvm *kvm = kmem_zalloc(sizeof(struct kvm), KM_SLEEP);
+	struct kvm *kvm = kmem_zalloc(sizeof (struct kvm), KM_SLEEP);
 
 	if (!kvm)
-		return NULL;
+		return (NULL);
 
-	kvm->arch.aliases = kmem_zalloc(sizeof(struct kvm_mem_aliases), KM_SLEEP);
-	if (!kvm->arch.aliases) {
-		kmem_free(kvm, sizeof(struct kvm));
-		return NULL;
+	if ((kvm->arch.aliases =
+	    kmem_zalloc(sizeof (struct kvm_mem_aliases), KM_SLEEP)) == NULL) {
+		kmem_free(kvm, sizeof (struct kvm));
+		return (NULL);
 	}
 
-	list_create(&kvm->arch.active_mmu_pages, sizeof(struct kvm_mmu_page),
-		    offsetof(struct kvm_mmu_page, link));
+	list_create(&kvm->arch.active_mmu_pages, sizeof (struct kvm_mmu_page),
+	    offsetof(struct kvm_mmu_page, link));
 
-	list_create(&kvm->arch.assigned_dev_head, sizeof(struct kvm_assigned_dev_kernel),
-		    offsetof(struct kvm_assigned_dev_kernel, list));
+	list_create(&kvm->arch.assigned_dev_head,
+	    sizeof (struct kvm_assigned_dev_kernel),
+	    offsetof(struct kvm_assigned_dev_kernel, list));
 
 	/* Reserve bit 0 of irq_sources_bitmap for userspace irq source */
 	set_bit(KVM_USERSPACE_IRQ_SOURCE_ID, &kvm->arch.irq_sources_bitmap);
 
 	/* XXX - original is rdtscll() */
-	kvm->arch.vm_init_tsc = (uint64_t)gethrtime(); 
+	kvm->arch.vm_init_tsc = (uint64_t)gethrtime();
 
-	return kvm;
+	return (kvm);
 }
 
-inline gpa_t gfn_to_gpa(gfn_t gfn)
+inline gpa_t
+gfn_to_gpa(gfn_t gfn)
 {
-	return (gpa_t)gfn << PAGESHIFT;
+	return ((gpa_t)gfn << PAGESHIFT);
 }
 
 page_t *pfn_to_page(pfn_t pfn);
 
-void kvm_release_pfn_clean(pfn_t pfn)
+void
+kvm_release_pfn_clean(pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn))
 		put_page(pfn_to_page(pfn));
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 }
 
 #ifdef IOMMU
 
 paddr_t
-iommu_iova_to_phys(struct iommu_domain *domain,
-			       unsigned long iova)
+iommu_iova_to_phys(struct iommu_domain *domain, unsigned long iova)
 {
-	return iommu_ops->iova_to_phys(domain, iova);
+	return (iommu_ops->iova_to_phys(domain, iova));
 }
 
 
@@ -183,10 +186,10 @@ kvm_iommu_unmap_memslots(struct kvm *kvm)
 
 	for (i = 0; i < slots->nmemslots; i++) {
 		kvm_iommu_put_pages(kvm, slots->memslots[i].base_gfn,
-				    slots->memslots[i].npages);
+		    slots->memslots[i].npages);
 	}
 
-	return 0;
+	return (0);
 }
 
 int
@@ -196,13 +199,13 @@ kvm_iommu_unmap_guest(struct kvm *kvm)
 
 	/* check if iommu exists and in use */
 	if (!domain)
-		return 0;
+		return (0);
 
 	kvm_iommu_unmap_memslots(kvm);
 	iommu_domain_free(domain);
-	return 0;
+	return (0);
 }
-#endif /*IOMMU*/
+#endif /* IOMMU */
 
 void
 kvm_arch_destroy_vm(struct kvm *kvm)
@@ -212,16 +215,16 @@ kvm_arch_destroy_vm(struct kvm *kvm)
 
 #ifdef IOMMU
 	kvm_iommu_unmap_guest(kvm);
-#endif /*IOMMU*/
+#endif /* IOMMU */
 #ifdef PIT /* i8254 programmable interrupt timer support */
 	kvm_free_pit(kvm);
-#endif /*PIT*/
+#endif /* PIT */
 #ifdef VPIC
 	if (kvm->arch.vpic) {
-		kmem_free(kvm->arch.vpic, sizeof(kvm->arch.vpic));
+		kmem_free(kvm->arch.vpic, sizeof (kvm->arch.vpic));
 		kvm->arch.vpic = 0;
 	}
-#endif /*VPIC*/
+#endif /* VPIC */
 #ifdef XXX
 	kvm_free_vcpus(kvm);
 	kvm_free_physmem(kvm);
@@ -230,18 +233,18 @@ kvm_arch_destroy_vm(struct kvm *kvm)
 		put_page(kvm->arch.apic_access_page);
 	if (kvm->arch.ept_identity_pagetable)
 		put_page(kvm->arch.ept_identity_pagetable);
-#endif /*APIC*/
+#endif /* APIC */
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif /* XXX */
 #if defined(CONFIG_MMU_NOTIFIER) && defined(KVM_ARCH_WANT_MMU_NOTIFIER)
 	cleanup_srcu_struct(&kvm->srcu);
-#endif /*CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER*/
+#endif /* CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER */
 	if (kvm->arch.aliases) {
 		kmem_free(kvm->arch.aliases, sizeof (struct kvm_mem_aliases));
 		kvm->arch.aliases = 0;
 	}
-	kmem_free(kvm, sizeof(struct kvm));
+	kmem_free(kvm, sizeof (struct kvm));
 }
 
 extern int getcr4(void);
@@ -250,13 +253,13 @@ extern int getcr0(void);
 extern ulong_t getcr3(void);
 extern pfn_t hat_getpfnum(struct hat *hat, caddr_t);
 
-#define X86_CR4_VMXE	0x00002000 /* enable VMX virtualization */
-#define MSR_IA32_FEATURE_CONTROL        0x0000003a
+#define	X86_CR4_VMXE	0x00002000 /* enable VMX virtualization */
+#define	MSR_IA32_FEATURE_CONTROL	0x0000003a
 
-#define FEATURE_CONTROL_LOCKED		(1<<0)
-#define FEATURE_CONTROL_VMXON_ENABLED	(1<<2)
+#define	FEATURE_CONTROL_LOCKED		(1<<0)
+#define	FEATURE_CONTROL_VMXON_ENABLED	(1<<2)
 
-#define ASM_VMX_VMXON_RAX         ".byte 0xf3, 0x0f, 0xc7, 0x30"
+#define	ASM_VMX_VMXON_RAX		".byte 0xf3, 0x0f, 0xc7, 0x30"
 
 extern uint64_t shadow_trap_nonpresent_pte;
 extern uint64_t shadow_notrap_nonpresent_pte;
@@ -283,13 +286,14 @@ vmx_hardware_enable(void *garbage)
 	uint64_t phys_addr;
 	XXX_KVM_PROBE;
 	pfn = hat_getpfnum(kas.a_hat, (caddr_t)vmxarea[cpu]);
-	phys_addr = ((uint64_t)pfn << PAGESHIFT)|((uint64_t)vmxarea[cpu] & PAGEOFFSET);
+	phys_addr = ((uint64_t)pfn << PAGESHIFT) |
+	    ((uint64_t)vmxarea[cpu] & PAGEOFFSET);
 #endif
 
 	((struct vmcs *)(vmxarea[cpu]))->revision_id = vmcs_config.revision_id;
 
 	if (getcr4() & X86_CR4_VMXE)
-		return DDI_FAILURE;
+		return (DDI_FAILURE);
 
 #ifdef XXX
 	INIT_LIST_HEAD(&per_cpu(vcpus_on_cpu, cpu));
@@ -297,29 +301,31 @@ vmx_hardware_enable(void *garbage)
 	XXX_KVM_PROBE;
 #endif
 	rdmsrl(MSR_IA32_FEATURE_CONTROL, old);
-	if ((old & (FEATURE_CONTROL_LOCKED |
-		    FEATURE_CONTROL_VMXON_ENABLED))
-	    != (FEATURE_CONTROL_LOCKED |
-		FEATURE_CONTROL_VMXON_ENABLED))
+	if ((old & (FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_VMXON_ENABLED)) !=
+	    (FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_VMXON_ENABLED)) {
 		/* enable and lock */
-		wrmsrl(MSR_IA32_FEATURE_CONTROL, old |
-		       FEATURE_CONTROL_LOCKED |
-		       FEATURE_CONTROL_VMXON_ENABLED);
+		wrmsrl(MSR_IA32_FEATURE_CONTROL, old | FEATURE_CONTROL_LOCKED |
+		    FEATURE_CONTROL_VMXON_ENABLED);
+	}
+
 	setcr4(getcr4() | X86_CR4_VMXE); /* FIXME: not cpu hotplug safe */
+	/* BEGIN CSTYLED */
 	__asm__ volatile (ASM_VMX_VMXON_RAX
 		      : : "a"(&phys_addr), "m"(phys_addr)
 		      : "memory", "cc");
+	/* END CSTYLED */
 
 	ept_sync_global();
 
-	return 0;
+	return (0);
 }
 
 extern struct vcpu_vmx *to_vmx(struct kvm_vcpu *vcpu);
 extern void vmcs_writel(unsigned long field, unsigned long value);
 extern unsigned long vmcs_readl(unsigned long field);
 
-unsigned long vmx_get_rflags(struct kvm_vcpu *vcpu)
+unsigned long
+vmx_get_rflags(struct kvm_vcpu *vcpu)
 {
 	unsigned long rflags, save_rflags;
 
@@ -329,18 +335,23 @@ unsigned long vmx_get_rflags(struct kvm_vcpu *vcpu)
 		save_rflags = to_vmx(vcpu)->rmode.save_rflags;
 		rflags |= save_rflags & ~RMODE_GUEST_OWNED_EFLAGS_BITS;
 	}
-	return rflags;
+
+	return (rflags);
 }
-void vmx_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags)
+
+void
+vmx_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags)
 {
 	if (to_vmx(vcpu)->rmode.vm86_active) {
 		to_vmx(vcpu)->rmode.save_rflags = rflags;
 		rflags |= X86_EFLAGS_IOPL | X86_EFLAGS_VM;
 	}
+
 	vmcs_writel(GUEST_RFLAGS, rflags);
 }
 
-int kvm_arch_hardware_enable(void *garbage)
+int
+kvm_arch_hardware_enable(void *garbage)
 {
 #ifdef LATER
 	/*
@@ -355,24 +366,26 @@ int kvm_arch_hardware_enable(void *garbage)
 	kvm_shared_msr_cpu_online();
 #endif
 
-	return vmx_hardware_enable(garbage);
+	return (vmx_hardware_enable(garbage));
 }
 
-void kvm_arch_hardware_disable(void *garbage)
+void
+kvm_arch_hardware_disable(void *garbage)
 {
 #ifdef XXX
 	hardware_disable(garbage);
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 #if defined(CONFIG_MMU_NOTIFIER) && defined(KVM_ARCH_WANT_MMU_NOTIFIER)
 	drop_user_return_notifiers(garbage);
-#endif /*CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER*/
+#endif
 }
 
-static inline int iommu_found(void)
+static inline int
+iommu_found(void)
 {
-	return 0;
+	return (0);
 }
 
 int
@@ -418,7 +431,7 @@ kvm_dev_ioctl_check_extension(long ext, int *rval_p)
 #else
 		r = EINVAL;
 		break;
-#endif/*KVM_COALESCED_MMIO_PAGE_OFFSET*/
+#endif
 	case KVM_CAP_VAPIC:
 		*rval_p = !kvm_x86_ops->cpu_has_accelerated_tpr();
 		r = DDI_SUCCESS;
@@ -446,10 +459,12 @@ kvm_dev_ioctl_check_extension(long ext, int *rval_p)
 		r = EINVAL;
 		break;
 	}
-	return r;
+
+	return (r);
 }
 
-int irqchip_in_kernel(struct kvm *kvm)
+int
+irqchip_in_kernel(struct kvm *kvm)
 {
 	int ret;
 
@@ -459,13 +474,14 @@ int irqchip_in_kernel(struct kvm *kvm)
 #else
 	XXX_KVM_SYNC_PROBE;
 #endif
-	return ret;
+	return (ret);
 }
 
 extern page_t *alloc_page(size_t size, int flag);
 extern caddr_t page_address(page_t *page);
 
-static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
+static int
+alloc_mmu_pages(struct kvm_vcpu *vcpu)
 {
 	page_t *page;
 	int i;
@@ -483,7 +499,7 @@ static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
 	 */
 	page = alloc_page(PAGESIZE, KM_SLEEP);
 	if (!page)
-		return -ENOMEM;
+		return (-ENOMEM);
 
 	vcpu->arch.mmu.pae_root = (uint64_t *)page_address(page);
 
@@ -495,10 +511,11 @@ static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
 	for (i = 0; i < 4; ++i)
 		vcpu->arch.mmu.pae_root[i] = INVALID_PAGE;
 
-	return 0;
+	return (0);
 }
 
-int kvm_mmu_create(struct kvm_vcpu *vcpu)
+int
+kvm_mmu_create(struct kvm_vcpu *vcpu)
 {
 	int i;
 
@@ -511,28 +528,32 @@ int kvm_mmu_create(struct kvm_vcpu *vcpu)
 
 	for (i = 0; i < KVM_NUM_MMU_PAGES; i++)
 		list_create(&vcpu->kvm->arch.mmu_page_hash[i],
-			    sizeof(struct kvm_mmu_page), 
-			    offsetof(struct kvm_mmu_page, hash_link));
+		    sizeof (struct kvm_mmu_page),
+		    offsetof(struct kvm_mmu_page, hash_link));
 
-	return alloc_mmu_pages(vcpu);
+	return (alloc_mmu_pages(vcpu));
 }
 
-inline uint32_t apic_get_reg(struct kvm_lapic *apic, int reg_off)
+inline uint32_t
+apic_get_reg(struct kvm_lapic *apic, int reg_off)
 {
-	return *((uint32_t *) (apic->regs + reg_off));
+	return (*((uint32_t *) (apic->regs + reg_off)));
 }
 
-void apic_set_reg(struct kvm_lapic *apic, int reg_off, uint32_t val)
+void
+apic_set_reg(struct kvm_lapic *apic, int reg_off, uint32_t val)
 {
 	*((uint32_t *) (apic->regs + reg_off)) = val;
 }
 
-static inline int apic_x2apic_mode(struct kvm_lapic *apic)
+static inline int
+apic_x2apic_mode(struct kvm_lapic *apic)
 {
-	return apic->vcpu->arch.apic_base & X2APIC_ENABLE;
+	return (apic->vcpu->arch.apic_base & X2APIC_ENABLE);
 }
 
-static uint32_t apic_get_tmcct(struct kvm_lapic *apic)
+static uint32_t
+apic_get_tmcct(struct kvm_lapic *apic)
 {
 #ifdef XXX
 	ktime_t remaining;
@@ -543,25 +564,25 @@ static uint32_t apic_get_tmcct(struct kvm_lapic *apic)
 
 	/* if initial count is 0, current count should also be 0 */
 	if (apic_get_reg(apic, APIC_TMICT) == 0)
-		return 0;
+		return (0);
 
 	remaining = hrtimer_get_remaining(&apic->lapic_timer.timer);
 	if (ktime_to_ns(remaining) < 0)
 		remaining = ktime_set(0, 0);
 	ns = mod_64(ktime_to_ns(remaining), apic->lapic_timer.period);
-	tmcct = div64_uint64_t(ns,
-			 (APIC_BUS_CYCLE_NS * apic->divide_count));
+	tmcct = div64_uint64_t(ns, (APIC_BUS_CYCLE_NS * apic->divide_count));
 
-	return tmcct;
+	return (tmcct);
 #else
 	XXX_KVM_PROBE;
-	return 0;
-#endif /*XXX*/
+	return (0);
+#endif
 }
 
 extern unsigned long kvm_rip_read(struct kvm_vcpu *vcpu);
 
-static void __report_tpr_access(struct kvm_lapic *apic, int write)
+static void
+__report_tpr_access(struct kvm_lapic *apic, int write)
 {
 	struct kvm_vcpu *vcpu = apic->vcpu;
 	struct kvm_run *run = vcpu->run;
@@ -571,7 +592,8 @@ static void __report_tpr_access(struct kvm_lapic *apic, int write)
 	run->tpr_access.is_write = write;
 }
 
-static inline void report_tpr_access(struct kvm_lapic *apic, int write)
+static inline void
+report_tpr_access(struct kvm_lapic *apic, int write)
 {
 	if (apic->vcpu->arch.tpr_access_reporting)
 		__report_tpr_access(apic, write);
@@ -579,17 +601,19 @@ static inline void report_tpr_access(struct kvm_lapic *apic, int write)
 
 extern void apic_update_ppr(struct kvm_lapic *apic);
 
-int kvm_apic_id(struct kvm_lapic *apic)
+int
+kvm_apic_id(struct kvm_lapic *apic)
 {
-	return (apic_get_reg(apic, APIC_ID) >> 24) & 0xff;
+	return ((apic_get_reg(apic, APIC_ID) >> 24) & 0xff);
 }
 
-static uint32_t __apic_read(struct kvm_lapic *apic, unsigned int offset)
+static uint32_t
+__apic_read(struct kvm_lapic *apic, unsigned int offset)
 {
 	uint32_t val = 0;
 
 	if (offset >= LAPIC_MMIO_LENGTH)
-		return 0;
+		return (0);
 
 	switch (offset) {
 	case APIC_ID:
@@ -599,7 +623,8 @@ static uint32_t __apic_read(struct kvm_lapic *apic, unsigned int offset)
 			val = kvm_apic_id(apic) << 24;
 		break;
 	case APIC_ARBPRI:
-		cmn_err(CE_WARN,  "Access APIC ARBPRI register which is for P6\n");
+		cmn_err(CE_WARN, "Access APIC ARBPRI register "
+		    "which is for P6\n");
 		break;
 
 	case APIC_TMCCT:	/* Timer CCR */
@@ -615,21 +640,22 @@ static uint32_t __apic_read(struct kvm_lapic *apic, unsigned int offset)
 		break;
 	}
 
-	return val;
+	return (val);
 }
 
-static inline struct kvm_lapic *to_lapic(struct kvm_io_device *dev)
+static inline struct kvm_lapic *
+to_lapic(struct kvm_io_device *dev)
 {
 #ifdef XXX
-	return container_of(dev, struct kvm_lapic, dev);
+	return (container_of(dev, struct kvm_lapic, dev));
 #else
 	XXX_KVM_PROBE;
-	return dev->lapic;
-#endif /*XXX*/
+	return (dev->lapic);
+#endif
 }
 
-int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
-		void *data)
+int
+apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len, void *data)
 {
 	unsigned char alignment = offset & 0xf;
 	uint32_t result;
@@ -637,11 +663,11 @@ int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
 	static const uint64_t rmask = 0x43ff01ffffffe70cULL;
 
 	if ((alignment + len) > 4) {
-		return 1;
+		return (1);
 	}
 
 	if (offset > 0x3f0 || !(rmask & (1ULL << (offset >> 4)))) {
-		return 1;
+		return (1);
 	}
 
 	result = __apic_read(apic, offset & ~0xf);
@@ -656,44 +682,48 @@ int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
 		memcpy(data, (char *)&result + alignment, len);
 		break;
 	default:
-		cmn_err(CE_WARN, "Local APIC read with len = %x, should be 1,2, or 4 instead\n", len);
+		cmn_err(CE_WARN, "Local APIC read with len = %x, "
+		    "should be 1,2, or 4 instead\n", len);
 		break;
 	}
-	return 0;
+
+	return (0);
 }
 
-inline int apic_hw_enabled(struct kvm_lapic *apic)
+inline int
+apic_hw_enabled(struct kvm_lapic *apic)
 {
-	return (apic)->vcpu->arch.apic_base & MSR_IA32_APICBASE_ENABLE;
+	return ((apic)->vcpu->arch.apic_base & MSR_IA32_APICBASE_ENABLE);
 }
 
-static int apic_mmio_in_range(struct kvm_lapic *apic, gpa_t addr)
+static int
+apic_mmio_in_range(struct kvm_lapic *apic, gpa_t addr)
 {
-	return apic_hw_enabled(apic) &&
+	return (apic_hw_enabled(apic) &&
 	    addr >= apic->base_address &&
-	    addr < apic->base_address + LAPIC_MMIO_LENGTH;
+	    addr < apic->base_address + LAPIC_MMIO_LENGTH);
 }
 
-static int apic_mmio_read(struct kvm_io_device *this,
-			   gpa_t address, int len, void *data)
+static int
+apic_mmio_read(struct kvm_io_device *this, gpa_t address, int len, void *data)
 {
 	struct kvm_lapic *apic = to_lapic(this);
 	uint32_t offset = address - apic->base_address;
 
 	if (!apic_mmio_in_range(apic, address))
-		return -EOPNOTSUPP;
+		return (-EOPNOTSUPP);
 
 	apic_reg_read(apic, offset, len, data);
 
-	return 0;
+	return (0);
 }
 
-#define LVT_MASK	\
+#define	LVT_MASK	\
 	(APIC_LVT_MASKED | APIC_SEND_PENDING | APIC_VECTOR_MASK)
 
-#define LINT_MASK	\
+#define	LINT_MASK	\
 	(LVT_MASK | APIC_MODE_MASK | APIC_INPUT_POLARITY | \
-	 APIC_LVT_REMOTE_IRR | APIC_LVT_LEVEL_TRIGGER)
+	APIC_LVT_REMOTE_IRR | APIC_LVT_LEVEL_TRIGGER)
 
 static unsigned int apic_lvt_mask[APIC_LVT_NUM] = {
 	LVT_MASK | APIC_LVT_TIMER_PERIODIC,	/* LVTT */
@@ -705,81 +735,62 @@ static unsigned int apic_lvt_mask[APIC_LVT_NUM] = {
 
 static int apic_lvtt_period(struct kvm_lapic *apic)
 {
-	return apic_get_reg(apic, APIC_LVTT) & APIC_LVT_TIMER_PERIODIC;
+	return (apic_get_reg(apic, APIC_LVTT) & APIC_LVT_TIMER_PERIODIC);
 }
 
-static void start_apic_timer(struct kvm_lapic *apic)
+static void
+start_apic_timer(struct kvm_lapic *apic)
 {
-#ifdef XXX
-	ktime_t now = apic->lapic_timer.timer.base->get_time();
-
-	apic->lapic_timer.period = (uint64_t)apic_get_reg(apic, APIC_TMICT) *
-		    APIC_BUS_CYCLE_NS * apic->divide_count;
-	atomic_set(&apic->lapic_timer.pending, 0);
-
-	if (!apic->lapic_timer.period)
-		return;
-	/*
-	 * Do not allow the guest to program periodic timers with small
-	 * interval, since the hrtimers are not throttled by the host
-	 * scheduler.
-	 */
-	if (apic_lvtt_period(apic)) {
-		if (apic->lapic_timer.period < NSEC_PER_MSEC/2)
-			apic->lapic_timer.period = NSEC_PER_MSEC/2;
-	}
-
-	hrtimer_start(&apic->lapic_timer.timer,
-		      ktime_add_ns(now, apic->lapic_timer.period),
-		      HRTIMER_MODE_ABS);
-
-#else
 	hrtime_t now = gethrtime();
 
 	apic->lapic_timer.period = (uint64_t)apic_get_reg(apic, APIC_TMICT) *
-		    APIC_BUS_CYCLE_NS * apic->divide_count;
+	    APIC_BUS_CYCLE_NS * apic->divide_count;
 
 	if (!apic->lapic_timer.period)
 		return;
+
 	/*
 	 * Do not allow the guest to program periodic timers with small
 	 * interval, since the hrtimers are not throttled by the host
 	 * scheduler.
 	 */
 	if (apic_lvtt_period(apic)) {
-		if (apic->lapic_timer.period < NSEC_PER_MSEC/2)
-			apic->lapic_timer.period = NSEC_PER_MSEC/2;
+		if (apic->lapic_timer.period < NSEC_PER_MSEC / 2)
+			apic->lapic_timer.period = NSEC_PER_MSEC / 2;
 	}
+
 	mutex_enter(&cpu_lock);
 	apic->lapic_timer.kvm_cyc_when.cyt_when = 0;
 	apic->lapic_timer.kvm_cyc_when.cyt_interval = apic->lapic_timer.period;
-	apic->lapic_timer.kvm_cyclic_id = cyclic_add(&apic->lapic_timer.kvm_cyc_handler,
-						     &apic->lapic_timer.kvm_cyc_when);
+	apic->lapic_timer.kvm_cyclic_id =
+	    cyclic_add(&apic->lapic_timer.kvm_cyc_handler,
+	    &apic->lapic_timer.kvm_cyc_when);
 	apic->lapic_timer.active = 1;
 	mutex_exit(&cpu_lock);
-	XXX_KVM_PROBE;
-#endif /*XXX*/
 }
 
-inline static int kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
+inline static int
+kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
 {
 #ifdef CONFIG_IA64
-	return irq->delivery_mode ==
-		(IOSAPIC_LOWEST_PRIORITY << IOSAPIC_DELIVERY_SHIFT);
+	return (irq->delivery_mode ==
+		(IOSAPIC_LOWEST_PRIORITY << IOSAPIC_DELIVERY_SHIFT));
 #else
-	return irq->delivery_mode == APIC_DM_LOWEST;
+	return (irq->delivery_mode == APIC_DM_LOWEST);
 #endif
 }
 
-#define VEC_POS(v) ((v) & (32 - 1))
-#define REG_POS(v) (((v) >> 5) << 4)
+#define	VEC_POS(v) ((v) & (32 - 1))
+#define	REG_POS(v) (((v) >> 5) << 4)
 
-inline void apic_clear_vector(int vec, caddr_t bitmap)
+inline void
+apic_clear_vector(int vec, caddr_t bitmap)
 {
 	clear_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
 }
 
-void kvm_vcpu_kick(struct kvm_vcpu *vcpu)
+void
+kvm_vcpu_kick(struct kvm_vcpu *vcpu)
 {
 #ifdef XXX
 	int me;
@@ -798,55 +809,63 @@ void kvm_vcpu_kick(struct kvm_vcpu *vcpu)
 	put_cpu();
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 }
 
-void kvm_inject_nmi(struct kvm_vcpu *vcpu)
+void
+kvm_inject_nmi(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.nmi_pending = 1;
 }
 
-inline void apic_set_vector(int vec, caddr_t bitmap)
+inline void
+apic_set_vector(int vec, caddr_t bitmap)
 {
 	set_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
 }
 
-static inline int apic_test_and_set_vector(int vec, caddr_t bitmap)
+static inline int
+apic_test_and_set_vector(int vec, caddr_t bitmap)
 {
 #ifndef XXX
-	return test_and_set_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
+	return (test_and_set_bit(VEC_POS(vec),
+	    (uint64_t *)(bitmap) + REG_POS(vec)));
 #else
 	if (BT_TEST((bitmap) + REG_POS(vec), VEC_POS(vec))) {
 		BT_SET((bitmap) + REG_POS(vec), VEC_POS(vec));
-		return 1;
+		return (1);
 	} else
-		return 0;
-#endif /*XXX*/
+		return (0);
+#endif
 }
 
 
-static inline int apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
+static inline int
+apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
 {
 	apic->irr_pending = 1;
-	return apic_test_and_set_vector(vec, apic->regs + APIC_IRR);
+	return (apic_test_and_set_vector(vec, apic->regs + APIC_IRR));
 }
 
-inline int  apic_sw_enabled(struct kvm_lapic *apic)
+inline int
+apic_sw_enabled(struct kvm_lapic *apic)
 {
-	return apic_get_reg(apic, APIC_SPIV) & APIC_SPIV_APIC_ENABLED;
+	return (apic_get_reg(apic, APIC_SPIV) & APIC_SPIV_APIC_ENABLED);
 }
 
-inline int apic_enabled(struct kvm_lapic *apic)
+inline int
+apic_enabled(struct kvm_lapic *apic)
 {
-	return apic_sw_enabled(apic) &&	apic_hw_enabled(apic);
+	return (apic_sw_enabled(apic) && apic_hw_enabled(apic));
 }
 
 /*
  * Add a pending IRQ into lapic.
  * Return 1 if successfully added and 0 if discarded.
  */
-static int __apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
-			     int vector, int level, int trig_mode)
+static int
+__apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
+    int vector, int level, int trig_mode)
 {
 	int result = 0;
 	struct kvm_vcpu *vcpu = apic->vcpu;
@@ -912,30 +931,33 @@ static int __apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
 	default:
 		break;
 	}
-	return result;
+	return (result);
 }
 
-int kvm_apic_set_irq(struct kvm_vcpu *vcpu, struct kvm_lapic_irq *irq)
+int
+kvm_apic_set_irq(struct kvm_vcpu *vcpu, struct kvm_lapic_irq *irq)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 
-	return __apic_accept_irq(apic, irq->delivery_mode, irq->vector,
-			irq->level, irq->trig_mode);
+	return (__apic_accept_irq(apic, irq->delivery_mode, irq->vector,
+	    irq->level, irq->trig_mode));
 }
 
-int kvm_apic_match_physical_addr(struct kvm_lapic *apic, uint16_t dest)
+int
+kvm_apic_match_physical_addr(struct kvm_lapic *apic, uint16_t dest)
 {
-	return dest == 0xff || kvm_apic_id(apic) == dest;
+	return (dest == 0xff || kvm_apic_id(apic) == dest);
 }
 
-int kvm_apic_match_logical_addr(struct kvm_lapic *apic, uint8_t mda)
+int
+kvm_apic_match_logical_addr(struct kvm_lapic *apic, uint8_t mda)
 {
 	int result = 0;
 	uint32_t logical_id;
 
 	if (apic_x2apic_mode(apic)) {
 		logical_id = apic_get_reg(apic, APIC_LDR);
-		return logical_id & mda;
+		return (logical_id & mda);
 	}
 
 	logical_id = GET_APIC_LOGICAL_ID(apic_get_reg(apic, APIC_LDR));
@@ -946,29 +968,29 @@ int kvm_apic_match_logical_addr(struct kvm_lapic *apic, uint8_t mda)
 			result = 1;
 		break;
 	case APIC_DFR_CLUSTER:
-		if (((logical_id >> 4) == (mda >> 0x4))
-		    && (logical_id & mda & 0xf))
+		if (((logical_id >> 4) == (mda >> 0x4)) &&
+		    (logical_id & mda & 0xf))
 			result = 1;
 		break;
 	default:
 		cmn_err(CE_WARN, "Bad DFR vcpu %d: %08x\n",
-		       apic->vcpu->vcpu_id, apic_get_reg(apic, APIC_DFR));
+		    apic->vcpu->vcpu_id, apic_get_reg(apic, APIC_DFR));
 		break;
 	}
 
-	return result;
+	return (result);
 }
 
-int kvm_apic_match_dest(struct kvm_vcpu *vcpu, struct kvm_lapic *source,
-			   int short_hand, int dest, int dest_mode)
+int
+kvm_apic_match_dest(struct kvm_vcpu *vcpu, struct kvm_lapic *source,
+    int short_hand, int dest, int dest_mode)
 {
 	int result = 0;
 	struct kvm_lapic *target = vcpu->arch.apic;
 
 	/* XXX - debug */
-	cmn_err(CE_NOTE, "target %p, source %p, dest 0x%x, "
-		   "dest_mode 0x%x, short_hand 0x%x\n",
-		   target, source, dest, dest_mode, short_hand);
+	cmn_err(CE_NOTE, "target %p, source %p, dest 0x%x, dest_mode 0x%x, "
+	    "short_hand 0x%x\n", target, source, dest, dest_mode, short_hand);
 
 	ASSERT(target != NULL);
 	switch (short_hand) {
@@ -990,44 +1012,45 @@ int kvm_apic_match_dest(struct kvm_vcpu *vcpu, struct kvm_lapic *source,
 		result = (target != source);
 		break;
 	default:
-		cmn_err(CE_WARN, "Bad dest shorthand value %x\n",
-		       short_hand);
+		cmn_err(CE_WARN, "Bad dest shorthand value %x\n", short_hand);
 		break;
 	}
 
-	return result;
+	return (result);
 }
 
-int kvm_apic_compare_prio(struct kvm_vcpu *vcpu1, struct kvm_vcpu *vcpu2)
+int
+kvm_apic_compare_prio(struct kvm_vcpu *vcpu1, struct kvm_vcpu *vcpu2)
 {
-	return vcpu1->arch.apic_arb_prio - vcpu2->arch.apic_arb_prio;
+	return (vcpu1->arch.apic_arb_prio - vcpu2->arch.apic_arb_prio);
 }
 
-int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
-		struct kvm_lapic_irq *irq)
+int
+kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
+    struct kvm_lapic_irq *irq)
 {
 	int i, r = -1;
 	struct kvm_vcpu *vcpu, *lowest = NULL;
 
 	if (irq->dest_mode == 0 && irq->dest_id == 0xff &&
-			kvm_is_dm_lowest_prio(irq))
+	    kvm_is_dm_lowest_prio(irq))
 		cmn_err(CE_NOTE, "kvm: apic: phys broadcast and lowest prio\n");
 
-	/*XXX - currently assumes only 1 vcpu */
-#ifdef XXX	
-/*	kvm_for_each_vcpu(i, vcpu, kvm) {*/
+#ifdef XXX
+	kvm_for_each_vcpu(i, vcpu, kvm) {
 #else
 	XXX_KVM_PROBE;
+	/* XXX - currently assumes only 1 vcpu */
 	for (i = 0; i < 1; i++) {
 		vcpu = kvm->vcpus[i];
-#endif /*XXX*/
+#endif
 		if (!kvm_apic_present(vcpu))
 			continue;
-		
+
 		if (!kvm_apic_match_dest(vcpu, src, irq->shorthand,
-					 irq->dest_id, irq->dest_mode))
+		    irq->dest_id, irq->dest_mode))
 			continue;
-			
+
 		if (!kvm_is_dm_lowest_prio(irq)) {
 			if (r < 0)
 				r = 0;
@@ -1041,11 +1064,12 @@ int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 	}
 	if (lowest)
 		r = kvm_apic_set_irq(lowest, irq);
-	
-	return r;
+
+	return (r);
 }
 
-static void apic_send_ipi(struct kvm_lapic *apic)
+static void
+apic_send_ipi(struct kvm_lapic *apic)
 {
 	uint32_t icr_low = apic_get_reg(apic, APIC_ICR);
 	uint32_t icr_high = apic_get_reg(apic, APIC_ICR2);
@@ -1069,7 +1093,8 @@ static void apic_send_ipi(struct kvm_lapic *apic)
 	kvm_irq_delivery_to_apic(apic->vcpu->kvm, apic, &irq);
 }
 
-static void update_divide_count(struct kvm_lapic *apic)
+static void
+update_divide_count(struct kvm_lapic *apic)
 {
 	uint32_t tmp1, tmp2, tdcr;
 
@@ -1079,22 +1104,24 @@ static void update_divide_count(struct kvm_lapic *apic)
 	apic->divide_count = 0x1 << (tmp2 & 0x7);
 }
 
-void apic_set_tpr(struct kvm_lapic *apic, uint32_t tpr)
+void
+apic_set_tpr(struct kvm_lapic *apic, uint32_t tpr)
 {
 	apic_set_reg(apic, APIC_TASKPRI, tpr);
 	apic_update_ppr(apic);
 }
 
-static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
+static int
+ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 {
 	union kvm_ioapic_redirect_entry *entry = &ioapic->redirtbl[irq];
 	struct kvm_lapic_irq irqe;
 
 	/* XXX - debug */
-	cmn_err(CE_NOTE, "dest_mode=%x delivery_mode=%x vector=%x trig_mode=%x\n",
-		     entry->fields.dest_mode,
-		     entry->fields.delivery_mode, entry->fields.vector,
-		     entry->fields.trig_mode);
+	cmn_err(CE_NOTE, "dest_mode=%x delivery_mode=%x vector=%x "
+	    "trig_mode=%x\n", entry->fields.dest_mode,
+	    entry->fields.delivery_mode, entry->fields.vector,
+	    entry->fields.trig_mode);
 
 	irqe.dest_id = entry->fields.dest_id;
 	irqe.vector = entry->fields.vector;
@@ -1108,16 +1135,18 @@ static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 	/* Always delivery PIT interrupt to vcpu 0 */
 	if (irq == 0) {
 		irqe.dest_mode = 0; /* Physical mode. */
-		/* need to read apic_id from apic regiest since
-		 * it can be rewritten */
+		/*
+		 * need to read apic_id from apic regiest since
+		 * it can be rewritten
+		 */
 		irqe.dest_id = ioapic->kvm->bsp_vcpu->vcpu_id;
 	}
 #endif
-	return kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe);
+	return (kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe));
 }
 
-
-static int ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
+static int
+ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
 {
 	union kvm_ioapic_redirect_entry *pent;
 	int injected = -1;
@@ -1129,11 +1158,11 @@ static int ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
 		if (injected && pent->fields.trig_mode == IOAPIC_LEVEL_TRIG)
 			pent->fields.remote_irr = 1;
 	}
-	return injected;
+	return (injected);
 }
 
-static void __kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector,
-				     int trigger_mode)
+static void
+__kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector, int trigger_mode)
 {
 	int i;
 
@@ -1165,43 +1194,49 @@ static void __kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector,
 	}
 }
 
-extern void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode);
+extern void kvm_ioapic_update_eoi(struct kvm *kvm,
+    int vector, int trigger_mode);
 extern inline int apic_find_highest_isr(struct kvm_lapic *apic);
 
-static inline int apic_test_and_clear_vector(int vec, caddr_t bitmap)
+static inline int
+apic_test_and_clear_vector(int vec, caddr_t bitmap)
 {
 #ifndef XXX
-	return test_and_clear_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
+	return (test_and_clear_bit(VEC_POS(vec),
+	    (uint64_t *)(bitmap) + REG_POS(vec)));
 #else
 	if (BT_TEST((bitmap) + REG_POS(vec), VEC_POS(vec))) {
 		BT_CLEAR((bitmap) + REG_POS(vec), VEC_POS(vec));
 		return (1);
 	} else
 		return (0);
-#endif /*XXX*/
+#endif
 }
 
-static inline int apic_lvt_nmi_mode(uint32_t lvt_val)
+static inline int
+apic_lvt_nmi_mode(uint32_t lvt_val)
 {
-	return (lvt_val & (APIC_MODE_MASK | APIC_LVT_MASKED)) == APIC_DM_NMI;
+	return ((lvt_val & (APIC_MODE_MASK | APIC_LVT_MASKED)) == APIC_DM_NMI);
 }
 
-static void apic_manage_nmi_watchdog(struct kvm_lapic *apic, uint32_t lvt0_val)
+static void
+apic_manage_nmi_watchdog(struct kvm_lapic *apic, uint32_t lvt0_val)
 {
 	int nmi_wd_enabled = apic_lvt_nmi_mode(apic_get_reg(apic, APIC_LVT0));
 
 	if (apic_lvt_nmi_mode(lvt0_val)) {
 		if (!nmi_wd_enabled) {
 			/* XXX - debug */
-			cmn_err(CE_NOTE, "Receive NMI setting on APIC_LVT0 for cpu %d\n", 
-				apic->vcpu->vcpu_id);
+			cmn_err(CE_NOTE, "Receive NMI setting on APIC_LVT0 "
+			    "for cpu %d\n", apic->vcpu->vcpu_id);
 			apic->vcpu->kvm->arch.vapics_in_nmi_mode++;
 		}
 	} else if (nmi_wd_enabled)
 		apic->vcpu->kvm->arch.vapics_in_nmi_mode--;
 }
 
-static void apic_set_eoi(struct kvm_lapic *apic)
+static void
+apic_set_eoi(struct kvm_lapic *apic)
 {
 	int vector = apic_find_highest_isr(apic);
 	int trigger_mode;
@@ -1223,13 +1258,14 @@ static void apic_set_eoi(struct kvm_lapic *apic)
 		kvm_ioapic_update_eoi(apic->vcpu->kvm, vector, trigger_mode);
 }
 
-int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
+int
+apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 {
 	int ret = 0;
 
 #ifdef XXX_KVM_TRACE
 	trace_kvm_apic_write(reg, val);
-#endif /*XXX*/
+#endif
 
 	switch (reg) {
 	case APIC_ID:		/* Local APIC ID */
@@ -1273,11 +1309,11 @@ int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 
 			for (i = 0; i < APIC_LVT_NUM; i++) {
 				lvt_val = apic_get_reg(apic,
-						       APIC_LVTT + 0x10 * i);
+				    APIC_LVTT + 0x10 * i);
 				apic_set_reg(apic, APIC_LVTT + 0x10 * i,
-					     lvt_val | APIC_LVT_MASKED);
+				    lvt_val | APIC_LVT_MASKED);
 			}
-			/* XXX pending needs protection ?*/
+			/* XXX pending needs protection? */
 			apic->lapic_timer.pending = 0;
 		}
 		break;
@@ -1350,18 +1386,20 @@ int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 		ret = 1;
 		break;
 	}
-	return ret;
+
+	return (ret);
 }
 
-static int apic_mmio_write(struct kvm_io_device *this,
-			    gpa_t address, int len, const void *data)
+static int
+apic_mmio_write(struct kvm_io_device *this,
+    gpa_t address, int len, const void *data)
 {
 	struct kvm_lapic *apic = to_lapic(this);
 	unsigned int offset = address - apic->base_address;
 	uint32_t val;
 
 	if (!apic_mmio_in_range(apic, address))
-		return -EOPNOTSUPP;
+		return (-EOPNOTSUPP);
 
 	/*
 	 * APIC register must be aligned on 128-bits boundary.
@@ -1370,29 +1408,30 @@ static int apic_mmio_write(struct kvm_io_device *this,
 	 */
 	if (len != 4 || (offset & 0xf)) {
 		/* Don't shout loud, $infamous_os would cause only noise. */
-		return 0;
+		return (0);
 	}
 
-	val = *(uint32_t*)data;
+	val = *(uint32_t *)data;
 
 	apic_reg_write(apic, offset & 0xff0, val);
 
-	return 0;
+	return (0);
 }
 
 static const struct kvm_io_device_ops apic_mmio_ops = {
-	.read     = apic_mmio_read,
-	.write    = apic_mmio_write,
+	.read	= apic_mmio_read,
+	.write	= apic_mmio_write,
 };
 
-static int __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
+static int
+__kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
 {
 	int restart_timer = 0;
 #ifdef XXX
 	wait_queue_head_t *q = &vcpu->wq;
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 
 	/*
 	 * There is a race window between reading and incrementing, but we do
@@ -1401,7 +1440,7 @@ static int __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
 	 */
 	/* XXX may need protectionn on pending */
 	if (ktimer->reinject || !ktimer->pending) {
-	  atomic_add_32(&ktimer->pending, 1);
+	    atomic_add_32(&ktimer->pending, 1);
 		/* FIXME: this code should not know anything about vcpus */
 		set_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
 	}
@@ -1411,53 +1450,59 @@ static int __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
 		wake_up_interruptible(q);
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 
 	if (ktimer->t_ops->is_periodic(ktimer)) {
 #ifdef XXX
 		kvm_hrtimer_add_expires_ns(&ktimer->timer, ktimer->period);
 #else
 		XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 		restart_timer = 1;
 	}
 
-	return restart_timer;
+	return (restart_timer);
 }
 
-void kvm_timer_fn(void *arg)
+void
+kvm_timer_fn(void *arg)
 {
 	struct kvm_timer *ktimer = (struct kvm_timer *)arg;
 	int restart_timer;
 	struct kvm_vcpu *vcpu;
-/*
+
+#ifdef XXX
 	vcpu = ktimer->vcpu;
 	if (!vcpu)
 		return;
 
 	restart_timer = __kvm_timer_fn(vcpu, ktimer);
-*/
-	return;
+#else
+	XXX_KVM_PROBE;
+#endif
 }
 
-static int lapic_is_periodic(struct kvm_timer *ktimer)
+static int
+lapic_is_periodic(struct kvm_timer *ktimer)
 {
-	struct kvm_lapic *apic = (struct kvm_lapic *)((caddr_t)ktimer
-						      - offsetof(struct kvm_lapic, lapic_timer));
-	return apic_lvtt_period(apic);
+	struct kvm_lapic *apic = (struct kvm_lapic *)((caddr_t)ktimer -
+	    offsetof(struct kvm_lapic, lapic_timer));
+
+	return (apic_lvtt_period(apic));
 }
 
 static struct kvm_timer_ops lapic_timer_ops = {
 	.is_periodic = lapic_is_periodic,
 };
 
-int kvm_create_lapic(struct kvm_vcpu *vcpu)
+int
+kvm_create_lapic(struct kvm_vcpu *vcpu)
 {
 	struct kvm_lapic *apic;
 
 	ASSERT(vcpu != NULL);
 
-	apic = kmem_zalloc(sizeof(*apic), KM_SLEEP);
+	apic = kmem_zalloc(sizeof (*apic), KM_SLEEP);
 	if (!apic)
 		goto nomem;
 
@@ -1466,24 +1511,17 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
 	apic->regs_page = alloc_page(PAGESIZE, KM_SLEEP);
 	if (apic->regs_page == NULL) {
 		cmn_err(CE_WARN, "malloc apic regs error for vcpu %x\n",
-		       vcpu->vcpu_id);
+		    vcpu->vcpu_id);
 		goto nomem_free_apic;
 	}
 	apic->regs = page_address(apic->regs_page);
 	memset(apic->regs, 0, PAGESIZE);
 	apic->vcpu = vcpu;
 
-#ifdef XXX
-	hrtimer_init(&apic->lapic_timer.timer, CLOCK_MONOTONIC,
-		     HRTIMER_MODE_ABS);
-	apic->lapic_timer.timer.function = kvm_timer_fn;
-#else
 	apic->lapic_timer.kvm_cyc_handler.cyh_func = kvm_timer_fn;
 	apic->lapic_timer.kvm_cyc_handler.cyh_arg = &apic->lapic_timer;
 	apic->lapic_timer.kvm_cyc_handler.cyh_level = CY_LOW_LEVEL;
 	apic->lapic_timer.active = 0;
-	XXX_KVM_PROBE;
-#endif /*XXX*/
 
 	apic->lapic_timer.t_ops = &lapic_timer_ops;
 	apic->lapic_timer.kvm = vcpu->kvm;
@@ -1496,12 +1534,12 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
 	kvm_iodevice_init(&apic->dev, &apic_mmio_ops);
 	apic->dev.lapic = apic;
 
-	return 0;
+	return (0);
 nomem_free_apic:
 	if (apic)
-		kmem_free(apic, sizeof(*apic));
+		kmem_free(apic, sizeof (struct kvm_lapic));
 nomem:
-	return -ENOMEM;
+	return (-ENOMEM);
 }
 
 extern int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu);
@@ -1531,7 +1569,7 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	 * vcpu->arch.pio_data = page_address(page);
 	 */
 	vcpu->arch.pio_data = (caddr_t)vcpu->run +
-	    (KVM_PIO_PAGE_OFFSET*PAGESIZE);
+	    (KVM_PIO_PAGE_OFFSET * PAGESIZE);
 
 	r = kvm_mmu_create(vcpu);
 	if (r < 0)
@@ -1553,26 +1591,26 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 
 	vcpu->arch.mcg_cap = KVM_MAX_MCE_BANKS;
 
-	return 0;
+	return (0);
 fail_free_lapic:
 #ifdef XXX
 	kvm_free_lapic(vcpu);
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 fail_mmu_destroy:
 #ifdef XXX
 	kvm_mmu_destroy(vcpu);
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 fail_free_pio_data:
 	/*
 	 * kmem_free(page, PAGESIZE);
 	 * vcpu->arch.pio_data = 0;
 	 */
 fail:
-	return r;
+	return (r);
 }
 
 static int coalesced_mmio_write(struct kvm_io_device *this,
@@ -1580,8 +1618,8 @@ static int coalesced_mmio_write(struct kvm_io_device *this,
 static void coalesced_mmio_destructor(struct kvm_io_device *this);
 
 static const struct kvm_io_device_ops coalesced_mmio_ops = {
-	.write      = coalesced_mmio_write,
-	.destructor = coalesced_mmio_destructor,
+	.write		= coalesced_mmio_write,
+	.destructor	= coalesced_mmio_destructor,
 };
 
 int
@@ -1622,8 +1660,8 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
  * we're assuming 64-bit address space (we won't run on
  * 32-bit hardware).
  */
-
-uint64_t kvm_va2pa(caddr_t va)
+uint64_t
+kvm_va2pa(caddr_t va)
 {
 	uint64_t pa;
 
@@ -1637,29 +1675,36 @@ unsigned long *vmx_io_bitmap_b;
 unsigned long *vmx_msr_bitmap_legacy;
 unsigned long *vmx_msr_bitmap_longmode;
 #else
-/* make these arrays to try to force into low 4GB memory...*/
+/* make these arrays to try to force into low 4GB memory... */
 /* also need to be aligned... */
-__attribute__((__aligned__(PAGESIZE)))unsigned long vmx_io_bitmap_a[PAGESIZE/sizeof(unsigned long)];
-__attribute__((__aligned__(PAGESIZE)))unsigned long vmx_io_bitmap_b[PAGESIZE/sizeof(unsigned long)];
-__attribute__((__aligned__(PAGESIZE)))unsigned long vmx_msr_bitmap_legacy[PAGESIZE/sizeof(unsigned long)];
-__attribute__((__aligned__(PAGESIZE)))unsigned long vmx_msr_bitmap_longmode[PAGESIZE/sizeof(unsigned long)];
-#endif /*XXX*/
+__attribute__((__aligned__(PAGESIZE)))unsigned long
+    vmx_io_bitmap_a[PAGESIZE / sizeof (unsigned long)];
+__attribute__((__aligned__(PAGESIZE)))unsigned long
+    vmx_io_bitmap_b[PAGESIZE / sizeof (unsigned long)];
+__attribute__((__aligned__(PAGESIZE)))unsigned long
+    vmx_msr_bitmap_legacy[PAGESIZE / sizeof (unsigned long)];
+__attribute__((__aligned__(PAGESIZE)))unsigned long
+    vmx_msr_bitmap_longmode[PAGESIZE / sizeof (unsigned long)];
+#endif
 
-
-static void vmcs_write16(unsigned long field, uint16_t value)
+static void
+vmcs_write16(unsigned long field, uint16_t value)
 {
 	vmcs_writel(field, value);
 }
 
-static void vmcs_write32(unsigned long field, uint32_t value)
+static void
+vmcs_write32(unsigned long field, uint32_t value)
 {
 	vmcs_writel(field, value);
 }
 
-static void vmcs_write64(unsigned long field, uint64_t value)
+static void
+vmcs_write64(unsigned long field, uint64_t value)
 {
 	vmcs_writel(field, value);
 #ifndef CONFIG_X86_64
+	/*CSTYLED*/
 	__asm__ volatile ("");
 	vmcs_writel(field+1, value >> 32);
 #endif
@@ -1679,7 +1724,8 @@ extern int enable_vpid;
 extern ulong_t *vmx_vpid_bitmap;
 extern kmutex_t vmx_vpid_lock;
 
-static void allocate_vpid(struct vcpu_vmx *vmx)
+static void
+allocate_vpid(struct vcpu_vmx *vmx)
 {
 	int vpid;
 
@@ -1697,7 +1743,8 @@ static void allocate_vpid(struct vcpu_vmx *vmx)
 
 extern page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn);
 
-static int alloc_identity_pagetable(struct kvm *kvm)
+static int
+alloc_identity_pagetable(struct kvm *kvm)
 {
 	struct kvm_userspace_memory_region kvm_userspace_mem;
 	int r = 0;
@@ -1720,15 +1767,18 @@ static int alloc_identity_pagetable(struct kvm *kvm)
 			kvm->arch.ept_identity_map_addr >> PAGESHIFT);
 out:
 	mutex_exit(&kvm->slots_lock);
-	return r;
+	return (r);
 }
 
-static int alloc_apic_access_page(struct kvm *kvm)
+static int
+alloc_apic_access_page(struct kvm *kvm)
 {
 	struct kvm_userspace_memory_region kvm_userspace_mem;
 	int r = 0;
 
-	memset(&kvm_userspace_mem, 0, sizeof(struct kvm_userspace_memory_region));
+	memset(&kvm_userspace_mem, 0,
+	    sizeof (struct kvm_userspace_memory_region));
+
 	mutex_enter(&kvm->slots_lock);
 	if (kvm->arch.apic_access_page)
 		goto out;
@@ -1743,7 +1793,7 @@ static int alloc_apic_access_page(struct kvm *kvm)
 	kvm->arch.apic_access_page = gfn_to_page(kvm, 0xfee00);
 out:
 	mutex_exit(&kvm->slots_lock);
-	return r;
+	return (r);
 }
 
 struct kvm_vcpu *
@@ -1754,7 +1804,7 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 	int cpu;
 
 	if (!vmx)
-		return NULL;
+		return (NULL);
 
 	allocate_vpid(vmx);
 	err = kvm_vcpu_init(&vmx->vcpu, kvm, id);
@@ -1763,20 +1813,20 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 		goto free_vcpu;
 #else
 		kmem_cache_free(kvm_vcpu_cache, vmx);
-		return NULL;
+		return (NULL);
 	}
-#endif /*NOTNOW*/
+#endif
 
 	vmx->guest_msrs = kmem_zalloc(PAGESIZE, KM_SLEEP);
 	if (!vmx->guest_msrs) {
-		return NULL;  /* XXX - need cleanup here */
+		return (NULL);  /* XXX - need cleanup here */
 	}
 
 	vmx->vmcs = kmem_zalloc(PAGESIZE, KM_SLEEP);
 	if (!vmx->vmcs) {
 		kmem_cache_free(kvm_vcpu_cache, vmx);
 		vmx = NULL;
-		return NULL;
+		return (NULL);
 	}
 
 	kpreempt_disable();
@@ -1807,7 +1857,7 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 			goto free_vmcs;
 	}
 
-	return &vmx->vcpu;
+	return (&vmx->vcpu);
 
 free_vmcs:
 	kmem_free(vmx->vmcs, PAGESIZE);
@@ -1821,8 +1871,8 @@ free_vcpu:
 	kmem_cache_free(kvm_vcpu_cache, vmx);
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
-	return NULL;
+#endif
+	return (NULL);
 }
 
 struct kvm_vcpu *
@@ -1831,21 +1881,23 @@ kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 	/* for right now, assume always on x86 */
 	/* later, if needed, we'll add something here */
 	/* to call architecture dependent routine */
-	return vmx_create_vcpu(kvm, id);
+	return (vmx_create_vcpu(kvm, id));
 }
 
-void update_exception_bitmap(struct kvm_vcpu *vcpu)
+void
+update_exception_bitmap(struct kvm_vcpu *vcpu)
 {
 	uint32_t eb;
 
 	eb = (1u << PF_VECTOR) | (1u << UD_VECTOR) | (1u << MC_VECTOR) |
-	     (1u << NM_VECTOR) | (1u << DB_VECTOR);
+	    (1u << NM_VECTOR) | (1u << DB_VECTOR);
+
 #ifndef XXX
 	if ((vcpu->guest_debug &
-	     (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP)) ==
+	    (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP)) ==
 	    (KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP))
 		eb |= 1u << BP_VECTOR;
-#endif /*XXX*/
+#endif
 	if (to_vmx(vcpu)->rmode.vm86_active)
 		eb = ~0;
 	if (enable_ept)
@@ -1856,7 +1908,8 @@ void update_exception_bitmap(struct kvm_vcpu *vcpu)
 }
 
 
-void kvm_lapic_set_base(struct kvm_vcpu *vcpu, uint64_t value)
+void
+kvm_lapic_set_base(struct kvm_vcpu *vcpu, uint64_t value)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 
@@ -1875,21 +1928,22 @@ void kvm_lapic_set_base(struct kvm_vcpu *vcpu, uint64_t value)
 		uint32_t ldr = ((id & ~0xf) << 16) | (1 << (id & 0xf));
 		apic_set_reg(apic, APIC_LDR, ldr);
 	}
-	apic->base_address = apic->vcpu->arch.apic_base &
-			     MSR_IA32_APICBASE_BASE;
 
+	apic->base_address = apic->vcpu->arch.apic_base &
+	    MSR_IA32_APICBASE_BASE;
 }
 
-uint64_t kvm_get_apic_base(struct kvm_vcpu *vcpu)
+uint64_t
+kvm_get_apic_base(struct kvm_vcpu *vcpu)
 {
 	if (irqchip_in_kernel(vcpu->kvm))
-		return vcpu->arch.apic_base;
+		return (vcpu->arch.apic_base);
 	else
-		return vcpu->arch.apic_base;
+		return (vcpu->arch.apic_base);
 }
 
-
-void kvm_set_apic_base(struct kvm_vcpu *vcpu, uint64_t data)
+void
+kvm_set_apic_base(struct kvm_vcpu *vcpu, uint64_t data)
 {
 	/* TODO: reserve bits check */
 	if (irqchip_in_kernel(vcpu->kvm))
@@ -1898,17 +1952,20 @@ void kvm_set_apic_base(struct kvm_vcpu *vcpu, uint64_t data)
 		vcpu->arch.apic_base = data;
 }
 
-void kvm_lapic_set_tpr(struct kvm_vcpu *vcpu, unsigned long cr8)
+void
+kvm_lapic_set_tpr(struct kvm_vcpu *vcpu, unsigned long cr8)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 
 	if (!apic)
 		return;
-	apic_set_tpr(apic, ((cr8 & 0x0f) << 4)
-		     | (apic_get_reg(apic, APIC_TASKPRI) & 4));
+
+	apic_set_tpr(apic, ((cr8 & 0x0f) << 4) |
+	    (apic_get_reg(apic, APIC_TASKPRI) & 4));
 }
 
-void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
+void
+kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 {
 	if (cr8 & CR8_RESERVED_BITS) {
 		kvm_inject_gp(vcpu, 0);
@@ -1923,15 +1980,17 @@ void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 
 extern inline ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask);
 
-int is_paging(struct kvm_vcpu *vcpu)
+int
+is_paging(struct kvm_vcpu *vcpu)
 {
-	return kvm_read_cr0_bits(vcpu, X86_CR0_PG);
+	return (kvm_read_cr0_bits(vcpu, X86_CR0_PG));
 }
 
-void vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+void
+vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 {
 	unsigned long hw_cr4 = cr4 | (to_vmx(vcpu)->rmode.vm86_active ?
-				      KVM_RMODE_VM_CR4_ALWAYS_ON : KVM_PMODE_VM_CR4_ALWAYS_ON);
+	    KVM_RMODE_VM_CR4_ALWAYS_ON : KVM_PMODE_VM_CR4_ALWAYS_ON);
 
 	vcpu->arch.cr4 = cr4;
 	if (enable_ept) {
@@ -1947,24 +2006,24 @@ void vmx_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 	vmcs_writel(GUEST_CR4, hw_cr4);
 }
 
-static void ept_update_paging_mode_cr0(unsigned long *hw_cr0,
-					unsigned long cr0,
-					struct kvm_vcpu *vcpu)
+static void
+ept_update_paging_mode_cr0(unsigned long *hw_cr0,
+    unsigned long cr0, struct kvm_vcpu *vcpu)
 {
 	if (!(cr0 & X86_CR0_PG)) {
 		/* From paging/starting to nonpaging */
 		vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
-			     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL) |
-			     (CPU_BASED_CR3_LOAD_EXITING |
-			      CPU_BASED_CR3_STORE_EXITING));
+		    vmcs_read32(CPU_BASED_VM_EXEC_CONTROL) |
+		    (CPU_BASED_CR3_LOAD_EXITING |
+		    CPU_BASED_CR3_STORE_EXITING));
 		vcpu->arch.cr0 = cr0;
 		vmx_set_cr4(vcpu, kvm_read_cr4(vcpu));
 	} else if (!is_paging(vcpu)) {
 		/* From nonpaging to paging */
 		vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
-			     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL) &
-			     ~(CPU_BASED_CR3_LOAD_EXITING |
-			       CPU_BASED_CR3_STORE_EXITING));
+		    vmcs_read32(CPU_BASED_VM_EXEC_CONTROL) &
+		    ~(CPU_BASED_CR3_LOAD_EXITING |
+		    CPU_BASED_CR3_STORE_EXITING));
 		vcpu->arch.cr0 = cr0;
 		vmx_set_cr4(vcpu, kvm_read_cr4(vcpu));
 	}
@@ -1973,7 +2032,7 @@ static void ept_update_paging_mode_cr0(unsigned long *hw_cr0,
 		*hw_cr0 &= ~X86_CR0_WP;
 }
 
-#define VMX_SEGMENT_FIELD(seg)					\
+#define	VMX_SEGMENT_FIELD(seg)					\
 	[VCPU_SREG_##seg] = {                                   \
 		.selector = GUEST_##seg##_SELECTOR,		\
 		.base = GUEST_##seg##_BASE,		   	\
@@ -2033,11 +2092,12 @@ static void enter_pmode(struct kvm_vcpu *vcpu)
 	vmcs_write32(GUEST_SS_AR_BYTES, 0x93);
 
 	vmcs_write16(GUEST_CS_SELECTOR,
-		     vmcs_read16(GUEST_CS_SELECTOR) & ~SELECTOR_RPL_MASK);
+	    vmcs_read16(GUEST_CS_SELECTOR) & ~SELECTOR_RPL_MASK);
 	vmcs_write32(GUEST_CS_AR_BYTES, 0x9b);
 }
 
-static gva_t rmode_tss_base(struct kvm *kvm)
+static gva_t
+rmode_tss_base(struct kvm *kvm)
 {
 	if (!kvm->arch.tss_addr) {
 		struct kvm_memslots *slots;
@@ -2048,15 +2108,17 @@ static gva_t rmode_tss_base(struct kvm *kvm)
 #else
 		XXX_KVM_PROBE;
 		slots = kvm->memslots;
-#endif /*XXX*/
+#endif
 		base_gfn = kvm->memslots->memslots[0].base_gfn +
-				 kvm->memslots->memslots[0].npages - 3;
-		return base_gfn << PAGESHIFT;
+		    kvm->memslots->memslots[0].npages - 3;
+		return (base_gfn << PAGESHIFT);
 	}
-	return kvm->arch.tss_addr;
+
+	return (kvm->arch.tss_addr);
 }
 
-static void fix_rmode_seg(int seg, struct kvm_save_segment *save)
+static void
+fix_rmode_seg(int seg, struct kvm_save_segment *save)
 {
 	struct kvm_vmx_segment_field *sf = &kvm_vmx_segment_fields[seg];
 
@@ -2070,7 +2132,8 @@ static void fix_rmode_seg(int seg, struct kvm_save_segment *save)
 	vmcs_write32(sf->ar_bytes, 0xf3);
 }
 
-static int init_rmode_tss(struct kvm *kvm)
+static int
+init_rmode_tss(struct kvm *kvm)
 {
 	gfn_t fn = rmode_tss_base(kvm) >> PAGESHIFT;
 	uint16_t data = 0;
@@ -2082,7 +2145,8 @@ static int init_rmode_tss(struct kvm *kvm)
 		goto out;
 	data = TSS_BASE_SIZE + TSS_REDIRECTION_SIZE;
 	r = kvm_write_guest_page(kvm, fn++, &data,
-			TSS_IOPB_BASE_OFFSET, sizeof(uint16_t));
+	    TSS_IOPB_BASE_OFFSET, sizeof (uint16_t));
+
 	if (r < 0)
 		goto out;
 	r = kvm_clear_guest_page(kvm, fn++, 0, PAGESIZE);
@@ -2093,30 +2157,33 @@ static int init_rmode_tss(struct kvm *kvm)
 		goto out;
 	data = ~0;
 	r = kvm_write_guest_page(kvm, fn, &data,
-				 RMODE_TSS_SIZE - 2 * PAGESIZE - 1,
-				 sizeof(uint8_t));
+	    RMODE_TSS_SIZE - 2 * PAGESIZE - 1, sizeof (uint8_t));
+
 	if (r < 0)
 		goto out;
 
 	ret = 1;
 out:
-	return ret;
+	return (ret);
 }
 
-static int init_rmode_identity_map(struct kvm *kvm)
+static int
+init_rmode_identity_map(struct kvm *kvm)
 {
 	int i, r, ret;
 	pfn_t identity_map_pfn;
 	uint32_t tmp;
 
 	if (!enable_ept)
-		return 1;
+		return (1);
 	if ((!kvm->arch.ept_identity_pagetable)) {
-		cmn_err(CE_WARN, "EPT: identity-mapping pagetable haven't been allocated!\n");
-		return 0;
+		cmn_err(CE_WARN, "EPT: identity-mapping pagetable "
+		    "haven't been allocated!\n");
+		return (0);
 	}
 	if ((kvm->arch.ept_identity_pagetable_done))
-		return 1;
+		return (1);
+
 	ret = 0;
 	identity_map_pfn = kvm->arch.ept_identity_map_addr >> PAGESHIFT;
 	r = kvm_clear_guest_page(kvm, identity_map_pfn, 0, PAGESIZE);
@@ -2126,25 +2193,30 @@ static int init_rmode_identity_map(struct kvm *kvm)
 	/* Set up identity-mapping pagetable for EPT in real mode */
 	for (i = 0; i < PT32_ENT_PER_PAGE; i++) {
 		tmp = (i << 22) + (PT_VALID | PT_WRITABLE | PT_USER |
-				   PT_REF | PT_MOD | PT_PAGESIZE);
+		    PT_REF | PT_MOD | PT_PAGESIZE);
+
 		r = kvm_write_guest_page(kvm, identity_map_pfn,
-				&tmp, i * sizeof(tmp), sizeof(tmp));
+		    &tmp, i * sizeof (tmp), sizeof (tmp));
+
 		if (r < 0)
 			goto out;
 	}
 	kvm->arch.ept_identity_pagetable_done = 1;
 	ret = 1;
 out:
-	return ret;
+	return (ret);
 }
 
-static int init_rmode(struct kvm *kvm)
+static int
+init_rmode(struct kvm *kvm)
 {
 	if (!init_rmode_tss(kvm))
-		return 0;
+		return (0);
+
 	if (!init_rmode_identity_map(kvm))
-		return 0;
-	return 1;
+		return (0);
+
+	return (1);
 }
 
 
@@ -2204,43 +2276,45 @@ extern void vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer);
 
 #ifdef CONFIG_X86_64
 
-static void enter_lmode(struct kvm_vcpu *vcpu)
+static void
+enter_lmode(struct kvm_vcpu *vcpu)
 {
 	uint32_t guest_tr_ar;
 
 	guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
 	if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
 		cmn_err(CE_NOTE, "%s: tss fixup for long mode. \n",
-		       __func__);
+		    __func__);
 		vmcs_write32(GUEST_TR_AR_BYTES,
-			     (guest_tr_ar & ~AR_TYPE_MASK)
-			     | AR_TYPE_BUSY_64_TSS);
+		    (guest_tr_ar & ~AR_TYPE_MASK) | AR_TYPE_BUSY_64_TSS);
 	}
 	vcpu->arch.efer |= EFER_LMA;
 	vmx_set_efer(vcpu, vcpu->arch.efer);
 }
 
-static void exit_lmode(struct kvm_vcpu *vcpu)
+static void
+exit_lmode(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.efer &= ~EFER_LMA;
 
 	vmcs_write32(VM_ENTRY_CONTROLS,
-		     vmcs_read32(VM_ENTRY_CONTROLS)
-		     & ~VM_ENTRY_IA32E_MODE);
+	    vmcs_read32(VM_ENTRY_CONTROLS) & ~VM_ENTRY_IA32E_MODE);
 }
 
 #endif
 
-void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+void
+vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	unsigned long hw_cr0;
 
-	if (enable_unrestricted_guest)
-		hw_cr0 = (cr0 & ~KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST)
-			| KVM_VM_CR0_ALWAYS_ON_UNRESTRICTED_GUEST;
-	else
+	if (enable_unrestricted_guest) {
+		hw_cr0 = (cr0 & ~KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST) |
+		    KVM_VM_CR0_ALWAYS_ON_UNRESTRICTED_GUEST;
+	} else {
 		hw_cr0 = (cr0 & ~KVM_GUEST_CR0_MASK) | KVM_VM_CR0_ALWAYS_ON;
+	}
 
 	if (vmx->rmode.vm86_active && (cr0 & X86_CR0_PE))
 		enter_pmode(vcpu);
@@ -2268,7 +2342,8 @@ void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	vcpu->arch.cr0 = cr0;
 }
 
-static void seg_setup(int seg)
+static void
+seg_setup(int seg)
 {
 	struct kvm_vmx_segment_field *sf = &kvm_vmx_segment_fields[seg];
 	unsigned int ar;
@@ -2288,23 +2363,24 @@ static void seg_setup(int seg)
 }
 
 
-extern int kvm_write_guest_page(struct kvm *kvm, gfn_t gfn, const void *data,
-			 int offset, int len);
+extern int kvm_write_guest_page(struct kvm *kvm,
+    gfn_t gfn, const void *data, int offset, int len);
 
-unsigned long empty_zero_page[PAGESIZE / sizeof(unsigned long)];
+unsigned long empty_zero_page[PAGESIZE / sizeof (unsigned long)];
 
-int kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len)
+int
+kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len)
 {
-	return kvm_write_guest_page(kvm, gfn, empty_zero_page, offset, len);
+	return (kvm_write_guest_page(kvm, gfn, empty_zero_page, offset, len));
 }
 
 extern void kvm_register_write(struct kvm_vcpu *vcpu,
-			       enum kvm_reg reg,
-			       unsigned long val);
+    enum kvm_reg reg, unsigned long val);
 extern ulong kvm_read_cr0(struct kvm_vcpu *vcpu);
 extern void setup_msrs(struct vcpu_vmx *vmx);
 
-void fx_init(struct kvm_vcpu *vcpu)
+void
+fx_init(struct kvm_vcpu *vcpu)
 {
 	unsigned after_mxcsr_mask;
 #ifdef XXX
@@ -2317,7 +2393,7 @@ void fx_init(struct kvm_vcpu *vcpu)
 	if (!used_math())
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 		kvm_fx_save(&vcpu->arch.host_fx_image);
 
 	/* Initialize guest FPU by resetting ours and saving into guest's */
@@ -2331,19 +2407,19 @@ void fx_init(struct kvm_vcpu *vcpu)
 	vcpu->arch.cr0 |= X86_CR0_ET;
 	after_mxcsr_mask = offsetof(struct i387_fxsave_struct, st_space);
 	vcpu->arch.guest_fx_image.mxcsr = 0x1f80;
-	memset((void *)&vcpu->arch.guest_fx_image + after_mxcsr_mask,
-	       0, sizeof(struct i387_fxsave_struct) - after_mxcsr_mask);
+	memset((void *)&vcpu->arch.guest_fx_image + after_mxcsr_mask, 0,
+	    sizeof (struct i387_fxsave_struct) - after_mxcsr_mask);
 }
-
 
 extern inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx);
 extern void vmx_fpu_activate(struct kvm_vcpu *vcpu);
 extern inline int vm_need_tpr_shadow(struct kvm *kvm);
 extern inline int cpu_has_vmx_tpr_shadow(void);
 
-#define page_to_phys(page) (page->p_pagenum << PAGESHIFT)
+#define	page_to_phys(page) (page->p_pagenum << PAGESHIFT)
 
-int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
+int
+vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	uint64_t msr;
@@ -2354,14 +2430,14 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	idx = srcu_read_lock(&vcpu->kvm->srcu);
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 
 	if (!init_rmode(vmx->vcpu.kvm)) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	vmx->rmode.vm86_active = 0;
 
+	vmx->rmode.vm86_active = 0;
 	vmx->soft_vnmi_blocked = 0;
 
 	vmx->vcpu.arch.regs[VCPU_REGS_RDX] = get_rdx_init_val();
@@ -2388,7 +2464,8 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 		vmcs_writel(GUEST_CS_BASE, 0xffff0000);
 #endif
 	} else {
-		vmcs_write16(GUEST_CS_SELECTOR, vmx->vcpu.arch.sipi_vector << 8);
+		vmcs_write16(GUEST_CS_SELECTOR,
+		    vmx->vcpu.arch.sipi_vector << 8);
 		vmcs_writel(GUEST_CS_BASE, vmx->vcpu.arch.sipi_vector << 12);
 	}
 
@@ -2442,16 +2519,19 @@ int vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 
 	if (cpu_has_vmx_tpr_shadow()) {
 		vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, 0);
-		if (vm_need_tpr_shadow(vmx->vcpu.kvm))
+		if (vm_need_tpr_shadow(vmx->vcpu.kvm)) {
 			vmcs_write64(VIRTUAL_APIC_PAGE_ADDR,
-				     page_to_phys(vmx->vcpu.arch.apic->regs_page));
+			    page_to_phys(vmx->vcpu.arch.apic->regs_page));
+		}
+
 		vmcs_write32(TPR_THRESHOLD, 0);
 	}
 
 
-	if (vm_need_virtualize_apic_accesses(vmx->vcpu.kvm))
+	if (vm_need_virtualize_apic_accesses(vmx->vcpu.kvm)) {
 		vmcs_write64(APIC_ACCESS_ADDR,
-			     page_to_phys(vmx->vcpu.kvm->arch.apic_access_page));
+		    page_to_phys(vmx->vcpu.kvm->arch.apic_access_page));
+	}
 
 	if (vmx->vpid != 0)
 		vmcs_write16(VIRTUAL_PROCESSOR_ID, vmx->vpid);
@@ -2475,141 +2555,158 @@ out:
 	srcu_read_unlock(&vcpu->kvm->srcu, idx);
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
-	return ret;
+#endif
+	return (ret);
 }
 
-int kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu)
+int
+kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.nmi_pending = 0;
 	vcpu->arch.nmi_injected = 0;
 
 	vcpu->arch.switch_db_regs = 0;
-	memset(vcpu->arch.db, 0, sizeof(vcpu->arch.db));
+	memset(vcpu->arch.db, 0, sizeof (vcpu->arch.db));
 	vcpu->arch.dr6 = DR6_FIXED_1;
 	vcpu->arch.dr7 = DR7_FIXED_1;
 
-	/*	return kvm_x86_ops->vcpu_reset(vcpu);*/
-	return vmx_vcpu_reset(vcpu);
+	/* XXX: return kvm_x86_ops->vcpu_reset(vcpu); */
+	return (vmx_vcpu_reset(vcpu));
 }
 
 extern void vcpu_load(struct kvm_vcpu *vcpu);
 
-static void nonpaging_new_cr3(struct kvm_vcpu *vcpu)
+static void
+nonpaging_new_cr3(struct kvm_vcpu *vcpu)
 {
 }
 
 void mmu_free_roots(struct kvm_vcpu *vcpu);
 
-static void paging_new_cr3(struct kvm_vcpu *vcpu)
+static void
+paging_new_cr3(struct kvm_vcpu *vcpu)
 {
 	cmn_err(CE_NOTE, "%s: cr3 %lx\n", __func__, vcpu->arch.cr3);
 	mmu_free_roots(vcpu);
 }
 
-static int mmu_topup_memory_cache(struct kvm_mmu_memory_cache *cache,
-				  struct kmem_cache *base_cache, int min)
+static int
+mmu_topup_memory_cache(struct kvm_mmu_memory_cache *cache,
+    struct kmem_cache *base_cache, int min)
 {
 	caddr_t obj;
 
 	if (cache->nobjs >= min)
-		return 0;
+		return (0);
 	while (cache->nobjs < ARRAY_SIZE(cache->objects)) {
 		obj = kmem_cache_alloc(base_cache, KM_SLEEP);
 		if (!obj)
-			return -ENOMEM;
+			return (-ENOMEM);
 		cache->objects[cache->nobjs++] = obj;
 	}
-	return 0;
+	return (0);
 }
 
 extern struct kmem_cache *pte_chain_cache;
 extern struct kmem_cache *rmap_desc_cache;
 extern struct kmem_cache *mmu_page_header_cache;
 
-static int mmu_topup_memory_cache_page(struct kvm_mmu_memory_cache *cache,
-				       int min)
+static int
+mmu_topup_memory_cache_page(struct kvm_mmu_memory_cache *cache, int min)
 {
 	page_t *page;
 
 	if (cache->nobjs >= min)
-		return 0;
+		return (0);
+
 	while (cache->nobjs < ARRAY_SIZE(cache->objects)) {
 		page = alloc_page(PAGESIZE, KM_SLEEP);
 		if (!page)
-			return -ENOMEM;
+			return (-ENOMEM);
+
 		set_page_private(page, 0);
 		cache->objects[cache->nobjs++] = page_address(page);
 	}
-	return 0;
+
+	return (0);
 }
 
-int mmu_topup_memory_caches(struct kvm_vcpu *vcpu)
+int
+mmu_topup_memory_caches(struct kvm_vcpu *vcpu)
 {
 	int r = 0;
 
 	r = mmu_topup_memory_cache(&vcpu->arch.mmu_pte_chain_cache,
-				   pte_chain_cache, 4);
+	    pte_chain_cache, 4);
+
 	if (r)
 		goto out;
+
 	r = mmu_topup_memory_cache(&vcpu->arch.mmu_rmap_desc_cache,
-				   rmap_desc_cache, 4);
+	    rmap_desc_cache, 4);
+
 	if (r)
 		goto out;
+
 	r = mmu_topup_memory_cache_page(&vcpu->arch.mmu_page_cache, 8);
+
 	if (r)
 		goto out;
+
 	r = mmu_topup_memory_cache(&vcpu->arch.mmu_page_header_cache,
-				   mmu_page_header_cache, 4);
+	    mmu_page_header_cache, 4);
+
 out:
-	return r;
+	return (r);
 }
 
 gfn_t unalias_gfn(struct kvm *kvm, gfn_t gfn);
-extern struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn);
+extern struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm,
+    gfn_t gfn);
 
-struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
+struct kvm_memory_slot *
+gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
 {
 	gfn = unalias_gfn(kvm, gfn);
-	return gfn_to_memslot_unaliased(kvm, gfn);
+	return (gfn_to_memslot_unaliased(kvm, gfn));
 }
 
 /*
  * Return the pointer to the largepage write count for a given
  * gfn, handling slots that are not large page aligned.
  */
-static int *slot_largepage_idx(gfn_t gfn,
-			       struct kvm_memory_slot *slot,
-			       int level)
+static int *
+slot_largepage_idx(gfn_t gfn, struct kvm_memory_slot *slot, int level)
 {
 	unsigned long idx;
 
 	idx = (gfn / KVM_PAGES_PER_HPAGE(level)) -
-	      (slot->base_gfn / KVM_PAGES_PER_HPAGE(level));
-	return &slot->lpage_info[level - 2][idx].write_count;
+	    (slot->base_gfn / KVM_PAGES_PER_HPAGE(level));
+	return (&slot->lpage_info[level - 2][idx].write_count);
 }
 
-static int has_wrprotected_page(struct kvm *kvm,
-				gfn_t gfn,
-				int level)
+static int
+has_wrprotected_page(struct kvm *kvm, gfn_t gfn, int level)
 {
 	struct kvm_memory_slot *slot;
 	int *largepage_idx;
 
 	gfn = unalias_gfn(kvm, gfn);
 	slot = gfn_to_memslot_unaliased(kvm, gfn);
+
 	if (slot) {
 		largepage_idx = slot_largepage_idx(gfn, slot, level);
-		return *largepage_idx;
+		return (*largepage_idx);
 	}
 
-	return 1;
+	return (1);
 }
 
 extern unsigned long gfn_to_hva(struct kvm *kvm, gfn_t gfn);
 extern int kvm_is_error_hva(unsigned long addr);
 
-unsigned long kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
+unsigned long
+kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
 {
 	struct vm_area_struct *vma;
 	unsigned long addr, size;
@@ -2618,7 +2715,7 @@ unsigned long kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
 
 	addr = gfn_to_hva(kvm, gfn);
 	if (kvm_is_error_hva(addr))
-		return PAGESIZE;
+		return (PAGESIZE);
 
 #ifdef XXX
 	down_read(&current->mm->mmap_sem);
@@ -2630,16 +2727,15 @@ unsigned long kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
 
 out:
 	up_read(&current->mm->mmap_sem);
-	return size;
+	return (size);
 #else
 	XXX_KVM_PROBE;
-	return PAGESIZE;
-#endif /*XXX*/
-
-
+	return (PAGESIZE);
+#endif
 }
 
-static int host_mapping_level(struct kvm *kvm, gfn_t gfn)
+static int
+host_mapping_level(struct kvm *kvm, gfn_t gfn)
 {
 	unsigned long page_size;
 	int i, ret = 0;
@@ -2647,29 +2743,30 @@ static int host_mapping_level(struct kvm *kvm, gfn_t gfn)
 	page_size = kvm_host_page_size(kvm, gfn);
 
 	for (i = PT_PAGE_TABLE_LEVEL;
-	     i < (PT_PAGE_TABLE_LEVEL + KVM_NR_PAGE_SIZES); ++i) {
+	    i < (PT_PAGE_TABLE_LEVEL + KVM_NR_PAGE_SIZES); ++i) {
 		if (page_size >= KVM_HPAGE_SIZE(i))
 			ret = i;
 		else
 			break;
 	}
 
-	return ret;
+	return (ret);
 }
 
-static int mapping_level(struct kvm_vcpu *vcpu, gfn_t large_gfn)
+static int
+mapping_level(struct kvm_vcpu *vcpu, gfn_t large_gfn)
 {
 	struct kvm_memory_slot *slot;
 	int host_level, level, max_level;
 
 	slot = gfn_to_memslot(vcpu->kvm, large_gfn);
 	if (slot && slot->dirty_bitmap)
-		return PT_PAGE_TABLE_LEVEL;
+		return (PT_PAGE_TABLE_LEVEL);
 
 	host_level = host_mapping_level(vcpu->kvm, large_gfn);
 
 	if (host_level == PT_PAGE_TABLE_LEVEL)
-		return host_level;
+		return (host_level);
 
 	max_level = kvm_x86_ops->get_lpage_level() < host_level ?
 		kvm_x86_ops->get_lpage_level() : host_level;
@@ -2678,14 +2775,14 @@ static int mapping_level(struct kvm_vcpu *vcpu, gfn_t large_gfn)
 		if (has_wrprotected_page(vcpu->kvm, large_gfn, level))
 			break;
 
-	return level - 1;
+	return (level - 1);
 }
-
 
 extern page_t *bad_page;
 extern inline void get_page(page_t *page);
 
-static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
+static pfn_t
+hva_to_pfn(struct kvm *kvm, unsigned long addr)
 {
 	page_t page[1];
 	int npages;
@@ -2693,9 +2790,6 @@ static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 	proc_t *procp = ttoproc(curthread);
 	struct as *as = procp->p_as;
 
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "hva_to_pfn: addr = %lx\n", addr);
-#endif /*DEBUG*/
 #ifdef XXX
 
 	npages = get_user_pages_fast(addr, 1, 1, page);
@@ -2710,7 +2804,7 @@ static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 		    !(vma->vm_flags & VM_PFNMAP)) {
 			up_read(&current->mm->mmap_sem);
 			get_page(bad_page);
-			return page_to_pfn(bad_page);
+			return (page_to_pfn(bad_page));
 		}
 
 		pfn = ((addr - vma->vm_start) >> PAGESHIFT) + vma->vm_pgoff;
@@ -2724,54 +2818,48 @@ static pfn_t hva_to_pfn(struct kvm *kvm, unsigned long addr)
 		pfn = hat_getpfnum(as->a_hat, (caddr_t)addr);
 	else
 		pfn = hat_getpfnum(kas.a_hat, (caddr_t)addr);
-#endif /*XXX*/
-#ifdef DEBUG
-	cmn_err(CE_CONT, "hva_to_pfn: returning %lx\n", pfn);
-#endif /*DEBUG*/
-	return pfn;
+#endif
+	return (pfn);
 }
 
-pfn_t gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
+pfn_t
+gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 {
 	unsigned long addr;
 	pfn_t pfn;
 
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "gfn_to_pfn: gfn = %lx\n", gfn);
-#endif /*DEBUG*/
 	addr = gfn_to_hva(kvm, gfn);
-#ifdef DEBUG
-	cmn_err(CE_CONT, "gfn_to_pfn: addr = %lx\n", addr);
-#endif /*DEBUG*/
+
 	if (kvm_is_error_hva(addr)) {
 		get_page(bad_page);
-		return page_to_pfn(bad_page);
+		return (page_to_pfn(bad_page));
 	}
 
 	pfn = hva_to_pfn(kvm, addr);
-#ifdef DEBUG
-	cmn_err(CE_CONT, "gfn_to_pfn: pfn = %lx\n", pfn);
-#endif /*DEBUG*/
-	return pfn;
+
+	return (pfn);
 }
 
 extern pfn_t bad_pfn;
 
-int is_error_pfn(pfn_t pfn)
+int
+is_error_pfn(pfn_t pfn)
 {
-	return pfn == bad_pfn;
+	return (pfn == bad_pfn);
 }
 
-int is_nx(struct kvm_vcpu *vcpu)
+int
+is_nx(struct kvm_vcpu *vcpu)
 {
-	return vcpu->arch.efer & EFER_NX;
+	return (vcpu->arch.efer & EFER_NX);
 }
 
 extern struct kvm_mmu_page *page_header(hpa_t shadow_page);
 
-pfn_t spte_to_pfn(uint64_t pte)
+pfn_t
+spte_to_pfn(uint64_t pte)
 {
-	return (pte & PT64_BASE_ADDR_MASK) >> PAGESHIFT;
+	return ((pte & PT64_BASE_ADDR_MASK) >> PAGESHIFT);
 }
 
 /*
@@ -2779,96 +2867,108 @@ pfn_t spte_to_pfn(uint64_t pte)
  * Note: gfn must be unaliased before this function get called
  */
 
-unsigned long *gfn_to_rmap(struct kvm *kvm, gfn_t gfn, int level)
+unsigned long *
+gfn_to_rmap(struct kvm *kvm, gfn_t gfn, int level)
 {
 	struct kvm_memory_slot *slot;
 	unsigned long idx;
 
 	slot = gfn_to_memslot(kvm, gfn);
 	if (level == PT_PAGE_TABLE_LEVEL)
-		return &slot->rmap[gfn - slot->base_gfn];
+	    return (&slot->rmap[gfn - slot->base_gfn]);
 
 	idx = (gfn / KVM_PAGES_PER_HPAGE(level)) -
-		(slot->base_gfn / KVM_PAGES_PER_HPAGE(level));
+	    (slot->base_gfn / KVM_PAGES_PER_HPAGE(level));
 
-	return &slot->lpage_info[level - 2][idx].rmap_pde;
+	return (&slot->lpage_info[level - 2][idx].rmap_pde);
 }
 
 extern inline unsigned long bad_hva(void);
 extern page_t *page_numtopp_nolock(pfn_t pfn);
 
-page_t *pfn_to_page(pfn_t pfn)
+page_t *
+pfn_to_page(pfn_t pfn)
 {
 	return (page_numtopp_nolock(pfn));
 }
-		
-void kvm_set_pfn_accessed(struct kvm *kvm, pfn_t pfn)
+
+void
+kvm_set_pfn_accessed(struct kvm *kvm, pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn))
 		mark_page_accessed(pfn_to_page(pfn));
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 }
 
-static void mmu_free_rmap_desc(struct kvm_rmap_desc *rd)
+static void
+mmu_free_rmap_desc(struct kvm_rmap_desc *rd)
 {
 	if (rd)
-		kmem_free(rd, sizeof(struct kvm_rmap_desc));
+		kmem_free(rd, sizeof (struct kvm_rmap_desc));
 }
 
-static void rmap_desc_remove_entry(unsigned long *rmapp,
-				   struct kvm_rmap_desc *desc,
-				   int i,
-				   struct kvm_rmap_desc *prev_desc)
+static void
+rmap_desc_remove_entry(unsigned long *rmapp, struct kvm_rmap_desc *desc,
+    int i, struct kvm_rmap_desc *prev_desc)
 {
 	int j;
 
 	for (j = RMAP_EXT - 1; !desc->sptes[j] && j > i; --j)
-		;
+		continue;
+
 	desc->sptes[i] = desc->sptes[j];
 	desc->sptes[j] = NULL;
+
 	if (j != 0)
 		return;
-	if (!prev_desc && !desc->more)
+	if (!prev_desc && !desc->more) {
 		*rmapp = (unsigned long)desc->sptes[0];
-	else
+	} else {
 		if (prev_desc)
 			prev_desc->more = desc->more;
 		else
 			*rmapp = (unsigned long)desc->more | 1;
+	}
+
 	mmu_free_rmap_desc(desc);
 }
 
-void kvm_set_pfn_dirty(pfn_t pfn)
+void
+kvm_set_pfn_dirty(pfn_t pfn)
 {
 #ifdef XXX
 	if (!kvm_is_mmio_pfn(pfn)) {
 		struct page *page = pfn_to_page(pfn);
 		if (!PageReserved(page))
-			SetPageDirty(page); /*XXX - definition not in linux???*/
+			SetPageDirty(page); /* XXX - not defined in linux?! */
 	}
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 }
 
-int 
+int
 is_shadow_present_pte(uint64_t pte)
 {
-	return pte != shadow_trap_nonpresent_pte
-		&& pte != shadow_notrap_nonpresent_pte;
+	return (pte != shadow_trap_nonpresent_pte &&
+	    pte != shadow_notrap_nonpresent_pte);
 }
 
-static int is_rmap_spte(uint64_t pte)
+static int
+is_rmap_spte(uint64_t pte)
 {
-	return is_shadow_present_pte(pte);
+	return (is_shadow_present_pte(pte));
 }
 
 extern int is_writable_pte(unsigned long pte);
 
-void rmap_remove(struct kvm *kvm, uint64_t *spte)
+/* BEGIN CSTYLED */
+
+void
+rmap_remove(struct kvm *kvm, uint64_t *spte)
 {
 	struct kvm_rmap_desc *desc;
 	struct kvm_rmap_desc *prev_desc;
@@ -4618,3 +4718,4 @@ kvm_vm_ioctl(struct kvm *kvmp, unsigned int ioctl, unsigned long arg, int mode)
 out:
 	return r;
 }
+/* END CSTYLED */
