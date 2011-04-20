@@ -13588,6 +13588,7 @@ static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_per
 	pt->kvm_cyc_when.cyt_interval = pt->period;
 	pt->kvm_cyclic_id = cyclic_add(&pt->kvm_cyc_handler, &pt->kvm_cyc_when);
 	pt->start = gethrtime();
+	pt->intervals = 0;
 	pt->active = 1;
 	mutex_exit(&cpu_lock);
 }

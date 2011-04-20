@@ -556,28 +556,26 @@ apic_x2apic_mode(struct kvm_lapic *apic)
 static uint32_t
 apic_get_tmcct(struct kvm_lapic *apic)
 {
-#ifdef XXX
-	ktime_t remaining;
-	s64 ns;
+	hrtime_t now, remaining;
 	uint32_t tmcct;
 
-	ASSERT(apic != NULL);
+	VERIFY(apic != NULL);
 
 	/* if initial count is 0, current count should also be 0 */
 	if (apic_get_reg(apic, APIC_TMICT) == 0)
 		return (0);
 
-	remaining = hrtimer_get_remaining(&apic->lapic_timer.timer);
-	if (ktime_to_ns(remaining) < 0)
-		remaining = ktime_set(0, 0);
-	ns = mod_64(ktime_to_ns(remaining), apic->lapic_timer.period);
-	tmcct = div64_uint64_t(ns, (APIC_BUS_CYCLE_NS * apic->divide_count));
+	now = gethrtime();
+	remaining = now - apic->lapic_timer.start -
+	    apic->lapic_timer.period * apic->lapic_timer.intervals;
+
+	if (remaining < 0)
+		remaining = 0;
+
+	remaining = remaining % apic->lapic_timer.period;
+	tmcct = remaining / (APIC_BUS_CYCLE_NS * apic->divide_count);
 
 	return (tmcct);
-#else
-	XXX_KVM_PROBE;
-	return (0);
-#endif
 }
 
 extern unsigned long kvm_rip_read(struct kvm_vcpu *vcpu);
@@ -768,6 +766,7 @@ start_apic_timer(struct kvm_lapic *apic)
 	    &apic->lapic_timer.kvm_cyc_when);
 	apic->lapic_timer.start = gethrtime();
 	apic->lapic_timer.active = 1;
+	apic->lapic_timer.intervals = 0;
 	mutex_exit(&cpu_lock);
 }
 
