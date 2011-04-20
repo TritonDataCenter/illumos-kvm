@@ -11922,8 +11922,10 @@ void kvm_lapic_reset(struct kvm_vcpu *vcpu)
 	hrtimer_cancel(&apic->lapic_timer.timer);
 #else
 	mutex_enter(&cpu_lock);
-	if (apic->lapic_timer.active)
+	if (apic->lapic_timer.active) {
 		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
+		apic->lapic_timer.active = 0;
+	}
 	mutex_exit(&cpu_lock);
 	XXX_KVM_PROBE;
 #endif /*XXX*/
@@ -13566,8 +13568,10 @@ static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_per
 
 	mutex_enter(&cpu_lock);
 	/* TODO The new value only affected after the retriggered */
-	if (pt->active)
+	if (pt->active) {
 		cyclic_remove(pt->kvm_cyclic_id);
+		pt->active = 0;
+	}
 	pt->period = interval;
 	ps->is_periodic = is_period;
 
@@ -13588,7 +13592,7 @@ static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_per
 
 	pt->kvm_cyc_when.cyt_when = 0;
 	pt->kvm_cyc_when.cyt_interval = pt->period;
-	cyclic_add(&pt->kvm_cyc_handler, &pt->kvm_cyc_when);
+	pt->kvm_cyclic_id = cyclic_add(&pt->kvm_cyc_handler, &pt->kvm_cyc_when);
 	pt->active = 1;
 	mutex_exit(&cpu_lock);
 }

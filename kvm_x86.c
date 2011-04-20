@@ -1315,7 +1315,10 @@ int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 		hrtimer_cancel(&apic->lapic_timer.timer);
 #else
 		mutex_enter(&cpu_lock);
-		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
+		if (apic->lapic_timer.active) {
+			cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
+			apic->lapic_timer.active = 0;
+		}
 		mutex_exit(&cpu_lock);
 		XXX_KVM_PROBE;
 #endif
@@ -1427,12 +1430,14 @@ void kvm_timer_fn(void *arg)
 	struct kvm_timer *ktimer = (struct kvm_timer *)arg;
 	int restart_timer;
 	struct kvm_vcpu *vcpu;
-
+/*
 	vcpu = ktimer->vcpu;
 	if (!vcpu)
 		return;
 
 	restart_timer = __kvm_timer_fn(vcpu, ktimer);
+*/
+	return;
 }
 
 static int lapic_is_periodic(struct kvm_timer *ktimer)
