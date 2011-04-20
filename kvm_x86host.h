@@ -28,6 +28,11 @@
 
 #endif
 
+#include <sys/ksynch.h>
+#include <sys/list.h>
+#include <sys/bitmap.h>
+#include <vm/page.h>
+#include <sys/pte.h>
 #include "kvm_types.h"
 #include "msr.h"
 

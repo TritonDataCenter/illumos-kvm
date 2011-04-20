@@ -12038,13 +12038,10 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 			break;
 		}
 
-#ifdef XXX
 		clear_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
 		if (kvm_cpu_has_pending_timer(vcpu))
 			kvm_inject_pending_timer_irqs(vcpu);
-#else
-		XXX_KVM_PROBE;
-#endif /*XXX*/
+
 		if (dm_request_for_irq_injection(vcpu)) {
 			r = -EINTR;
 			vcpu->run->exit_reason = KVM_EXIT_INTR;

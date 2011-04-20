@@ -21,6 +21,7 @@
 #include <sys/segments.h>
 #include <sys/mman.h>
 #include <sys/mach_mmu.h>
+#include <sys/int_limits.h>
 
 #include "msr-index.h"
 #include "msr.h"
@@ -863,7 +864,7 @@ apic_enabled(struct kvm_lapic *apic)
  * Add a pending IRQ into lapic.
  * Return 1 if successfully added and 0 if discarded.
  */
-static int
+int
 __apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
     int vector, int level, int trig_mode)
 {
@@ -1451,35 +1452,22 @@ __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
 #else
 	XXX_KVM_PROBE;
 #endif
-
-	if (ktimer->t_ops->is_periodic(ktimer)) {
-#ifdef XXX
-		kvm_hrtimer_add_expires_ns(&ktimer->timer, ktimer->period);
-#else
-		XXX_KVM_PROBE;
-#endif
-		restart_timer = 1;
-	}
-
-	return (restart_timer);
+	return (ktimer->t_ops->is_periodic(ktimer));
 }
 
 void
 kvm_timer_fn(void *arg)
 {
+	hrtime_t max = UINT64_MAX;
 	struct kvm_timer *ktimer = (struct kvm_timer *)arg;
-	int restart_timer;
 	struct kvm_vcpu *vcpu;
 
-#ifdef XXX
 	vcpu = ktimer->vcpu;
 	if (!vcpu)
 		return;
 
-	restart_timer = __kvm_timer_fn(vcpu, ktimer);
-#else
-	XXX_KVM_PROBE;
-#endif
+	if (__kvm_timer_fn(vcpu, ktimer) == 0)
+		cyclic_reprogram(ktimer->kvm_cyclic_id, max);
 }
 
 static int

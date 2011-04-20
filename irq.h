@@ -89,6 +89,7 @@ static struct kvm_pic *pic_irqchip(struct kvm *kvm)
 
 
 void kvm_pic_reset(struct kvm_kpic_state *s);
+void kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu);
 
 void kvm_inject_pending_timer_irqs(struct kvm_vcpu *vcpu);
 void kvm_inject_apic_timer_irqs(struct kvm_vcpu *vcpu);
