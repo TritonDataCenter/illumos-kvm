@@ -47,7 +47,8 @@ kvm_cpu_has_pending_timer(struct kvm_vcpu *vcpu)
 	return (ret);
 }
 
-void kvm_inject_pending_timer_irqs(struct kvm_vcpu *vcpu)
+void
+kvm_inject_pending_timer_irqs(struct kvm_vcpu *vcpu)
 {
 	kvm_inject_apic_timer_irqs(vcpu);
 	kvm_inject_pit_timer_irqs(vcpu);

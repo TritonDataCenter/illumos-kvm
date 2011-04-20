@@ -1458,7 +1458,7 @@ __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
 void
 kvm_timer_fn(void *arg)
 {
-	hrtime_t max = UINT64_MAX;
+	hrtime_t max = INT64_MAX;
 	struct kvm_timer *ktimer = (struct kvm_timer *)arg;
 	struct kvm_vcpu *vcpu;
 

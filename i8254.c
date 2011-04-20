@@ -95,7 +95,8 @@ kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu)
 		int inject = 0;
 		ps = &pit->pit_state;
 
-		/* Try to inject pending interrupts when
+		/*
+		 * Try to inject pending interrupts when
 		 * last one has been acked.
 		 */
 #ifdef XXX

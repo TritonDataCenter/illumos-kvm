@@ -103,4 +103,3 @@ kvm_apic_nmi_wd_deliver(struct kvm_vcpu *vcpu)
 	if (apic)
 		kvm_apic_local_deliver(apic, APIC_LVT0);
 }
-
