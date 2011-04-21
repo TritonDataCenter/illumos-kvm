@@ -375,6 +375,7 @@ struct kvm_lapic {
 };
 
 struct vcpu_vmx;
+struct kvm_user_return_notifier;
 
 struct kvm_vcpu {
 	struct kvm *kvm;
@@ -409,6 +410,7 @@ struct kvm_vcpu {
 
 	struct kvm_vcpu_arch arch;
 	ddi_umem_cookie_t cookie;
+	struct kvm_user_return_notifier *urn;
 };
 typedef struct kvm_vcpu kvm_vcpu_t;
 
@@ -420,13 +422,13 @@ struct kvm_shared_msrs_global {
 	uint32_t msrs[KVM_NR_SHARED_MSRS];
 };
 
-struct user_return_notifier {
-	void (*on_user_return)(struct user_return_notifier *urn);
-	list_t link;
+struct kvm_user_return_notifier {
+	void (*on_user_return)(struct kvm_vcpu *,
+	    struct kvm_user_return_notifier *);
 };
 
 struct kvm_shared_msrs {
-	struct user_return_notifier urn;
+	struct kvm_user_return_notifier urn;
 	int registered;
 	struct kvm_shared_msr_values {
 		uint64_t host;

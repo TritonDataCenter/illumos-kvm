@@ -25,6 +25,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/vm.h>
+#include <sys/proc.h>
 
 #include "vmx.h"
 #include "msr-index.h"
@@ -5096,6 +5097,53 @@ void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
 	kvm_x86_ops->vcpu_put(vcpu);
 }
 
+void
+kvm_user_return_notifier_register(struct kvm_vcpu *vcpu,
+    struct kvm_user_return_notifier *urn)
+{
+	vcpu->urn = urn;
+}
+
+void
+kvm_user_return_notifier_unregister(struct kvm_vcpu *vcpu,
+    struct kvm_user_return_notifier *urn)
+{
+	vcpu->urn = NULL;
+}
+
+void
+kvm_fire_urn(struct kvm_vcpu *vcpu)
+{
+	if (vcpu->urn)
+		vcpu->urn->on_user_return(vcpu, vcpu->urn);
+}
+
+/*
+ * Called when we've been asked to save our context. i.e. we're being swapped
+ * out.
+ */
+void
+kvm_ctx_save(void *arg)
+{
+	struct kvm_vcpu *vcpu = arg;
+	kvm_arch_vcpu_put(vcpu);
+	kvm_fire_urn(vcpu);
+}
+
+/*
+ * Called when we're being asked to restore our context. i.e. we're returning
+ * from being swapped out.
+ */
+void
+kvm_ctx_restore(void *arg)
+{
+	int cpu;
+
+	cpu = CPU->cpu_seqid;
+	struct kvm_vcpu *vcpu = arg;
+	kvm_arch_vcpu_load(vcpu, cpu);
+}
+
 /*
  * Switches to specified vcpu, until a matching vcpu_put()
  */
@@ -5106,11 +5154,8 @@ void vcpu_load(struct kvm_vcpu *vcpu)
 	mutex_enter(&vcpu->mutex);
 	kpreempt_disable();
 	cpu = CPU->cpu_seqid;
-#ifdef XXX
-	preempt_notifier_register(&vcpu->preempt_notifier);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
+	installctx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
+	    NULL, NULL, NULL);
 	kvm_arch_vcpu_load(vcpu, cpu);
 	kpreempt_enable();
 }
@@ -5119,11 +5164,9 @@ void vcpu_put(struct kvm_vcpu *vcpu)
 {
 	kpreempt_disable();
 	kvm_arch_vcpu_put(vcpu);
-#ifdef XXX
-	preempt_notifier_unregister(&vcpu->preempt_notifier);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
+	kvm_fire_urn(vcpu);
+	removectx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
+	    NULL, NULL, NULL);
 	kpreempt_enable();
 	mutex_exit(&vcpu->mutex);
 }
@@ -7749,8 +7792,12 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 #undef Q
 
 static struct kvm_shared_msrs shared_msrs[KVM_MAX_VCPUS]; /*XXX - need to dynamic alloc based on cpus, not vcpus */
+static void kvm_on_user_return(struct kvm_vcpu *,
+    struct kvm_user_return_notifier *);
 
-void kvm_set_shared_msr(unsigned slot, uint64_t value, uint64_t mask)
+void
+kvm_set_shared_msr(struct kvm_vcpu *vcpu, unsigned slot, uint64_t value,
+    uint64_t mask)
 {
 #ifdef XXX_KVM_DECLARATION
 	struct kvm_shared_msrs *smsr = &__get_cpu_var(shared_msrs);
@@ -7763,13 +7810,9 @@ void kvm_set_shared_msr(unsigned slot, uint64_t value, uint64_t mask)
 	smsr->values[slot].curr = value;
 	wrmsrl(shared_msrs_global.msrs[slot], value);
 	if (!smsr->registered) {
-#ifdef XXX
 		smsr->urn.on_user_return = kvm_on_user_return;
-		user_return_notifier_register(&smsr->urn);
+		kvm_user_return_notifier_register(vcpu, &smsr->urn);
 		smsr->registered = 1;
-#else
-		XXX_KVM_PROBE;
-#endif /*XXX*/
 	}
 }
 static void vmx_save_host_state(struct kvm_vcpu *vcpu)
@@ -7818,9 +7861,10 @@ static void vmx_save_host_state(struct kvm_vcpu *vcpu)
 	}
 #endif
 	for (i = 0; i < vmx->save_nmsrs; ++i)
-		kvm_set_shared_msr(vmx->guest_msrs[i].index,
-				   vmx->guest_msrs[i].data,
-				   vmx->guest_msrs[i].mask);
+		kvm_set_shared_msr(vcpu,
+		    vmx->guest_msrs[i].index,
+		    vmx->guest_msrs[i].data,
+		    vmx->guest_msrs[i].mask);
 }
 
 int vmx_interrupt_allowed(struct kvm_vcpu *vcpu)
@@ -15391,3 +15435,25 @@ kvm_segmap(dev_t dev, off_t off, struct as *asp, caddr_t *addrp, off_t len,
 	return (ddi_devmap_segmap(dev, off, asp, addrp, len, prot, maxprot,
 	    flags, credp));
 }
+
+
+static void
+kvm_on_user_return(struct kvm_vcpu *vcpu, struct kvm_user_return_notifier *urn)
+{
+	unsigned slot;
+	struct kvm_shared_msrs *locals =
+	    (struct kvm_shared_msrs *)(((caddr_t)urn) -
+		offsetof(struct kvm_shared_msrs, urn));
+	struct kvm_shared_msr_values *values;
+
+	for (slot = 0; slot < shared_msrs_global.nr; ++slot) {
+		values = &locals->values[slot];
+		if (values->host != values->curr) {
+			wrmsrl(shared_msrs_global.msrs[slot], values->host);
+			values->curr = values->host;
+		}
+	}
+	locals->registered = 0;
+	kvm_user_return_notifier_unregister(vcpu, urn);
+}
+
