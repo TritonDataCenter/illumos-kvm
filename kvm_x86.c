@@ -351,10 +351,13 @@ vmx_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags)
 	vmcs_writel(GUEST_RFLAGS, rflags);
 }
 
+
+extern void kvm_shared_msr_cpu_online(void);
+
 int
 kvm_arch_hardware_enable(void *garbage)
 {
-#ifdef LATER
+#ifdef XXX
 	/*
 	 * Since this may be called from a hotplug notifcation,
 	 * we can't get the CPU frequency directly.
@@ -363,9 +366,10 @@ kvm_arch_hardware_enable(void *garbage)
 		int cpu = raw_smp_processor_id();
 		per_cpu(cpu_tsc_khz, cpu) = 0;
 	}
-
-	kvm_shared_msr_cpu_online();
+#else
+	XXX_KVM_PROBE;
 #endif
+	kvm_shared_msr_cpu_online();
 
 	return (vmx_hardware_enable(garbage));
 }

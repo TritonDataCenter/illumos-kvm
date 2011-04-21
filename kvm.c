@@ -7790,10 +7790,38 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 
 #undef R
 #undef Q
-
 static struct kvm_shared_msrs shared_msrs[KVM_MAX_VCPUS]; /*XXX - need to dynamic alloc based on cpus, not vcpus */
 static void kvm_on_user_return(struct kvm_vcpu *,
     struct kvm_user_return_notifier *);
+
+static void shared_msr_update(unsigned slot, uint32_t msr)
+{
+	struct kvm_shared_msrs *smsr;
+	uint64_t value;
+#ifdef XXX
+	smsr = &__get_cpu_var(shared_msrs);
+#else
+	smsr = &shared_msrs[0];
+	XXX_KVM_PROBE;
+#endif
+	/* only read, and nobody should modify it at this time,
+	 * so don't need lock */
+	if (slot >= shared_msrs_global.nr) {
+		cmn_err(CE_WARN, "kvm: invalid MSR slot!");
+		return;
+	}
+	rdmsrl_safe(msr, (unsigned long long *)&value);
+	smsr->values[slot].host = value;
+	smsr->values[slot].curr = value;
+}
+
+void kvm_shared_msr_cpu_online(void)
+{
+	unsigned i;
+
+	for (i = 0; i < shared_msrs_global.nr; ++i)
+		shared_msr_update(i, shared_msrs_global.msrs[i]);
+}
 
 void
 kvm_set_shared_msr(struct kvm_vcpu *vcpu, unsigned slot, uint64_t value,
