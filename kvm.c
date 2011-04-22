@@ -5877,7 +5877,7 @@ static int find_highest_vector(void *bitmap)
 
 static inline int apic_search_irr(struct kvm_lapic *apic)
 {
-	return find_highest_vector(apic->regs + APIC_IRR);
+	return find_highest_vector((void *)((uintptr_t)apic->regs + APIC_IRR));
 }
 
 static inline int apic_find_highest_irr(struct kvm_lapic *apic)
@@ -6318,14 +6318,15 @@ int kvm_write_guest(struct kvm *kvm, gpa_t gpa, const void *data,
 	int seg;
 	int offset = offset_in_page(gpa);
 	int ret;
+	uintptr_t dp = (uintptr_t)data;
 
 	while ((seg = next_segment(len, offset)) != 0) {
-		ret = kvm_write_guest_page(kvm, gfn, data, offset, seg);
+		ret = kvm_write_guest_page(kvm, gfn, (void *)dp, offset, seg);
 		if (ret < 0)
 			return ret;
 		offset = 0;
 		len -= seg;
-		data += seg;
+		dp += seg;
 		++gfn;
 	}
 	return 0;
@@ -7926,7 +7927,7 @@ static int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
 				      struct kvm_vcpu *vcpu, uint32_t access,
 				      uint32_t *error)
 {
-	void *data = val;
+	uintptr_t data = (uintptr_t)val;
 	int r = /*X86EMUL_CONTINUE*/ 0;
 
 	while (bytes) {
@@ -7939,7 +7940,7 @@ static int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
 			r = /*X86EMUL_PROPAGATE_FAULT*/1;
 			goto out;
 		}
-		ret = kvm_read_guest(vcpu->kvm, gpa, data, toread);
+		ret = kvm_read_guest(vcpu->kvm, gpa, (void *)data, toread);
 		if (ret < 0) {
 			r = /*X86EMUL_UNHANDLEABLE*/ 1;
 			goto out;
@@ -8136,7 +8137,7 @@ static void mmu_guess_page_from_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 			r = kvm_read_guest(vcpu->kvm, gpa & ~(uint64_t)7, &gpte, 8);
 			if (r)
 				return;
-			memcpy((void *)&gpte + (gpa % 8), new, 4);
+			memcpy((void *)((uintptr_t)&gpte + (gpa % 8)), new, 4);
 		} else if ((bytes == 8) && (gpa % 8 == 0)) {
 			memcpy((void *)&gpte, new, 8);
 		}
@@ -8414,21 +8415,20 @@ mmio:
 	return X86EMUL_CONTINUE;
 }
 
-int emulator_write_emulated(unsigned long addr,
-				   const void *val,
-				   unsigned int bytes,
-				   struct kvm_vcpu *vcpu)
+int emulator_write_emulated(unsigned long addr, const void *val,
+    unsigned int bytes, struct kvm_vcpu *vcpu)
 {
+	uintptr_t data = (uintptr_t)val;
 	/* Crossing a page boundary? */
 	if (((addr + bytes - 1) ^ addr) & PAGEMASK) {
 		int rc, now;
 
 		now = -addr & ~PAGEMASK;
-		rc = emulator_write_emulated_onepage(addr, val, now, vcpu);
+		rc = emulator_write_emulated_onepage(addr, (void *)data, now, vcpu);
 		if (rc != X86EMUL_CONTINUE)
 			return rc;
 		addr += now;
-		val += now;
+		data += now;
 		bytes -= now;
 	}
 	return emulator_write_emulated_onepage(addr, val, bytes, vcpu);
@@ -8953,7 +8953,7 @@ static int handle_triple_fault(struct kvm_vcpu *vcpu)
 static int kvm_write_guest_virt(gva_t addr, void *val, unsigned int bytes,
 				struct kvm_vcpu *vcpu, uint32_t *error)
 {
-	void *data = val;
+	uintptr_t data = (uintptr_t)val;
 	int r = 0;
 
 	while (bytes) {
@@ -8966,7 +8966,7 @@ static int kvm_write_guest_virt(gva_t addr, void *val, unsigned int bytes,
 			r = X86EMUL_PROPAGATE_FAULT;
 			goto out;
 		}
-		ret = kvm_write_guest(vcpu->kvm, gpa, data, towrite);
+		ret = kvm_write_guest(vcpu->kvm, gpa, (void *)data, towrite);
 		if (ret < 0) {
 			r = X86EMUL_UNHANDLEABLE;
 			goto out;
@@ -10484,14 +10484,15 @@ int kvm_read_guest(struct kvm *kvm, gpa_t gpa, void *data, unsigned long len)
 	int seg;
 	int offset = offset_in_page(gpa);
 	int ret;
+	uintptr_t dp = (uintptr_t)data;
 
 	while ((seg = next_segment(len, offset)) != 0) {
-		ret = kvm_read_guest_page(kvm, gfn, data, offset, seg);
+		ret = kvm_read_guest_page(kvm, gfn, (void *)dp, offset, seg);
 		if (ret < 0)
 			return ret;
 		offset = 0;
 		len -= seg;
-		data += seg;
+		dp += seg;
 		++gfn;
 	}
 	return 0;
@@ -10921,7 +10922,7 @@ inline int apic_find_highest_isr(struct kvm_lapic *apic)
 {
 	int result;
 
-	result = find_highest_vector(apic->regs + APIC_ISR);
+	result = find_highest_vector((void *)((uintptr_t)apic->regs + APIC_ISR));
 	ASSERT(result == -1 || result >= 16);
 
 	return result;
@@ -11006,7 +11007,7 @@ extern inline void apic_clear_vector(int vec, caddr_t bitmap);
 static inline void apic_clear_irr(int vec, struct kvm_lapic *apic)
 {
 	apic->irr_pending = 0;
-	apic_clear_vector(vec, apic->regs + APIC_IRR);
+	apic_clear_vector(vec, (void *)((uintptr_t)apic->regs + APIC_IRR));
 	if (apic_search_irr(apic) != -1)
 		apic->irr_pending = 1;
 }
@@ -11019,7 +11020,7 @@ int kvm_get_apic_interrupt(struct kvm_vcpu *vcpu)
 	if (vector == -1)
 		return -1;
 
-	apic_set_vector(vector, apic->regs + APIC_ISR);
+	apic_set_vector(vector, (void *)((uintptr_t)apic->regs + APIC_ISR));
 	apic_update_ppr(apic);
 	apic_clear_irr(vector, apic);
 	return vector;
@@ -11250,7 +11251,7 @@ void kvm_lapic_sync_from_vapic(struct kvm_vcpu *vcpu)
 
 	vapic = page_address(vcpu->arch.apic->vapic_page);
 
-	data = *(uint32_t *)(vapic + offset_in_page(vcpu->arch.apic->vapic_addr));
+	data = *(uint32_t *)((uintptr_t)vapic + offset_in_page(vcpu->arch.apic->vapic_addr));
 #ifdef XXX
 	kunmap_atomic(vapic, KM_USER0);
 #else
@@ -11282,7 +11283,7 @@ void kvm_lapic_sync_to_vapic(struct kvm_vcpu *vcpu)
 
 	vapic = page_address(vcpu->arch.apic->vapic_page);
 
-	*(uint32_t *)(vapic + offset_in_page(vcpu->arch.apic->vapic_addr)) = data;
+	*(uint32_t *)((uintptr_t)vapic + offset_in_page(vcpu->arch.apic->vapic_addr)) = data;
 #ifdef XXX
 	kunmap_atomic(vapic, KM_USER0);
 #else
@@ -11729,7 +11730,7 @@ static void kvm_write_guest_time(struct kvm_vcpu *v)
 
 	shared_kaddr = page_address(vcpu->time_page);
 
-	memcpy(shared_kaddr + vcpu->time_offset, &vcpu->hv_clock,
+	memcpy((void *)((uintptr_t)shared_kaddr + vcpu->time_offset), &vcpu->hv_clock,
 	       sizeof(vcpu->hv_clock));
 
 

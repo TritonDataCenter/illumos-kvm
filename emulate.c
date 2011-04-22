@@ -729,13 +729,15 @@ do_insn_fetch(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops,
     unsigned long eip, void *dest, unsigned size)
 {
 	int rc = 0;
+	uintptr_t dp = (uintptr_t)dest;
 
 	/* x86 instructions are limited to 15 bytes. */
 	if (eip + size - ctxt->decode.eip_orig > 15)
 		return (X86EMUL_UNHANDLEABLE);
 	eip += ctxt->cs_base;
 	while (size--) {
-		rc = do_fetch_insn_byte(ctxt, ops, eip++, dest++);
+		/* Remember, ++ has higher precedence than cast */
+		rc = do_fetch_insn_byte(ctxt, ops, eip++, (void *)dp++);
 		if (rc)
 			return (rc);
 	}
@@ -2035,7 +2037,7 @@ static int
 kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
     struct kvm_vcpu *vcpu, uint32_t access, uint32_t *error)
 {
-	void *data = val;
+	uintptr_t data = (uintptr_t)val;
 	int r = X86EMUL_CONTINUE;
 
 	while (bytes) {
@@ -2049,7 +2051,7 @@ kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
 			r = X86EMUL_PROPAGATE_FAULT;
 			goto out;
 		}
-		ret = kvm_read_guest(vcpu->kvm, gpa, data, toread);
+		ret = kvm_read_guest(vcpu->kvm, gpa, (void *)data, toread);
 		if (ret < 0) {
 			r = X86EMUL_UNHANDLEABLE;
 			goto out;
@@ -2084,7 +2086,7 @@ kvm_read_guest_virt_system(gva_t addr, void *val, unsigned int bytes,
 static int kvm_write_guest_virt(gva_t addr, void *val, unsigned int bytes,
 				struct kvm_vcpu *vcpu, uint32_t *error)
 {
-	void *data = val;
+	uintptr_t data = (uintptr_t)val;
 	int r = X86EMUL_CONTINUE;
 
 	while (bytes) {
@@ -2097,7 +2099,7 @@ static int kvm_write_guest_virt(gva_t addr, void *val, unsigned int bytes,
 			r = X86EMUL_PROPAGATE_FAULT;
 			goto out;
 		}
-		ret = kvm_write_guest(vcpu->kvm, gpa, data, towrite);
+		ret = kvm_write_guest(vcpu->kvm, gpa, (void *)data, towrite);
 		if (ret < 0) {
 			r = X86EMUL_UNHANDLEABLE;
 			goto out;
@@ -2139,12 +2141,12 @@ static int
 pio_string_write(struct kvm_vcpu *vcpu)
 {
 	struct kvm_pio_request *io = &vcpu->arch.pio;
-	void *pd = vcpu->arch.pio_data;
+	uintptr_t pd = (uintptr_t)vcpu->arch.pio_data;
 	int i, r = 0;
 
 	for (i = 0; i < io->cur_count; i++) {
 		if (kvm_io_bus_write(vcpu->kvm, KVM_PIO_BUS,
-		    io->port, io->size, pd)) {
+		    io->port, io->size, (void *)pd)) {
 			r = -ENOTSUP;
 			break;
 		}
@@ -2321,8 +2323,8 @@ x86_emulate_insn(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 		if (c->d & BitOp) {
 			unsigned long mask = ~(c->dst.bytes * 8 - 1);
 
-			c->dst.ptr = (void *)c->dst.ptr +
-			    (c->src.val & mask) / 8;
+			c->dst.ptr = (void *)((uintptr_t)c->dst.ptr +
+			    (c->src.val & mask) / 8);
 		}
 		if (!(c->d & Mov)) {
 			/* optimisation - avoid slow emulated read */

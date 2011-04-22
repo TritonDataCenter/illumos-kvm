@@ -542,13 +542,13 @@ kvm_mmu_create(struct kvm_vcpu *vcpu)
 inline uint32_t
 apic_get_reg(struct kvm_lapic *apic, int reg_off)
 {
-	return (*((uint32_t *) (apic->regs + reg_off)));
+	return (*((uint32_t *)((uintptr_t)apic->regs + reg_off)));
 }
 
 void
 apic_set_reg(struct kvm_lapic *apic, int reg_off, uint32_t val)
 {
-	*((uint32_t *) (apic->regs + reg_off)) = val;
+	*((uint32_t *)((uintptr_t)apic->regs + reg_off)) = val;
 }
 
 static inline int
@@ -791,7 +791,7 @@ kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
 inline void
 apic_clear_vector(int vec, caddr_t bitmap)
 {
-	clear_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
+	clear_bit(VEC_POS(vec), (unsigned long *)(bitmap + REG_POS(vec)));
 }
 
 void
@@ -826,22 +826,14 @@ kvm_inject_nmi(struct kvm_vcpu *vcpu)
 inline void
 apic_set_vector(int vec, caddr_t bitmap)
 {
-	set_bit(VEC_POS(vec), (uint64_t *)(bitmap) + REG_POS(vec));
+	set_bit(VEC_POS(vec), (unsigned long *)(bitmap + REG_POS(vec)));
 }
 
 static inline int
 apic_test_and_set_vector(int vec, caddr_t bitmap)
 {
-#ifndef XXX
-	return (test_and_set_bit(VEC_POS(vec),
-	    (uint64_t *)(bitmap) + REG_POS(vec)));
-#else
-	if (BT_TEST((bitmap) + REG_POS(vec), VEC_POS(vec))) {
-		BT_SET((bitmap) + REG_POS(vec), VEC_POS(vec));
-		return (1);
-	} else
-		return (0);
-#endif
+	return (test_and_set_bit(VEC_POS(vec), (unsigned long *)(bitmap +
+	    REG_POS(vec))));
 }
 
 
@@ -849,7 +841,8 @@ static inline int
 apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
 {
 	apic->irr_pending = 1;
-	return (apic_test_and_set_vector(vec, apic->regs + APIC_IRR));
+	return (apic_test_and_set_vector(vec, (void *)((uintptr_t)apic->regs +
+	    APIC_IRR)));
 }
 
 inline int
@@ -884,9 +877,11 @@ __apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
 			break;
 
 		if (trig_mode) {
-			apic_set_vector(vector, apic->regs + APIC_TMR);
+			apic_set_vector(vector, (void *)((uintptr_t)apic->regs +
+			    APIC_TMR));
 		} else
-			apic_clear_vector(vector, apic->regs + APIC_TMR);
+			apic_clear_vector(vector,
+			    (void *)((uintptr_t)apic->regs + APIC_TMR));
 
 		result = !apic_test_and_set_irr(vector, apic);
 		if (!result) {
@@ -1208,7 +1203,7 @@ apic_test_and_clear_vector(int vec, caddr_t bitmap)
 {
 #ifndef XXX
 	return (test_and_clear_bit(VEC_POS(vec),
-	    (uint64_t *)(bitmap) + REG_POS(vec)));
+	    (unsigned long *)(bitmap + REG_POS(vec))));
 #else
 	if (BT_TEST((bitmap) + REG_POS(vec), VEC_POS(vec))) {
 		BT_CLEAR((bitmap) + REG_POS(vec), VEC_POS(vec));
@@ -1252,10 +1247,11 @@ apic_set_eoi(struct kvm_lapic *apic)
 	if (vector == -1)
 		return;
 
-	apic_clear_vector(vector, apic->regs + APIC_ISR);
+	apic_clear_vector(vector, (void *)((uintptr_t)apic->regs + APIC_ISR));
 	apic_update_ppr(apic);
 
-	if (apic_test_and_clear_vector(vector, apic->regs + APIC_TMR))
+	if (apic_test_and_clear_vector(vector, (void *)((uintptr_t)apic->regs +
+	    APIC_TMR)))
 		trigger_mode = IOAPIC_LEVEL_TRIG;
 	else
 		trigger_mode = IOAPIC_EDGE_TRIG;
@@ -2400,8 +2396,9 @@ fx_init(struct kvm_vcpu *vcpu)
 	vcpu->arch.cr0 |= X86_CR0_ET;
 	after_mxcsr_mask = offsetof(struct i387_fxsave_struct, st_space);
 	vcpu->arch.guest_fx_image.mxcsr = 0x1f80;
-	memset((void *)&vcpu->arch.guest_fx_image + after_mxcsr_mask, 0,
-	    sizeof (struct i387_fxsave_struct) - after_mxcsr_mask);
+	memset((void *)((uintptr_t)&vcpu->arch.guest_fx_image +
+	    after_mxcsr_mask), 0, sizeof (struct i387_fxsave_struct) -
+	    after_mxcsr_mask);
 }
 
 extern inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx);
