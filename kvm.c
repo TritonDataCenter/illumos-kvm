@@ -206,6 +206,8 @@ extern int mmu_topup_memory_caches(struct kvm_vcpu *vcpu);
 extern int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 				    struct kvm_lapic_irq *irq);
 extern int sigprocmask(int, const sigset_t *, sigset_t *);
+extern void start_apic_timer(struct kvm_lapic *);
+extern void update_divide_count(struct kvm_lapic *);
 extern void cli(void);
 extern void sti(void);
 
@@ -13921,22 +13923,21 @@ fail:
 	return NULL;
 }
 
-void kvm_apic_post_state_restore(struct kvm_vcpu *vcpu)
+void
+kvm_apic_post_state_restore(struct kvm_vcpu *vcpu)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 
 	apic->base_address = vcpu->arch.apic_base &
-			     MSR_IA32_APICBASE_BASE;
+	    MSR_IA32_APICBASE_BASE;
 	kvm_apic_set_version(vcpu);
 
 	apic_update_ppr(apic);
-#ifdef XXX
-	hrtimer_cancel(&apic->lapic_timer.timer);
+	if (apic->lapic_timer.active)
+		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
+	apic->lapic_timer.active = 0;
 	update_divide_count(apic);
 	start_apic_timer(apic);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
 	apic->irr_pending = 1;
 }
 

@@ -741,7 +741,7 @@ static int apic_lvtt_period(struct kvm_lapic *apic)
 	return (apic_get_reg(apic, APIC_LVTT) & APIC_LVT_TIMER_PERIODIC);
 }
 
-static void
+void
 start_apic_timer(struct kvm_lapic *apic)
 {
 	hrtime_t now = gethrtime();
@@ -1093,7 +1093,7 @@ apic_send_ipi(struct kvm_lapic *apic)
 	kvm_irq_delivery_to_apic(apic->vcpu->kvm, apic, &irq);
 }
 
-static void
+void
 update_divide_count(struct kvm_lapic *apic)
 {
 	uint32_t tmp1, tmp2, tdcr;
