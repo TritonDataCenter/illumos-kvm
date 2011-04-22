@@ -11941,6 +11941,21 @@ void kvm_vcpu_block(struct kvm_vcpu *vcpu)
 	finish_wait(&vcpu->wq, &wait);
 #else
 	XXX_KVM_PROBE;
+
+	for (;;) {
+		if (kvm_arch_vcpu_runnable(vcpu)) {
+			set_bit(KVM_REQ_UNHALT, &vcpu->requests);
+			break;
+		}
+
+		if (kvm_cpu_has_pending_timer(vcpu))
+			break;
+
+		if (issig(JUSTLOOKING))
+			break;
+
+		preempt();
+	}
 #endif /*XXX*/
 }
 
