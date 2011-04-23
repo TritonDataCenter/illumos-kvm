@@ -5063,12 +5063,12 @@ __vmx_load_host_state(struct vcpu_vmx *vmx)
 		 * If we have to reload gs, we must take care to
 		 * preserve our gs base.
 		 */
-		kpreempt_disable();
+		cli();
 		kvm_load_gs(vmx->host_state.gs_sel);
 #ifdef CONFIG_X86_64
 		wrmsrl(MSR_GS_BASE, vmcs_readl(HOST_GS_BASE));
 #endif
-		kpreempt_enable();
+		sti();
 	}
 	reload_tss();
 
