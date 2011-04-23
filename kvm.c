@@ -13639,7 +13639,8 @@ static struct kvm_timer_ops kpit_ops = {
 	.is_periodic = kpit_is_periodic,
 };
 
-static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
+static void
+create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
 {
 	struct kvm_timer *pt = &ps->pit_timer;
 	int64_t interval;
@@ -13674,10 +13675,15 @@ static void create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_per
 	pt->pending = 0;  /*XXX need protection?*/
 	ps->irq_ack = 1;
 
-	pt->kvm_cyc_when.cyt_when = 0;
-	pt->kvm_cyc_when.cyt_interval = pt->period;
-	pt->kvm_cyclic_id = cyclic_add(&pt->kvm_cyc_handler, &pt->kvm_cyc_when);
 	pt->start = gethrtime();
+	if (is_period) {
+		pt->kvm_cyc_when.cyt_when = 0;
+		pt->kvm_cyc_when.cyt_interval = pt->period;
+	} else {
+		pt->kvm_cyc_when.cyt_when = pt->start + pt->period;
+		pt->kvm_cyc_when.cyt_when = CY_INFINITY;
+	}
+	pt->kvm_cyclic_id = cyclic_add(&pt->kvm_cyc_handler, &pt->kvm_cyc_when);
 	pt->intervals = 0;
 	pt->active = 1;
 	mutex_exit(&cpu_lock);

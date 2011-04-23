@@ -752,23 +752,32 @@ start_apic_timer(struct kvm_lapic *apic)
 	if (!apic->lapic_timer.period)
 		return;
 
+	mutex_enter(&cpu_lock);
+
+	apic->lapic_timer.start = gethrtime();
+
 	/*
 	 * Do not allow the guest to program periodic timers with small
 	 * interval, since the hrtimers are not throttled by the host
 	 * scheduler.
+	 *
+	 * If it is a one shot, we want to program it differently.
 	 */
 	if (apic_lvtt_period(apic)) {
 		if (apic->lapic_timer.period < NSEC_PER_MSEC / 2)
 			apic->lapic_timer.period = NSEC_PER_MSEC / 2;
+		apic->lapic_timer.kvm_cyc_when.cyt_when = 0;
+		apic->lapic_timer.kvm_cyc_when.cyt_interval =
+		    apic->lapic_timer.period;
+	} else {
+		apic->lapic_timer.kvm_cyc_when.cyt_when =
+		    apic->lapic_timer.start + apic->lapic_timer.period;
+		apic->lapic_timer.kvm_cyc_when.cyt_interval = CY_INFINITY;
 	}
 
-	mutex_enter(&cpu_lock);
-	apic->lapic_timer.kvm_cyc_when.cyt_when = 0;
-	apic->lapic_timer.kvm_cyc_when.cyt_interval = apic->lapic_timer.period;
 	apic->lapic_timer.kvm_cyclic_id =
 	    cyclic_add(&apic->lapic_timer.kvm_cyc_handler,
 	    &apic->lapic_timer.kvm_cyc_when);
-	apic->lapic_timer.start = gethrtime();
 	apic->lapic_timer.active = 1;
 	apic->lapic_timer.intervals = 0;
 	mutex_exit(&cpu_lock);
