@@ -158,18 +158,18 @@ enum kvm_reg_ex {
  */
 #define KVM_NR_MEM_OBJS 40
 
-struct kvm_mmu_memory_cache {
+typedef struct kvm_mmu_memory_cache {
 	int nobjs;
 	void *objects[KVM_NR_MEM_OBJS];
-};
+} kvm_mmu_memory_cache_t;
 
 #ifdef _KERNEL
 #define NR_PTE_CHAIN_ENTRIES 5
 
-struct kvm_pte_chain {
+typedef struct kvm_pte_chain {
 	uint64_t *parent_ptes[NR_PTE_CHAIN_ENTRIES];
 	struct list_node link;
-};
+} kvm_pte_chain_t;
 
 /*
  * kvm_mmu_page_role, below, is defined as:
@@ -196,7 +196,7 @@ union kvm_mmu_page_role {
 	};
 };
 
-struct kvm_mmu_page {
+typedef struct kvm_mmu_page {
 	struct list_node link;
 	struct list_node hash_link;
 
@@ -227,19 +227,19 @@ struct kvm_mmu_page {
 		list_t parent_ptes; /* multimapped, kvm_pte_chain */
 	};
 	unsigned long unsync_child_bitmap[BT_BITOUL(512)];
-};
+} kvm_mmu_page_t;
 
 #endif /*_KERNEL*/
 
-struct kvm_pv_mmu_op_buffer {
+typedef struct kvm_pv_mmu_op_buffer {
 	void *ptr;
 	unsigned len;
 	unsigned processed;
 	char pad[2];
 	char buf[512];
-};
+} kvm_pv_mmu_op_buffer_t;
 
-struct kvm_pio_request {
+typedef struct kvm_pio_request {
 	unsigned long count;
 	int cur_count;
 	gva_t guest_gva;
@@ -249,7 +249,7 @@ struct kvm_pio_request {
 	int string;
 	int down;
 	int rep;
-};
+} kvm_pio_request_t;
 
 #ifdef _KERNEL
 /*
@@ -257,7 +257,7 @@ struct kvm_pio_request {
  * 32-bit).  The kvm_mmu structure abstracts the details of the current mmu
  * mode.
  */
-struct kvm_mmu {
+typedef struct kvm_mmu {
 	void (*new_cr3)(struct kvm_vcpu *vcpu);
 	int (*page_fault)(struct kvm_vcpu *vcpu, gva_t gva, uint32_t err);
 	void (*free)(struct kvm_vcpu *vcpu);
@@ -275,11 +275,11 @@ struct kvm_mmu {
 
 	uint64_t *pae_root;
 	uint64_t rsvd_bits_mask[2][4];
-};
+} kvm_mmu_t;
 
 #endif /*_KERNEL*/
 
-struct kvm_cpuid_entry2 {
+typedef struct kvm_cpuid_entry2 {
 	uint32_t function;
 	uint32_t index;
 	uint32_t flags;
@@ -288,9 +288,9 @@ struct kvm_cpuid_entry2 {
 	uint32_t ecx;
 	uint32_t edx;
 	uint32_t padding[3];
-};
+} kvm_cpuid_entry2_t;
 
-struct kvm_segment {
+typedef struct kvm_segment {
 	uint64_t base;
 	uint32_t limit;
 	unsigned short selector;
@@ -298,7 +298,7 @@ struct kvm_segment {
 	unsigned char  present, dpl, db, s, l, g, avl;
 	unsigned char  unusable;
 	unsigned char  padding;
-};
+} kvm_segment_t;
 
 
 #ifdef _KERNEL
@@ -312,20 +312,20 @@ typedef unsigned char mtrr_type;
 #define MTRR_NUM_FIXED_RANGES 88
 #define MTRR_MAX_VAR_RANGES 256
 
-struct mtrr_var_range {
+typedef struct mtrr_var_range {
 	uint32_t base_lo;
 	uint32_t base_hi;
 	uint32_t mask_lo;
 	uint32_t mask_hi;
-};
+} mtrr_var_range_t;
 
-struct mtrr_state_type {
+typedef struct mtrr_state_type {
 	struct mtrr_var_range var_ranges[MTRR_MAX_VAR_RANGES];
 	mtrr_type fixed_ranges[MTRR_NUM_FIXED_RANGES];
 	unsigned char enabled;
 	unsigned char have_fixed;
 	mtrr_type def_type;
-};
+} mtrr_state_type_t;
 
 struct i387_fxsave_struct {
 	unsigned short			cwd; /* Control Word			*/
@@ -362,6 +362,8 @@ struct i387_fxsave_struct {
 
 } __attribute__((aligned(16)));
 
+typedef struct i387_fxsave_struct i387_fxsave_struct_t;
+
 /*
  * These structs MUST NOT be changed.
  * They are the ABI between hypervisor and guest OS.
@@ -392,7 +394,9 @@ struct pvclock_vcpu_time_info {
 	unsigned char    pad[3];
 } __attribute__((__packed__)); /* 32 bytes */
 
-struct kvm_vcpu_arch {
+typedef struct pvclock_vcpu_time_info pvclock_vcpu_time_info_t;
+
+typedef struct kvm_vcpu_arch {
 	uint64_t host_tsc;
 	/*
 	 * rip and regs accesses must go through
@@ -505,24 +509,24 @@ struct kvm_vcpu_arch {
 	unsigned long singlestep_rip;
 	/* fields used by HYPER-V emulation */
 	uint64_t hv_vapic;
-};
+} kvm_vcpu_arch_t;
 
-struct kvm_mem_alias {
+typedef struct kvm_mem_alias {
 	gfn_t base_gfn;
 	unsigned long npages;
 	gfn_t target_gfn;
 #define KVM_ALIAS_INVALID     1UL
 	unsigned long flags;
-};
+} kvm_mem_alias_t;
 
 #define KVM_ARCH_HAS_UNALIAS_INSTANTIATION
 
-struct kvm_mem_aliases {
+typedef struct kvm_mem_aliases {
 	struct kvm_mem_alias aliases[KVM_ALIAS_SLOTS];
 	int naliases;
-};
+} kvm_mem_aliases_t;
 
-struct kvm_xen_hvm_config {
+typedef struct kvm_xen_hvm_config {
 	uint32_t flags;
 	uint32_t msr;
 	uint64_t blob_addr_32;
@@ -530,11 +534,11 @@ struct kvm_xen_hvm_config {
 	unsigned char blob_size_32;
 	unsigned char blob_size_64;
 	unsigned char pad2[30];
-};
+} kvm_xen_hvm_config_t;
 
 
 
-struct kvm_arch {
+typedef struct kvm_arch {
 	struct kvm_mem_aliases *aliases;
 
 	unsigned int n_free_mmu_pages;
@@ -571,9 +575,9 @@ struct kvm_arch {
 	/* fields used by HYPER-V emulation */
 	uint64_t hv_guest_os_id;
 	uint64_t hv_hypercall;
-};
+} kvm_arch_t;
 
-struct kvm_vm_stat {
+typedef struct kvm_vm_stat {
 	uint32_t mmu_shadow_zapped;
 	uint32_t mmu_pte_write;
 	uint32_t mmu_pte_updated;
@@ -584,9 +588,9 @@ struct kvm_vm_stat {
 	uint32_t mmu_unsync;
 	uint32_t remote_tlb_flush;
 	uint32_t lpages;
-};
+} kvm_vm_stat_t;
 
-struct kvm_vcpu_stat {
+typedef struct kvm_vcpu_stat {
 	uint32_t pf_fixed;
 	uint32_t pf_guest;
 	uint32_t tlb_flush;
@@ -610,7 +614,7 @@ struct kvm_vcpu_stat {
 	uint32_t hypercalls;
 	uint32_t irq_injections;
 	uint32_t nmi_injections;
-};
+} kvm_vcpu_stat_t;
 
 #define KVM_GUESTDBG_USE_SW_BP		0x00010000
 #define KVM_GUESTDBG_USE_HW_BP		0x00020000
@@ -618,29 +622,31 @@ struct kvm_vcpu_stat {
 #define KVM_GUESTDBG_INJECT_BP		0x00080000
 
 /* for KVM_SET_GUEST_DEBUG */
-struct kvm_guest_debug_arch {
+typedef struct kvm_guest_debug_arch {
 	uint64_t debugreg[8];
-};
+} kvm_guest_debug_arch_t;
 
 /* for KVM_SET_GUEST_DEBUG */
 
 #define KVM_GUESTDBG_ENABLE		0x00000001
 #define KVM_GUESTDBG_SINGLESTEP		0x00000002
 
-struct kvm_guest_debug {
+typedef struct kvm_guest_debug {
 	uint32_t control;
 	uint32_t pad;
 	struct kvm_guest_debug_arch arch;
-};
+} kvm_guest_debug_t;
 
 struct descriptor_table {
 	unsigned short limit;
 	unsigned long base;
 } __attribute__((packed));
 
+typedef struct descriptor_table descriptor_table_t;
+
 struct kvm_vcpu_ioc;
 
-struct kvm_x86_ops {
+typedef struct kvm_x86_ops {
 	int (*cpu_has_kvm_support)(void);          /* __init */
 	int (*disabled_by_bios)(void);             /* __init */
 	int (*hardware_enable)(void *dummy);
@@ -716,7 +722,7 @@ struct kvm_x86_ops {
 	int (*get_lpage_level)(void);
 	int (*rdtscp_supported)(void);
 	const struct trace_print_flags *exit_reasons_str;
-};
+} kvm_x86_ops_t;
 
 extern struct kvm_x86_ops *kvm_x86_ops;
 
@@ -929,6 +935,8 @@ struct desc_struct {
 		}b;
 	}c;
 } __attribute__((packed));
+
+typedef struct desc_struct desc_struct_t;
 
 static unsigned long get_desc_base(const struct desc_struct *desc)
 {

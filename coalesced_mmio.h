@@ -10,16 +10,16 @@
  *
  */
 
-struct kvm_coalesced_mmio_zone {
+typedef struct kvm_coalesced_mmio_zone {
 	uint64_t addr;
 	uint32_t size;
 	uint32_t pad;
-};
+} kvm_coalesced_mmio_zone_t;
 
-struct kvm_coalesced_mmio_zone_ioc {
+typedef struct kvm_coalesced_mmio_zone_ioc {
 	struct kvm_coalesced_mmio_zone zone;
 	int kvmid;
-};
+} kvm_coalesced_mmio_zone_ioc_t;
 
 #ifdef CONFIG_KVM_MMIO
 
@@ -30,13 +30,13 @@ struct kvm_coalesced_mmio_zone_ioc {
 
 #ifdef _KERNEL
 
-struct kvm_coalesced_mmio_dev {
+typedef struct kvm_coalesced_mmio_dev {
 	struct kvm_io_device dev;
 	struct kvm *kvm;
 	kmutex_t lock;
 	int nb_zones;
 	struct kvm_coalesced_mmio_zone zone[KVM_COALESCED_MMIO_ZONE_MAX];
-};
+} kvm_coalesced_mmio_dev_t;
 
 int kvm_coalesced_mmio_init(struct kvm *kvm);
 void kvm_coalesced_mmio_free(struct kvm *kvm);

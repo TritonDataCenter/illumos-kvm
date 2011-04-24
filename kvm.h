@@ -117,11 +117,11 @@
 #define KVM_MCE_CAP_SUPPORTED MCG_CTL_P
 
 /* for ioctl KVM_X86_SETUP_MCE */
-struct mcg_cap_ioc {
+typedef struct mcg_cap_ioc {
 	int kvm_kvmid;
 	int kvm_cpu_index;
 	uint64_t mcg_cap;
-};
+} mcg_cap_ioc_t;
 
 #define KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
 	(X86_CR0_WP | X86_CR0_NE | X86_CR0_NW | X86_CR0_CD)
@@ -246,19 +246,19 @@ struct mcg_cap_ioc {
 #define KVM_NR_PAGE_SIZES	3  /* XXX assumes x86 */
 
 #ifdef _KERNEL
-struct kvm_vcpu_data {
+typedef struct kvm_vcpu_data {
 	char vcpu_vhpt[VHPT_SIZE];
 	char vcpu_vtlb[VTLB_SIZE];
 	char vcpu_vpd[VPD_SIZE];
 	char vcpu_struct[VCPU_STRUCT_SIZE];
-};
+} kvm_vcpu_data_t;
 
-struct kvm_vm_data {
+typedef struct kvm_vm_data {
 	char kvm_p2m[KVM_P2M_SIZE];
 	char kvm_vm_struct[KVM_VM_STRUCT_SIZE];
 	char kvm_mem_dirty_log[KVM_MEM_DIRTY_LOG_SIZE];
 	struct kvm_vcpu_data vcpu_data[KVM_MAX_VCPUS];
-};
+} kvm_vm_data_t;
 
 /*
  * We don't want allocation failures within the mmu code, so we preallocate
@@ -272,7 +272,7 @@ struct kvm_vm_data {
  * fxsave fpu state.  Taken from x86_64/processor.h.  To be killed when
  * we have asm/x86/processor.h
  */
-struct fxsave {
+typedef struct fxsave {
 	uint16_t	cwd;
 	uint16_t	swd;
 	uint16_t	twd;
@@ -287,7 +287,7 @@ struct fxsave {
 #else
 	uint32_t	xmm_space[32];	/* 8*16 bytes for each XMM-reg = 128 bytes */
 #endif
-};
+} fxsave_t;
 
 #endif /*_KERNEL*/
 
@@ -338,7 +338,7 @@ struct fxsave {
 
 #ifdef _KERNEL
 
-struct kvm_timer {
+typedef struct kvm_timer {
 #ifdef XXX
 	struct hrtimer timer;
 #else
@@ -355,13 +355,13 @@ struct kvm_timer {
 	struct kvm_timer_ops *t_ops;
 	struct kvm *kvm;
 	struct kvm_vcpu *vcpu;
-};
+} kvm_timer_t;
 
-struct kvm_timer_ops {
+typedef struct kvm_timer_ops {
         int (*is_periodic)(struct kvm_timer *);
-};
+} kvm_timer_ops_t;
 
-struct kvm_lapic {
+typedef struct kvm_lapic {
 	unsigned long base_address;
 	struct kvm_io_device dev;
 	struct kvm_timer lapic_timer;
@@ -372,12 +372,12 @@ struct kvm_lapic {
 	void *regs;
 	gpa_t vapic_addr;
 	page_t *vapic_page;
-};
+} kvm_lapic_t;
 
 struct vcpu_vmx;
 struct kvm_user_return_notifier;
 
-struct kvm_vcpu {
+typedef struct kvm_vcpu {
 	struct kvm *kvm;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	struct preempt_notifier preempt_notifier;
@@ -411,32 +411,30 @@ struct kvm_vcpu {
 	struct kvm_vcpu_arch arch;
 	ddi_umem_cookie_t cookie;
 	struct kvm_user_return_notifier *urn;
-};
-typedef struct kvm_vcpu kvm_vcpu_t;
-
+} kvm_vcpu_t;
 
 #define KVM_NR_SHARED_MSRS 16
 
-struct kvm_shared_msrs_global {
+typedef struct kvm_shared_msrs_global {
 	int nr;
 	uint32_t msrs[KVM_NR_SHARED_MSRS];
-};
+} kvm_shared_msrs_global_t;
 
-struct kvm_user_return_notifier {
+typedef struct kvm_user_return_notifier {
 	void (*on_user_return)(struct kvm_vcpu *,
 	    struct kvm_user_return_notifier *);
-};
+} kvm_user_return_notifier_t;
 
-struct kvm_shared_msrs {
+typedef struct kvm_shared_msrs {
 	struct kvm_user_return_notifier urn;
 	int registered;
 	struct kvm_shared_msr_values {
 		uint64_t host;
 		uint64_t curr;
 	} values[KVM_NR_SHARED_MSRS];
-};
+} kvm_shared_msrs_t;
 
-struct kvm_memory_slot {
+typedef struct kvm_memory_slot {
 	gfn_t base_gfn;
 	unsigned long npages;
 	unsigned long flags;
@@ -448,14 +446,14 @@ struct kvm_memory_slot {
 	} *lpage_info[KVM_NR_PAGE_SIZES];
 	unsigned long userspace_addr;
 	int user_alloc;
-};
+} kvm_memory_slot_t;
 
 
-struct kvm_memslots {
+typedef struct kvm_memslots {
 	int nmemslots;
 	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS +
 					KVM_PRIVATE_MEM_SLOTS];
-};
+} kvm_memslots_t;
 
 #endif /*_KERNEL*/
 
@@ -585,7 +583,7 @@ extern list_t vm_list;
 #define KVM_NR_IRQCHIPS          3
 
 /* for KVM_GET_IRQCHIP and KVM_SET_IRQCHIP */
-struct kvm_pic_state {
+typedef struct kvm_pic_state {
 	uint8_t last_irr;	/* edge detection */
 	uint8_t irr;		/* interrupt request register */
 	uint8_t imr;		/* interrupt mask register */
@@ -602,10 +600,10 @@ struct kvm_pic_state {
 	uint8_t init4;		/* true if 4 byte init */
 	uint8_t elcr;		/* PIIX edge/trigger selection */
 	uint8_t elcr_mask;
-};
+} kvm_pic_state_t;
 
 #define KVM_IOAPIC_NUM_PINS  24
-struct kvm_ioapic_state {
+typedef struct kvm_ioapic_state {
 	uint64_t base_address;
 	uint32_t ioregsel;
 	uint32_t id;
@@ -627,9 +625,9 @@ struct kvm_ioapic_state {
 			uint8_t dest_id;
 		} fields;
 	} redirtbl[KVM_IOAPIC_NUM_PINS];
-};
+} kvm_ioapic_state_t;
 
-struct kvm_irqchip {
+typedef struct kvm_irqchip {
 	uint32_t chip_id;
 	uint32_t pad;
         union {
@@ -637,79 +635,79 @@ struct kvm_irqchip {
 		struct kvm_pic_state pic;
 		struct kvm_ioapic_state ioapic;
 	} chip;
-};
+} kvm_irqchip_t;
 
 /* for KVM_GET_IRQCHIP */
-struct kvm_irqchip_ioc {
+typedef struct kvm_irqchip_ioc {
 	struct kvm_irqchip chip;
 	int kvmid;
-};
+} kvm_irqchip_ioc_t;
 
 
 /* for KVM_CREATE_PIT2 */
-struct kvm_pit_config {
+typedef struct kvm_pit_config {
 	uint32_t flags;
 	uint32_t pad[15];
-};
+} kvm_pit_config_t;
 
 /* for KVM_GET_REGS and KVM_SET_REGS */
-struct kvm_regs {
+typedef struct kvm_regs {
 	/* out (KVM_GET_REGS) / in (KVM_SET_REGS) */
         uint64_t rax, rbx, rcx, rdx;
 	uint64_t rsi, rdi, rsp, rbp;
 	uint64_t r8,  r9,  r10, r11;
 	uint64_t r12, r13, r14, r15;
 	uint64_t rip, rflags;
-};
+} kvm_regs_t;
 
-struct kvm_regs_ioc {
+typedef struct kvm_regs_ioc {
 	struct kvm_regs kvm_regs;
 	int kvm_cpu_index;
 	int kvm_kvmid;
-};
+} kvm_regs_ioc_t;
 
-struct kvm_mp_state {
+typedef struct kvm_mp_state {
 	uint32_t mp_state;
-};
+} kvm_mp_state_t;
 
-struct kvm_mp_state_ioc {
+typedef struct kvm_mp_state_ioc {
 	struct kvm_mp_state mp_state;
 	int kvm_cpu_index;
 	int kvm_kvmid;
-};
+} kvm_mp_state_ioc_t;
 
 /* for KVM_GET_LAPIC and KVM_SET_LAPIC */
 #define KVM_APIC_REG_SIZE 0x400
-struct kvm_lapic_state {
+typedef struct kvm_lapic_state {
 	char regs[KVM_APIC_REG_SIZE];
-};
+} kvm_lapic_state_t;
 
-struct kvm_lapic_ioc {
+typedef struct kvm_lapic_ioc {
 	int kvm_cpu_index;
 	int kvm_kvmid;
 	struct kvm_lapic_state s;
-};
+} kvm_lapic_ioc_t;
 
 
-struct kvm_dtable {
+typedef struct kvm_dtable {
 	uint64_t base;
 	unsigned short limit;
 	unsigned short padding[3];
-};
+} kvm_dtable_t;
 
 /* Architectural interrupt line count. */
 #define KVM_NR_INTERRUPTS 256
 
 
-struct kvm_vmx_segment_field {
+typedef struct kvm_vmx_segment_field {
 	unsigned selector;
 	unsigned base;
 	unsigned limit;
 	unsigned ar_bytes;
-};
+} kvm_vmx_segment_field_t;
 
 /* for KVM_GET_SREGS and KVM_SET_SREGS */
-struct kvm_sregs {
+typedef struct kvm_sregs {
 	/* out (KVM_GET_SREGS) / in (KVM_SET_SREGS) */
 	struct kvm_segment cs, ds, es, fs, gs, ss;
 	struct kvm_segment tr, ldt;
@@ -718,20 +716,20 @@ struct kvm_sregs {
 	uint64_t efer;
 	uint64_t apic_base;
 	unsigned long interrupt_bitmap[(KVM_NR_INTERRUPTS + (64-1)) / 64]; /*XXX 64 = bits in unsigned long*/
-};
+} kvm_sregs_t;
 
-struct kvm_sregs_ioc {
+typedef struct kvm_sregs_ioc {
 	struct kvm_sregs sregs;
 	int kvm_cpu_index;
 	int kvm_kvmid;
-};
+} kvm_sregs_ioc_t;
 
 /* When set in flags, include corresponding fields on KVM_SET_VCPU_EVENTS */
 #define KVM_VCPUEVENT_VALID_NMI_PENDING	0x00000001
 #define KVM_VCPUEVENT_VALID_SIPI_VECTOR	0x00000002
 
 /* for KVM_GET/SET_VCPU_EVENTS */
-struct kvm_vcpu_events {
+typedef struct kvm_vcpu_events {
 	struct {
 		unsigned char injected;
 		unsigned char nr;
@@ -754,21 +752,21 @@ struct kvm_vcpu_events {
 	uint32_t sipi_vector;
 	uint32_t flags;
 	uint32_t reserved[10];
-};
+} kvm_vcpu_events_t;
 
-struct kvm_vcpu_events_ioc {
+typedef struct kvm_vcpu_events_ioc {
 	struct kvm_vcpu_events events;
 	int kvm_cpu_index;
 	int kvm_kvmid;
-};
+} kvm_vcpu_events_ioc_t;
 
 #define KVM_CAP_IRQ_ROUTING 25
 
 #ifdef KVM_CAP_IRQ_ROUTING
-struct kvm_irq_routing_irqchip {
+typedef struct kvm_irq_routing_irqchip {
 	uint32_t irqchip;
 	uint32_t pin;
-};
+} kvm_irq_routing_irqchip_t;
 
 /*
  * Shift/mask fields for msi address
@@ -805,18 +803,18 @@ struct kvm_irq_routing_irqchip {
 #define  MSI_DATA_TRIGGER_EDGE		(0 << MSI_DATA_TRIGGER_SHIFT)
 #define  MSI_DATA_TRIGGER_LEVEL		(1 << MSI_DATA_TRIGGER_SHIFT)
 
-struct kvm_irq_routing_msi {
+typedef struct kvm_irq_routing_msi {
 	uint32_t address_lo;
 	uint32_t address_hi;
 	uint32_t data;
 	uint32_t pad;
-};
+} kvm_irq_routing_msi_t;
 
 /* gsi routing entry types */
 #define KVM_IRQ_ROUTING_IRQCHIP 1
 #define KVM_IRQ_ROUTING_MSI 2
 
-struct kvm_irq_routing_entry {
+typedef struct kvm_irq_routing_entry {
 	uint32_t gsi;
 	uint32_t type;
 	uint32_t flags;
@@ -826,13 +824,13 @@ struct kvm_irq_routing_entry {
 		struct kvm_irq_routing_msi msi;
 		uint32_t pad[8];
 	} u;
-};
+} kvm_irq_routing_entry_t;
 
-struct kvm_irq_routing {
+typedef struct kvm_irq_routing {
 	uint32_t nr;
 	uint32_t flags;
 	struct kvm_irq_routing_entry entries[1];
-};
+} kvm_irq_routing_t;
 
 #endif
 
@@ -843,20 +841,20 @@ struct kvm_irq_routing {
 struct kvm_vcpu;
 struct kvm;
 
-struct kvm_irq_ack_notifier {
+typedef struct kvm_irq_ack_notifier {
 	list_t link;
 	unsigned gsi;
 	void (*irq_acked)(struct kvm_irq_ack_notifier *kian);
-};
+} kvm_irq_ack_notifier_t;
 
 #define KVM_ASSIGNED_MSIX_PENDING		0x1
-struct kvm_guest_msix_entry {
+typedef struct kvm_guest_msix_entry {
 	uint32_t vector;
 	unsigned short entry;
 	unsigned short flags;
-};
+} kvm_guest_msix_entry_t;
 
-struct kvm_assigned_dev_kernel {
+typedef struct kvm_assigned_dev_kernel {
 	struct kvm_irq_ack_notifier ack_notifier;
 	list_t interrupt_work;
 	list_t list;
@@ -876,7 +874,7 @@ struct kvm_assigned_dev_kernel {
 	struct pci_dev *dev;
 	struct kvm *kvm;
 	kmutex_t assigned_dev_lock;
-};
+} kvm_assigned_dev_kernel_t;
 
 #ifndef container_of
 /**
@@ -905,29 +903,29 @@ struct kvm_assigned_dev_kernel {
 #define NMI_VECTOR 0x02
 
 
-struct kvm_mmu_pages {
+typedef struct kvm_mmu_pages {
 	struct mmu_page_and_offset {
 		struct kvm_mmu_page *sp;
 		unsigned int idx;
 	} page[KVM_PAGE_ARRAY_NR];
 	unsigned int nr;
-};
+} kvm_mmu_pages_t;
 
-struct mmu_page_path {
+typedef struct mmu_page_path {
 	struct kvm_mmu_page *parent[PT64_ROOT_LEVEL-1];
 	unsigned int idx[PT64_ROOT_LEVEL-1];
-};
+} mmu_page_path_t;
 
 /*
  * Save the original ist values for checking stack pointers during debugging
  */
-struct orig_ist {
+typedef struct orig_ist {
 	unsigned long		ist[7];
-};
+} orig_ist_t;
 
 #define	MXCSR_DEFAULT		0x1f80
 
-struct i387_fsave_struct {
+typedef struct i387_fsave_struct {
 	uint32_t			cwd;	/* FPU Control Word		*/
 	uint32_t			swd;	/* FPU Status Word		*/
 	uint32_t			twd;	/* FPU Tag Word			*/
@@ -941,10 +939,10 @@ struct i387_fsave_struct {
 
 	/* Software status information [not touched by FSAVE ]:		*/
 	uint32_t			status;
-};
+} i387_fsave_struct_t;
 
 
-struct i387_soft_struct {
+typedef struct i387_soft_struct {
 	uint32_t			cwd;
 	uint32_t			swd;
 	uint32_t			twd;
@@ -962,7 +960,7 @@ struct i387_soft_struct {
 	unsigned char			alimit;
 	struct math_emu_info	*info;
 	uint32_t			entry_eip;
-};
+} i387_soft_struct_t;
 
 #define KVM_CPUID_FLAG_SIGNIFCANT_INDEX 1
 #define KVM_CPUID_FLAG_STATEFUL_FUNC    2
@@ -970,7 +968,7 @@ struct i387_soft_struct {
 
 
 /* for KVM_GET_FPU and KVM_SET_FPU */
-struct kvm_fpu {
+typedef struct kvm_fpu {
 	unsigned char  fpr[8][16];
 	unsigned short fcw;
 	unsigned short fsw;
@@ -982,66 +980,66 @@ struct kvm_fpu {
 	unsigned char  xmm[16][16];
 	uint32_t mxcsr;
 	uint32_t pad2;
-};
+} kvm_fpu_t;
 
-struct kvm_fpu_ioc {
+typedef struct kvm_fpu_ioc {
 	struct kvm_fpu fpu;
 	int kvm_cpu_index;
 	int kvm_kvmid;
-};
+} kvm_fpu_ioc_t;
 
-struct kvm_msr_entry {
+typedef struct kvm_msr_entry {
 	uint32_t index;
 	uint32_t reserved;
 	uint64_t data;
-};
+} kvm_msr_entry_t;
 
 /* for KVM_GET_MSRS and KVM_SET_MSRS */
-struct kvm_msrs {
+typedef struct kvm_msrs {
 	uint32_t nmsrs; /* number of msrs in entries */
 	uint32_t pad;
 
 	struct kvm_msr_entry entries[100];
-};
+} kvm_msrs_t;
 
-struct kvm_msrs_ioc {
+typedef struct kvm_msrs_ioc {
 	struct kvm_msrs kvm_msrs;
 	int kvm_cpu_index;
 	int kvm_kvmid;
-};
+} kvm_msrs_ioc_t;
 	
 /* for KVM_GET_MSR_INDEX_LIST */
-struct kvm_msr_list {
+typedef struct kvm_msr_list {
 	uint32_t nmsrs; /* number of msrs in entries */
 	uint32_t indices[1];
-};
+} kvm_msr_list_t;
 
-struct kvm_cpuid_entry {
+typedef struct kvm_cpuid_entry {
 	uint32_t function;
 	uint32_t eax;
 	uint32_t ebx;
 	uint32_t ecx;
 	uint32_t edx;
 	uint32_t padding;
-};
+} kvm_cpuid_entry_t;
 
 /* for KVM_SET_CPUID */
-struct kvm_cpuid {
+typedef struct kvm_cpuid {
 	uint32_t nent;
 	uint32_t padding;
 	struct kvm_cpuid_entry entries[1];
-};
+} kvm_cpuid_t;
 
-struct kvm_cpuid_ioc {
+typedef struct kvm_cpuid_ioc {
 	uint32_t nent;
 	uint32_t padding;
 	struct kvm_cpuid_entry entries[100];  /* XXX is 100 enough? */
 	int kvm_cpu_index;
 	int kvm_kvmid;
-};
+} kvm_cpuid_ioc_t;
 
 /* for KVM_GET_PIT and KVM_SET_PIT */
-struct kvm_pit_channel_state {
+typedef struct kvm_pit_channel_state {
 	uint32_t count; /* can be 65536 */
 	uint16_t latched_count;
 	uint8_t count_latched;
@@ -1055,21 +1053,21 @@ struct kvm_pit_channel_state {
 	uint8_t bcd;
 	uint8_t gate;
 	int64_t count_load_time;
-};
+} kvm_pit_channel_state_t;
 
-struct kvm_pit_ioc {
+typedef struct kvm_pit_ioc {
 	int kvmid;
 	int pad;
 	struct kvm_pic_state s;
-};
+} kvm_pit_ioc_t;
 
-struct kvm_debug_exit_arch {
+typedef struct kvm_debug_exit_arch {
 	uint32_t exception;
 	uint32_t pad;
 	uint64_t pc;
 	uint64_t dr6;
 	uint64_t dr7;
-};
+} kvm_debug_exit_arch_t;
 
 #define KVM_GUESTDBG_USE_SW_BP		0x00010000
 #define KVM_GUESTDBG_USE_HW_BP		0x00020000
@@ -1078,35 +1076,35 @@ struct kvm_debug_exit_arch {
 
 #ifdef XXX
 /* for KVM_SET_GUEST_DEBUG */
-struct kvm_guest_debug_arch {
+typedef struct kvm_guest_debug_arch {
 	uint64_t debugreg[8];
-};
+} kvm_guest_debug_arch_t;
 #endif /*XXX*/
 
-struct kvm_pit_state {
+typedef struct kvm_pit_state {
 	struct kvm_pit_channel_state channels[3];
-};
+} kvm_pit_state_t;
 
 #define KVM_PIT_FLAGS_HPET_LEGACY  0x00000001
 
-struct kvm_pit_state2 {
+typedef struct kvm_pit_state2 {
 	struct kvm_pit_channel_state channels[3];
 	uint32_t flags;
 	uint32_t reserved[9];
-};
+} kvm_pit_state2_t;
 
-struct kvm_reinject_control {
+typedef struct kvm_reinject_control {
 	uint8_t pit_reinject;
 	uint8_t reserved[31];
-};
+} kvm_reinject_control_t;
 
 
 /* for KVM_SET_CPUID2 */
-struct kvm_cpuid2 {
+typedef struct kvm_cpuid2 {
 	uint32_t nent;
 	uint32_t padding;
 	struct kvm_cpuid_entry2 entries[100];
-};
+} kvm_cpuid2_t;
 
 
 #define X86_SHADOW_INT_MOV_SS  1
@@ -1119,14 +1117,16 @@ struct pvclock_wall_clock {
 	uint32_t   nsec;
 } __attribute__((__packed__));
 
-struct msi_msg {
+typedef struct pvclock_wall_clock pvclock_wall_clock_t;
+
+typedef struct msi_msg {
 	uint32_t	address_lo;	/* low 32 bits of msi message address */
 	uint32_t	address_hi;	/* high 32 bits of msi message address */
 	uint32_t	data;		/* 16 bits of msi message data */
-};
+} msi_msg_t;
 
 
-struct kvm_kernel_irq_routing_entry {
+typedef struct kvm_kernel_irq_routing_entry {
 	uint32_t gsi;
 	uint32_t type;
 	int (*set)(struct kvm_kernel_irq_routing_entry *e,
@@ -1139,13 +1139,13 @@ struct kvm_kernel_irq_routing_entry {
 		struct msi_msg msi;
 	};
 	struct list_node link;
-};
+} kvm_kernel_irq_routing_entry_t;
 
 /*#ifdef __KVM_HAVE_IOAPIC*/
 
 #define KVM_MAX_IRQ_ROUTES 1024
 
-struct kvm_irq_routing_table {
+typedef struct kvm_irq_routing_table {
 	int chip[KVM_NR_IRQCHIPS][KVM_IOAPIC_NUM_PINS];
 	struct kvm_kernel_irq_routing_entry *rt_entries;
 	uint32_t nr_rt_entries;
@@ -1154,18 +1154,18 @@ struct kvm_irq_routing_table {
 	 * the gsi is connected to.
 	 */
 	list_t map[KVM_MAX_IRQ_ROUTES+1];
-};
+} kvm_irq_routing_table_t;
 
-struct kvm_kirq_routing {
+typedef struct kvm_kirq_routing {
 	uint32_t nr;
 	uint32_t flags;
 	struct kvm_irq_routing_entry entries[KVM_MAX_IRQ_ROUTES+1];
-};
+} kvm_kirq_routing_t;
 
-struct kvm_irq_routing_ioc {
+typedef struct kvm_irq_routing_ioc {
 	struct kvm_kirq_routing kvm_kirq_routing;
 	int kvmid;
-};
+} kvm_irq_routing_ioc_t;
 
 /*#endif  __KVM_HAVE_IOAPIC*/
 
@@ -1176,13 +1176,13 @@ struct kvm_irq_routing_ioc {
 
 #ifdef _KERNEL
 
-struct kvm_shadow_walk_iterator {
+typedef struct kvm_shadow_walk_iterator {
 	uint64_t addr;
 	hpa_t shadow_addr;
 	uint64_t *sptep;
 	int level;
 	unsigned index;
-};
+} kvm_shadow_walk_iterator_t;
 
 extern void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
 			     struct kvm_vcpu *vcpu, uint64_t addr);
@@ -1200,7 +1200,7 @@ enum kvm_bus {
 	KVM_NR_BUSES
 };
 
-struct kvm {
+typedef struct kvm {
 	kmutex_t mmu_lock;
 	kmutex_t requests_lock;
 	kmutex_t slots_lock;
@@ -1247,7 +1247,7 @@ struct kvm {
 	long mmu_notifier_count;
 #endif
 	int kvmid;  /* unique identifier for this kvm */
-};
+} kvm_t;
 #endif /*_KERNEL*/
 
 #define KVM_EXIT_UNKNOWN          0
@@ -1274,7 +1274,7 @@ struct kvm {
 #define KVM_INTERNAL_ERROR_SIMUL_EX 2
 
 /* for KVM_RUN, returned by mmap(vcpu_fd, offset=0) */
-struct kvm_run {
+typedef struct kvm_run {
 	/* in */
 	unsigned char request_interrupt_window;
 	unsigned char padding1[7];
@@ -1380,7 +1380,7 @@ struct kvm_run {
 		/* Fix the size of the union. */
 		char padding[256];
 	};
-};
+} kvm_run_t;
 
 /* the following is directly copied from ioctl.h on linux */
 #ifndef _ASM_GENERIC_IOCTL_H
@@ -1503,20 +1503,20 @@ static void native_load_tr_desc(void)
 #define KVMIO 0xAE
 
 /* for KVM_SET_CPUID2/KVM_GET_CPUID2 */
-struct kvm_cpuid2_ioc {
+typedef struct kvm_cpuid2_ioc {
 	struct kvm_cpuid2 cpuid_data;
 	int kvm_id;
 	int cpu_index;
-};
+} kvm_cpuid2_ioc_t;
 
 /* for KVM_RUN */
-struct kvm_run_ioc {
+typedef struct kvm_run_ioc {
 	int kvm_kvmid;
 	int kvm_cpu_index;
-};
+} kvm_run_ioc_t;
 
 /* x86 MCE */
-struct kvm_x86_mce {
+typedef struct kvm_x86_mce {
 	uint64_t status;
 	uint64_t addr;
 	uint64_t misc;
@@ -1524,30 +1524,30 @@ struct kvm_x86_mce {
 	uint8_t bank;
 	uint8_t pad1[7];
 	uint64_t pad2[3];
-};
+} kvm_x86_mce_t;
 
-struct kvm_clock_data {
+typedef struct kvm_clock_data {
 	uint64_t clock;
 	uint32_t flags;
 	uint32_t pad[9];
-};
+} kvm_clock_data_t;
 
 /* for KVM_SET_SIGNAL_MASK */
-struct kvm_signal_mask {
+typedef struct kvm_signal_mask {
 	uint32_t len;
 	uint8_t  sigset[1];
-};
+} kvm_signal_mask_t;
 
-struct kvm_pit_s2_ioc {
+typedef struct kvm_pit_s2_ioc {
 	int kvmid;
 	int pad;
 	struct kvm_pit_state2 s;
-};
+} kvm_pit_s2_ioc_t;
 
-struct kvm_set_boot_cpu_id_ioc {
+typedef struct kvm_set_boot_cpu_id_ioc {
 	int kvmid;
 	int id;
-};
+} kvm_set_boot_cpu_id_ioc_t;
 
 /*
  * ioctls for vcpu fds
@@ -1603,7 +1603,7 @@ struct kvm_set_boot_cpu_id_ioc {
 #define KVM_GET_SUPPORTED_CPUID   _IOWR(KVMIO, 0x05, struct kvm_cpuid2)
 
 /* for KVM_IRQ_LINE */
-struct kvm_irq_level {
+typedef struct kvm_irq_level {
 	/*
 	 * ACPI gsi notion of irq.
 	 * For IA-64 (APIC model) IOAPIC0: irq 0-23; IOAPIC1: irq 24-47..
@@ -1614,37 +1614,37 @@ struct kvm_irq_level {
 		int32_t status;
 	};
 	uint32_t level;
-};
+} kvm_irq_level_t;
 
-struct kvm_irq_level_ioc {
+typedef struct kvm_irq_level_ioc {
 	struct kvm_irq_level event;
 	int kvmid;
-};
+} kvm_irq_level_ioc_t;
 
 /*
  * for KVM_SET_IDENTITY_MAP_ADDR
  */
 
-struct kvm_id_map_addr {
+typedef struct kvm_id_map_addr {
 	int kvmid;
 	int pad;
 	uint64_t addr;
-};
+} kvm_id_map_addr_t;
 
-struct kvm_create_pit_ioc {
+typedef struct kvm_create_pit_ioc {
 	int kvmid;
-};
+} kvm_create_pit_ioc_t;
 
 /* for KVM_CREATE_IRQCHIP */
-struct kvm_irq_ioc {
+typedef struct kvm_irq_ioc {
 	int kvmid;
-};
+} kvm_irq_ioc_t;
 
 /* for KVM_SET_IDENTITY_MAP_ADDR */
-struct kvm_id_map_addr_ioc {
+typedef struct kvm_id_map_addr_ioc {
 	uint64_t ident_addr;
 	int kvmid;
-};
+} kvm_id_map_addr_ioc_t;
 
 
 /*
@@ -1688,7 +1688,7 @@ struct kvm_id_map_addr_ioc {
  */
 #define KVM_CHECK_EXTENSION       _IO(KVMIO,   0x03)
 
-struct vmcs_config {
+typedef struct vmcs_config {
 	int size;
 	int order;
 	uint32_t revision_id;
@@ -1697,80 +1697,80 @@ struct vmcs_config {
 	uint32_t cpu_based_2nd_exec_ctrl;
 	uint32_t vmexit_ctrl;
 	uint32_t vmentry_ctrl;
-};
+} vmcs_config_t;
 
 #define RMAP_EXT 4
 
-struct kvm_rmap_desc {
+typedef struct kvm_rmap_desc {
 	uint64_t *sptes[RMAP_EXT];
 	struct kvm_rmap_desc *more;
-};
+} kvm_rmap_desc_t;
 
 
-struct vmx_capability {
+typedef struct vmx_capability {
 	uint32_t ept;
 	uint32_t vpid;
-};
+} vmx_capability_t;
 
-struct vmcs {
+typedef struct vmcs {
 	uint32_t revision_id;
 	uint32_t abort;
 	char data[1];  /* size is read from MSR */
-};
+} vmcs_t;
 
 /* for KVM_INTERRUPT */
-struct kvm_interrupt {
+typedef struct kvm_interrupt {
 	/* in */
 	uint32_t irq;
-};
+} kvm_interrupt_t;
 
-struct kvm_interrupt_ioc {
+typedef struct kvm_interrupt_ioc {
 	struct kvm_interrupt intr;
 	int kvm_kvmid;
 	int kvm_cpu_index;
-};
+} kvm_interrupt_ioc_t;
 
 /* for KVM_GET_DIRTY_LOG */
-struct kvm_dirty_log {
+typedef struct kvm_dirty_log {
 	uint32_t slot;
 	uint32_t padding1;
 	union {
 		void  *dirty_bitmap; /* one bit per page */
 		uint64_t padding2;
 	}v;
-};
+} kvm_dirty_log_t;
 
-struct kvm_dirty_log_ioc {
+typedef struct kvm_dirty_log_ioc {
 	struct kvm_dirty_log d;
 	int kvmid;
-};
+} kvm_dirty_log_ioc_t;
 
-struct kvm_coalesced_mmio {
+typedef struct kvm_coalesced_mmio {
 	uint64_t phys_addr;
 	uint32_t len;
 	uint32_t pad;
 	unsigned char  data[8];
-};
+} kvm_coalesced_mmio_t;
 
-struct kvm_coalesced_mmio_ring {
+typedef struct kvm_coalesced_mmio_ring {
 	uint32_t first, last;
 	struct kvm_coalesced_mmio coalesced_mmio[1];
-};
+} kvm_coalesced_mmio_ring_t;
 
 #define KVM_COALESCED_MMIO_MAX \
 	((PAGESIZE - sizeof(struct kvm_coalesced_mmio_ring)) / \
 	 sizeof(struct kvm_coalesced_mmio))
 
 /* for KVM_SET_VAPIC_ADDR */
-struct kvm_vapic_addr {
+typedef struct kvm_vapic_addr {
 	uint64_t vapic_addr;
-};
+} kvm_vapic_addr_t;
 
-struct kvm_vapic_ioc {
+typedef struct kvm_vapic_ioc {
 	int kvm_cpu_index;
 	int kvm_kvmid;
 	struct kvm_vapic_addr va;
-};
+} kvm_vapic_ioc_t;
 
 
 
@@ -1783,17 +1783,17 @@ struct kvm_vapic_ioc {
 #define KVM_MP_STATE_SIPI_RECEIVED     4
 
 /* for KVM_TPR_ACCESS_REPORTING */
-struct kvm_tpr_access_ctl {
+typedef struct kvm_tpr_access_ctl {
 	uint32_t enabled;
 	uint32_t flags;
 	uint32_t reserved[8];
-};
+} kvm_tpr_access_ctl_t;
 
-struct kvm_tpr_acl_ioc {
+typedef struct kvm_tpr_acl_ioc {
 	struct kvm_tpr_access_ctl tac;
 	int kvm_id;
 	int cpu_index;
-};
+} kvm_tpr_acl_ioc_t;
 
 #define KVM_SET_CPUID2            _IOW(KVMIO,  0x90, struct kvm_cpuid2_ioc)
 #define KVM_GET_CPUID2            _IOWR(KVMIO, 0x91, struct kvm_cpuid2_ioc)
@@ -1812,28 +1812,28 @@ struct kvm_tpr_acl_ioc {
 
 
 /* for KVM_CREATE_MEMORY_REGION */
-struct kvm_memory_region {
+typedef struct kvm_memory_region {
 	uint32_t slot;
 	uint32_t flags;
 	uint64_t guest_phys_addr;
 	uint64_t memory_size; /* bytes */
-};
+} kvm_memory_region_t;
 
 /* for KVM_SET_USER_MEMORY_REGION */
-struct kvm_userspace_memory_region {
+typedef struct kvm_userspace_memory_region {
 	uint32_t slot;
 	uint32_t flags;
 	uint64_t guest_phys_addr;
 	uint64_t memory_size; /* bytes */
 	uint64_t userspace_addr; /* start of the userspace allocated memory */
-};
+} kvm_userspace_memory_region_t;
 
 /* for KVM_SET_USER_MEMORY_REGION */
-struct kvm_set_user_memory_ioc {
+typedef struct kvm_set_user_memory_ioc {
 	struct kvm_userspace_memory_region kvm_userspace_map;
 	int32_t kvmid;
 	int32_t pad;
-};
+} kvm_set_user_memory_ioc_t;
 
 #ifdef XXX
 #define KVM_SET_USER_MEMORY_REGION _IOW(KVMIO, 0x46, \
@@ -1844,18 +1844,18 @@ struct kvm_set_user_memory_ioc {
 #endif /*XXX*/
 
 /* for KVM_SET_TSS_ADDR ioctl */
-struct kvm_tss {
+typedef struct kvm_tss {
 	uint64_t addr; /* in */
 	int kvmid;
-};
+} kvm_tss_t;
 
 /* for KVM_CREATE_VCPU */
-struct kvm_vcpu_ioc {
+typedef struct kvm_vcpu_ioc {
 	uint32_t id;  /*IN*/
 	int32_t kvmid;
 	uint64_t kvm_run_addr; /*OUT*/
 	uint64_t kvm_vcpu_addr; /* OUT, id is not unique across VMs */
-};
+} kvm_vcpu_ioc_t;
 
 
 
@@ -1869,14 +1869,16 @@ struct ldttss_desc64 {
 	uint32_t zero1;
 } __attribute__((packed));
 
-struct shared_msr_entry {
+typedef struct ldttss_desc64 ldttss_desc64_t;
+
+typedef struct shared_msr_entry {
 	unsigned index;
 	uint64_t data;
 	uint64_t mask;
-};
+} shared_msr_entry_t;
 
 #ifdef _KERNEL
-struct vcpu_vmx {
+typedef struct vcpu_vmx {
 	struct kvm_vcpu       vcpu;
 	list_t      local_vcpus_link;
 	unsigned long         host_rsp;
@@ -1922,7 +1924,7 @@ struct vcpu_vmx {
 	uint32_t exit_reason;
 
 	char rdtscp_enabled;
-};
+} vcpu_vmx_t;
 
 #define kvm_for_each_vcpu(idx, vcpup, kvm) \
 	for (idx = 0, vcpup = kvm_get_vcpu(kvm, idx); \
@@ -1932,11 +1934,11 @@ struct vcpu_vmx {
 extern struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i);
 
 #ifdef XXX
-struct kvm_irq_mask_notifier {
+typedef struct kvm_irq_mask_notifier {
 	void (*func)(struct kvm_irq_mask_notifier *kimn, bool masked);
 	int irq;
 	struct list_node link;
-};
+} kvm_irq_mask_notifier_t;
 #endif /*XXX*/
 
 #ifdef __KVM_HAVE_IOAPIC
@@ -1985,7 +1987,7 @@ static void kvm_free_irq_routing(struct kvm *kvm) {}
 
 #define KVM_USERSPACE_IRQ_SOURCE_ID	0
 
-struct kvm_kpit_channel_state {
+typedef struct kvm_kpit_channel_state {
 	uint32_t count; /* can be 65536 */
 	uint16_t latched_count;
 	uint8_t count_latched;
@@ -1999,9 +2001,9 @@ struct kvm_kpit_channel_state {
 	uint8_t bcd; /* not supported */
 	uint8_t gate; /* timer start */
 	hrtime_t count_load_time;
-};
+} kvm_kpit_channel_state_t;
 
-struct kvm_kpit_state {
+typedef struct kvm_kpit_state {
 	struct kvm_kpit_channel_state channels[3];
 	uint32_t flags;
 	struct kvm_timer pit_timer;
@@ -2012,9 +2014,9 @@ struct kvm_kpit_state {
 	kmutex_t inject_lock;
 	unsigned long irq_ack;
 	struct kvm_irq_ack_notifier irq_ack_notifier;
-};
+} kvm_kpit_state_t;
 
-struct kvm_pit {
+typedef struct kvm_pit {
 	unsigned long base_addresss;
 	struct kvm_io_device dev;
 	struct kvm_io_device speaker_dev;
@@ -2024,7 +2026,7 @@ struct kvm_pit {
 #ifdef XXX
 	struct kvm_irq_mask_notifier mask_notifier;
 #endif /*XXX*/
-};
+} kvm_pit_t;
 
 #define KVM_PIT_BASE_ADDRESS	    0x40
 #define KVM_SPEAKER_BASE_ADDRESS    0x61
@@ -2064,11 +2066,11 @@ struct preempt_notifier;
  * while sched_in is called without rq lock and irq enabled.  This
  * difference is intentional and depended upon by its users.
  */
-struct preempt_ops {
+typedef struct preempt_ops {
 	void (*sched_in)(struct preempt_notifier *notifier, int cpu);
 	void (*sched_out)(struct preempt_notifier *notifier,
 			  struct task_struct *next);
-};
+} preempt_ops_t;
 
 /**
  * preempt_notifier - key for installing preemption notifiers
@@ -2077,10 +2079,10 @@ struct preempt_ops {
  *
  * Usually used in conjunction with container_of().
  */
-struct preempt_notifier {
+typedef struct preempt_notifier {
 	struct hlist_node link;
 	struct preempt_ops *ops;
-};
+} preempt_notifier_t;
 
 void preempt_notifier_register(struct preempt_notifier *notifier);
 void preempt_notifier_unregister(struct preempt_notifier *notifier);
@@ -2089,7 +2091,7 @@ void preempt_notifier_init(struct preempt_notifier *notifier,
 
 #endif /*XXX*/
 #endif /*CONFIG_PREEMPT_NOTIFIERS*/
-struct cpuid_data {
+typedef struct cpuid_data {
         struct kvm_cpuid2 cpuid;
         struct kvm_cpuid_entry2 entries[100];
 } __attribute__((packed)) cpuid_data;
@@ -2100,11 +2102,11 @@ struct cpuid_data {
  * so until then it will suffice.  At least its abstracted so we can change
  * in one place.
  */
-struct kvm_io_bus {
+typedef struct kvm_io_bus {
 	int                   dev_count;
 #define NR_IOBUS_DEVS 200
 	struct kvm_io_device *devs[NR_IOBUS_DEVS];
-};
+} kvm_io_bus_t;
 
 int kvm_io_bus_write(struct kvm *kvm, enum kvm_bus bus_idx, gpa_t addr,
 		     int len, const void *val);

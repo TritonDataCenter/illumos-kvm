@@ -19,7 +19,7 @@
 #include <asm/cpumask.h>
 #endif /*XXX*/
 
-struct msr {
+typedef struct msr {
 	union {
 		struct {
 			uint32_t l;
@@ -27,19 +27,19 @@ struct msr {
 		};
 		uint64_t q;
 	}b;
-};
+} msr_t;
 
-struct msr_info {
+typedef struct msr_info {
 	uint32_t msr_no;
 	struct msr reg;
 	struct msr *msrs;
 	int err;
-};
+} msr_info_t;
 
-struct msr_regs_info {
+typedef struct msr_regs_info {
 	uint32_t *regs;
 	int err;
-};
+} msr_regs_info_t;
 
 extern unsigned long long native_read_tscp(unsigned int *aux);
 

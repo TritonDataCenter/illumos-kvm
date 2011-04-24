@@ -5,7 +5,7 @@
 /* note that a vmcs must be loaded (via vcpu_load)  */
 /* of course, x86/x64 only */
 
-struct vmcs_dump_area {
+typedef struct vmcs_dump_area {
 	int where;  /* 0, 1, or 2 depending on when the area is dumped to */
 	uint16_t virtual_processor_id;
 	uint16_t guest_es_selector;
@@ -155,4 +155,4 @@ struct vmcs_dump_area {
 	long host_ia32_sysenter_eip;
 	long host_rsp;
 	long host_rip;
-};
+} vmcs_dump_area_t;

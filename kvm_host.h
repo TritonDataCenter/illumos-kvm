@@ -117,12 +117,12 @@ enum kvm_stat_kind {
 	KVM_STAT_VCPU,
 };
 
-struct kvm_stats_debugfs_item {
+typedef struct kvm_stats_debugfs_item {
 	const char *name;
 	int offset;
 	enum kvm_stat_kind kind;
 	struct dentry *dentry;
-};
+} kvm_stats_debugfs_item_t;
 extern struct kvm_stats_debugfs_item debugfs_entries[];
 extern struct dentry *kvm_debugfs_dir;
 

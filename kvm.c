@@ -1270,9 +1270,6 @@ alloc_kvm_area(void)
 	 */
 	vmxarea = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
 
-	if (vmxarea == NULL)
-		return (ENOMEM);
-
 	for (i = 0; i < ncpus; i++) {
 		struct vmcs *vmcs;
 
@@ -1280,12 +1277,6 @@ alloc_kvm_area(void)
 		/* are PAGESIZE aligned.  We could enforce this */
 		/* via kmem_cache_create, but I'm lazy */
 		vmcs = kmem_zalloc(PAGESIZE, KM_SLEEP);
-		if (!vmcs) {
-			for (j = 0; j < i; j++)
-				kmem_free(vmxarea[j], PAGESIZE);
-			return (ENOMEM);
-		}
-
 		vmxarea[i] = vmcs;
 	}
 
@@ -2851,12 +2842,6 @@ kvm_init(void *opaque, unsigned int vcpu_size)
 		return (r);
 
 	bad_page = alloc_page(PAGESIZE, KM_SLEEP);
-
-	if (bad_page == NULL) {
-		r = ENOMEM;
-		goto out;
-	}
-
 	bad_pfn = bad_page->p_pagenum;
 
 #ifdef XXX
@@ -3085,29 +3070,10 @@ vmx_init(void)
 		kvm_define_shared_msr(i, vmx_msr_index[i]);
 
 #ifdef XXX
-	vmx_io_bitmap_a = (unsigned long *)kmem_zalloc(PAGESIZE, KM_SLEEP);
-	if (!vmx_io_bitmap_a)
-		return (ENOMEM);
-
-	vmx_io_bitmap_b = (unsigned long *)kmem_zalloc(PAGESIZE, KM_SLEEP);
-	if (!vmx_io_bitmap_b) {
-		r = ENOMEM;
-		goto out;
-	}
-
-	vmx_msr_bitmap_legacy =
-	    (unsigned long *)kmem_zalloc(PAGESIZE, KM_SLEEP);
-
-	if (!vmx_msr_bitmap_legacy) {
-		r = ENOMEM;
-		goto out1;
-	}
-
-	vmx_msr_bitmap_longmode = (unsigned long *)kmem_zalloc(PAGESIZE,
-	    KM_SLEEP);
-	if (!vmx_msr_bitmap_longmode) {
-		r = ENOMEM;		goto out2;
-	}
+	vmx_io_bitmap_a = kmem_zalloc(PAGESIZE, KM_SLEEP);
+	vmx_io_bitmap_b = kmem_zalloc(PAGESIZE, KM_SLEEP);
+	vmx_msr_bitmap_legacy = kmem_zalloc(PAGESIZE, KM_SLEEP);
+	vmx_msr_bitmap_longmode = kmem_zalloc(PAGESIZE, KM_SLEEP);
 #else
 	XXX_KVM_PROBE;
 #endif
@@ -3712,12 +3678,6 @@ kvm_create_vm(void)
 	for (i = 0; i < KVM_NR_BUSES; i++) {
 		kvmp->buses[i] =
 		    kmem_zalloc(sizeof (struct kvm_io_bus), KM_SLEEP);
-		if (!kvmp->buses[i]) {
-			rw_destroy(&kvmp->kvm_rwlock);
-			kmem_free(kvmp->memslots, sizeof (struct kvm_memslots));
-			kvm_arch_destroy_vm(kvmp);
-			return (NULL);
-		}
 	}
 
 	rval = kvm_init_mmu_notifier(kvmp);
@@ -4043,12 +4003,8 @@ __kvm_set_memory_region(struct kvm *kvmp,
 
 	/* Allocate if a slot is being created */
 	if (npages && !new.rmap) {
-		new.rmap = kmem_alloc(npages * sizeof(struct page *), KM_SLEEP);
-
-		if (!new.rmap)
-			goto out_free;
-
-		memset(new.rmap, 0, npages * sizeof(*new.rmap));
+		new.rmap =
+		    kmem_zalloc(npages * sizeof (struct page *), KM_SLEEP);
 
 		new.user_alloc = user_alloc;
 		new.userspace_addr = mem->userspace_addr;
@@ -4074,13 +4030,7 @@ __kvm_set_memory_region(struct kvm *kvmp,
 		lpages -= base_gfn / KVM_PAGES_PER_HPAGE(level);
 
 		new.lpage_info[i] =
-		    kmem_alloc(lpages * sizeof (*new.lpage_info[i]), KM_SLEEP);
-
-		if (!new.lpage_info[i])
-			goto out_free;
-
-		memset(new.lpage_info[i], 0,
-		       lpages * sizeof(*new.lpage_info[i]));
+		    kmem_zalloc(lpages * sizeof (*new.lpage_info[i]), KM_SLEEP);
 
 		if (base_gfn % KVM_PAGES_PER_HPAGE(level))
 			new.lpage_info[i][0].write_count = 1;
@@ -4104,10 +4054,8 @@ skip_lpage:
 	if ((new.flags & KVM_MEM_LOG_DIRTY_PAGES) && !new.dirty_bitmap) {
 		unsigned long dirty_bytes = kvm_dirty_bitmap_bytes(&new);
 
-		new.dirty_bitmap = kmem_alloc(dirty_bytes, KM_SLEEP);
-		if (!new.dirty_bitmap)
-			goto out_free;
-		memset(new.dirty_bitmap, 0, dirty_bytes);
+		new.dirty_bitmap = kmem_zalloc(dirty_bytes, KM_SLEEP);
+
 		/* destroy any largepage mappings for dirty tracking */
 		if (old.npages)
 			flush_shadow = 1;
@@ -4116,8 +4064,6 @@ skip_lpage:
 	if (!npages) {
 		r = ENOMEM;
 		slots = kmem_zalloc(sizeof(struct kvm_memslots), KM_SLEEP);
-		if (!slots)
-			goto out_free;
 		memcpy(slots, kvmp->memslots, sizeof(struct kvm_memslots));
 		if (mem->slot >= slots->nmemslots)
 			slots->nmemslots = mem->slot + 1;
@@ -4159,8 +4105,6 @@ skip_lpage:
 
 	r = ENOMEM;
 	slots = kmem_zalloc(sizeof(struct kvm_memslots), KM_SLEEP);
-	if (!slots)
-		goto out_free;
 	memcpy(slots, kvmp->memslots, sizeof(struct kvm_memslots));
 	if (mem->slot >= slots->nmemslots)
 		slots->nmemslots = mem->slot + 1;
@@ -4480,8 +4424,6 @@ static int kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *cpuid,
 	r = ENOMEM;
 	allocsize = sizeof(struct kvm_cpuid_entry2)*cpuid->nent;
 	cpuid_entries = kmem_zalloc(allocsize, KM_SLEEP);
-	if (!cpuid_entries)
-		goto out;
 
 	do_cpuid_ent(&cpuid_entries[0], 0, 0, &nent, cpuid->nent);
 	limit = cpuid_entries[0].eax;
@@ -6356,8 +6298,6 @@ static int xen_hvm_config(struct kvm_vcpu *vcpu, uint64_t data)
 		goto out;
 	r = ENOMEM;
 	page = kmem_alloc(PAGESIZE, KM_SLEEP);
-	if (!page)
-		goto out;
 	r = EFAULT;
 	if (copyin(blob_addr + (page_num * PAGESIZE), page, PAGESIZE))
 		goto out_free;
@@ -6595,9 +6535,6 @@ int clear_user(void *addr, unsigned long size)
 	caddr_t ka;
 	int rval = 0;
 
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "clear_user: addr = %p, size = %lx\n", addr, size);
-#endif /*DEBUG*/
 	ka = kmem_zalloc(size, KM_SLEEP);
 	rval = copyout(ka, addr, size);
 	kmem_free(ka, size);
@@ -12619,8 +12556,6 @@ struct kvm_pic *kvm_create_pic(struct kvm *kvm)
 	int ret;
 
 	s = kmem_zalloc(sizeof(struct kvm_pic), KM_SLEEP);
-	if (!s)
-		return NULL;
 	mutex_init(&s->lock, NULL, MUTEX_DRIVER, 0);
 	s->kvm = kvm;
 	s->pics[0].elcr_mask = 0xf8;
@@ -13018,8 +12953,6 @@ int kvm_ioapic_init(struct kvm *kvm)
 	int ret;
 
 	ioapic = kmem_zalloc(sizeof(struct kvm_ioapic), KM_SLEEP);
-	if (!ioapic)
-		return -ENOMEM;
 	mutex_init(&ioapic->lock, NULL, MUTEX_DRIVER, 0);
 	kvm->arch.vioapic = ioapic;
 	kvm_ioapic_reset(ioapic);
@@ -13220,24 +13153,17 @@ int kvm_set_irq_routing(struct kvm *kvm,
 	new = kmem_zalloc(sizeof(*new) + (nr_rt_entries * sizeof(list_t))
 		      + (nr * sizeof(struct kvm_kernel_irq_routing_entry)),
 		      KM_SLEEP);
-	if (!new)
-		return -ENOMEM;
 
 	new->rt_entries = (void *)&new->map[nr_rt_entries];
 #else
 	XXX_KVM_PROBE;
 	new = kmem_zalloc(sizeof(*new), KM_SLEEP);
-	if (!new)
-		return -ENOMEM;
+
 	for (i = 0; i < KVM_MAX_IRQ_ROUTES; i++) {
 		list_create(&new->map[i], sizeof(struct kvm_kernel_irq_routing_entry),
 			    offsetof(struct kvm_kernel_irq_routing_entry, link));
 	}
 	new->rt_entries = kmem_zalloc(sizeof(struct kvm_kernel_irq_routing_entry)*nr, KM_SLEEP);
-	if (!new->rt_entries) {
-		kmem_free(new, sizeof(*new));
-		return -ENOMEM;
-	}
 
 #endif /*XXX*/
 
@@ -13849,8 +13775,6 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 	int ret;
 
 	pit = kmem_zalloc(sizeof(struct kvm_pit), KM_SLEEP);
-	if (!pit)
-		return NULL;
 
 	pit->irq_source_id = kvm_request_irq_source_id(kvm);
 	if (pit->irq_source_id < 0) {
@@ -14185,10 +14109,9 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_create_pit_ioc *kvm_create_pit_ioc;
 		struct kvm *kvmp;
 
-		if ((kvm_create_pit_ioc = kmem_zalloc(sizeof(struct kvm_create_pit_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_create_pit_ioc =
+		    kmem_zalloc(sizeof (struct kvm_create_pit_ioc), KM_SLEEP);
+
 		if (ddi_copyin((const char *)arg, kvm_create_pit_ioc, sizeof (struct kvm_create_pit_ioc), mode)) {
 			rval = EFAULT;
 			kmem_free(kvm_create_pit_ioc, sizeof(struct kvm_create_pit_ioc));
@@ -14240,10 +14163,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_irq_ioc *kvm_irq_ioc;
 		struct kvm *kvmp;
 
-		if ((kvm_irq_ioc = kmem_zalloc(sizeof(struct kvm_irq_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_irq_ioc = kmem_zalloc(sizeof (kvm_irq_ioc_t), KM_SLEEP);
+
 		if (ddi_copyin((const caddr_t)arg, kvm_irq_ioc, sizeof(struct kvm_irq_ioc), mode)) {
 			rval = EFAULT;
 			kmem_free(kvm_irq_ioc, sizeof(struct kvm_irq_ioc));
@@ -14306,10 +14227,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		if ((kvm_run_ioc = kmem_zalloc(sizeof(struct kvm_run_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_run_ioc = kmem_zalloc(sizeof(struct kvm_run_ioc), KM_SLEEP);
+
 		if (ddi_copyin((caddr_t)arg, kvm_run_ioc, sizeof (struct kvm_run_ioc), mode)) {
 			rval = EFAULT;
 			kmem_free(kvm_run_ioc, sizeof(struct kvm_run_ioc));
@@ -14377,7 +14296,9 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		kvm_msrs_ioc = kmem_alloc(sizeof(struct kvm_msrs_ioc), KM_SLEEP);
+		kvm_msrs_ioc =
+		    kmem_alloc(sizeof (struct kvm_msrs_ioc), KM_SLEEP);
+
 		if (ddi_copyin((const void *)arg, kvm_msrs_ioc,
 			       sizeof(struct kvm_msrs_ioc), mode) != 0) {
 			rval = EFAULT;
@@ -14416,10 +14337,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_id_map_addr_ioc *kvm_id_map_addr_ioc;
 		struct kvm *kvmp;
 
-		if ((kvm_id_map_addr_ioc = kmem_zalloc(sizeof(struct kvm_id_map_addr_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_id_map_addr_ioc =
+		    kmem_zalloc(sizeof (struct kvm_id_map_addr_ioc), KM_SLEEP);
 
 		rval = EFAULT;
 		if (ddi_copyin((const char *)arg, kvm_id_map_addr_ioc, sizeof (struct kvm_id_map_addr_ioc), mode)) {
@@ -14443,7 +14362,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_vcpu *vcpu;
 		int n;
 
-		kvm_msrs_ioc = kmem_alloc(sizeof(struct kvm_msrs_ioc), KM_SLEEP);
+		kvm_msrs_ioc =
+		    kmem_alloc(sizeof (struct kvm_msrs_ioc), KM_SLEEP);
 		if (ddi_copyin((const void *)arg, kvm_msrs_ioc,
 			       sizeof(struct kvm_msrs_ioc), mode) != 0) {
 			rval = EFAULT;
@@ -14549,10 +14469,9 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_set_user_memory_ioc *kvmioc;
 		struct kvm *kvmp;
 		
-		if ((kvmioc = kmem_zalloc(sizeof(struct kvm_set_user_memory_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvmioc = kmem_zalloc(sizeof (struct kvm_set_user_memory_ioc),
+		    KM_SLEEP);
+
 		if (ddi_copyin((const void *)arg, kvmioc,
 			       sizeof(struct kvm_set_user_memory_ioc), mode) != 0) {
 			rval = EFAULT;
@@ -14577,10 +14496,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_cpuid2 *cpuid_arg = (struct kvm_cpuid2 *)arg;
 		struct kvm_cpuid2 *cpuid;
 
-		if ((cpuid = kmem_zalloc(sizeof(struct kvm_cpuid2), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		cpuid = kmem_zalloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
 
 		if (ddi_copyin(cpuid_arg, cpuid, sizeof (struct kvm_cpuid2), mode)) {
 			rval = EFAULT;
@@ -14605,10 +14521,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_msr_list *msr_list;
 		unsigned n;
 
-		if ((msr_list = kmem_zalloc(sizeof(struct kvm_msr_list), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		msr_list = kmem_zalloc(sizeof (struct kvm_msr_list), KM_SLEEP);
+
 		if (ddi_copyin(user_msr_list, msr_list, sizeof (struct kvm_msr_list), mode)) {
 			rval = EFAULT;
 			kmem_free(msr_list, sizeof(struct kvm_msr_list));
@@ -14649,10 +14563,9 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		if ((kvm_regs_ioc = kmem_zalloc(sizeof(struct kvm_regs_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_regs_ioc =
+		    kmem_zalloc(sizeof (struct kvm_regs_ioc), KM_SLEEP);
+
 		if (ddi_copyin((caddr_t)arg, kvm_regs_ioc, sizeof (struct kvm_regs_ioc), mode)) {
 			rval = EFAULT;
 			kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
@@ -14686,10 +14599,9 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		if ((kvm_regs_ioc = kmem_zalloc(sizeof(struct kvm_regs_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_regs_ioc =
+		    kmem_zalloc(sizeof (struct kvm_regs_ioc), KM_SLEEP);
+
 		if (ddi_copyin((caddr_t)arg, kvm_regs_ioc, sizeof (struct kvm_regs_ioc), mode)) {
 			rval = EFAULT;
 			kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
@@ -14717,10 +14629,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		if ((kvm_fpu_ioc = kmem_zalloc(sizeof(struct kvm_fpu_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_fpu_ioc =
+		    kmem_zalloc(sizeof(struct kvm_fpu_ioc), KM_SLEEP);
 
 		if (ddi_copyin((caddr_t)arg, kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc), mode)) {
 			rval = EFAULT;
@@ -14756,10 +14666,9 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		if ((kvm_fpu_ioc = kmem_zalloc(sizeof(struct kvm_fpu_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_fpu_ioc =
+		    kmem_zalloc(sizeof (struct kvm_fpu_ioc), KM_SLEEP);
+
 		if (ddi_copyin((caddr_t)arg, kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc), mode)) {
 			rval = EFAULT;
 			kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
@@ -14787,10 +14696,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		if ((kvm_sregs_ioc = kmem_zalloc(sizeof(struct kvm_sregs_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_sregs_ioc =
+		    kmem_zalloc(sizeof (struct kvm_sregs_ioc), KM_SLEEP);
 
 		if (ddi_copyin((caddr_t)arg, kvm_sregs_ioc, sizeof (struct kvm_sregs_ioc), mode)) {
 			rval = EFAULT;
@@ -14824,10 +14731,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		if ((kvm_sregs_ioc = kmem_zalloc(sizeof(struct kvm_sregs_ioc), KM_SLEEP)) == NULL) {
-			rval = ENOMEM;
-			break;
-		}
+		kvm_sregs_ioc =
+		    kmem_zalloc(sizeof (struct kvm_sregs_ioc), KM_SLEEP);
 
 		if (ddi_copyin((caddr_t)arg, kvm_sregs_ioc, sizeof (struct kvm_sregs_ioc), mode)) {
 			rval = EFAULT;
@@ -14857,7 +14762,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		cpuid2_ioc = kmem_alloc(sizeof(struct kvm_cpuid2_ioc), KM_SLEEP);
+		cpuid2_ioc =
+		    kmem_alloc(sizeof (struct kvm_cpuid2_ioc), KM_SLEEP);
 		cpuid2_data = kmem_alloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
 
 		if (ddi_copyin((const char *)arg, cpuid2_ioc, sizeof (struct kvm_cpuid2_ioc), mode)) {
@@ -14897,7 +14803,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_vcpu *vcpu;
 		struct kvm *kvmp;
 
-		cpuid2_ioc = kmem_zalloc(sizeof(struct kvm_cpuid2_ioc), KM_SLEEP);
+		cpuid2_ioc =
+		    kmem_zalloc(sizeof (struct kvm_cpuid2_ioc), KM_SLEEP);
 		cpuid2_data = kmem_zalloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
 
 		if (ddi_copyin((const char *)arg, cpuid2_ioc, sizeof (struct kvm_cpuid2_ioc), mode)) {
@@ -14940,7 +14847,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		events_ioc = kmem_zalloc(sizeof(struct kvm_vcpu_events_ioc), KM_SLEEP);
+		events_ioc =
+		    kmem_zalloc(sizeof (struct kvm_vcpu_events_ioc), KM_SLEEP);
 
 		if (ddi_copyin((const char *)arg, events_ioc, sizeof (struct kvm_vcpu_events_ioc), mode)) {
 			rval = EFAULT;
@@ -14971,7 +14879,9 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		lapic_ioc = kmem_zalloc(sizeof(struct kvm_lapic_ioc), KM_SLEEP);
+		lapic_ioc =
+		    kmem_zalloc(sizeof (struct kvm_lapic_ioc), KM_SLEEP);
+
 		if (ddi_copyin((const char *)arg, lapic_ioc, sizeof (struct kvm_lapic_ioc), mode)) {
 			rval = EFAULT;
 			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
@@ -15044,7 +14954,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 		
-		events_ioc = kmem_zalloc(sizeof(struct kvm_vcpu_events_ioc), KM_SLEEP);
+		events_ioc =
+		    kmem_zalloc(sizeof (struct kvm_vcpu_events_ioc), KM_SLEEP);
 		if (ddi_copyin((const char *)arg, events_ioc, sizeof (struct kvm_vcpu_events_ioc), mode)) {
 			rval = EFAULT;
 			kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
@@ -15149,10 +15060,11 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 #endif
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	case KVM_REGISTER_COALESCED_MMIO: {
-		struct kvm_coalesced_mmio_zone_ioc *zone_ioc;
 		struct kvm *kvmp;
+		struct kvm_coalesced_mmio_zone_ioc *zone_ioc =
+		    kmem_zalloc(sizeof (struct kvm_coalesced_mmio_zone_ioc),
+		    KM_SLEEP);
 
-		zone_ioc = kmem_zalloc(sizeof(struct kvm_coalesced_mmio_zone_ioc), KM_SLEEP);
 		rval = EFAULT;
 		if (ddi_copyin((caddr_t)arg, zone_ioc, sizeof (struct kvm_coalesced_mmio_zone_ioc), mode)) {
 			kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));

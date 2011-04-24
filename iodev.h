@@ -25,7 +25,7 @@ struct kvm_io_device;
  * read and write handlers return 0 if the transaction has been handled,
  * or non-zero to have it passed to the next device.
  **/
-struct kvm_io_device_ops {
+typedef struct kvm_io_device_ops {
 	int (*read)(struct kvm_io_device *this,
 		    gpa_t addr,
 		    int len,
@@ -35,13 +35,13 @@ struct kvm_io_device_ops {
 		     int len,
 		     const void *val);
 	void (*destructor)(struct kvm_io_device *this);
-};
+} kvm_io_device_ops_t;
 
 
-struct kvm_io_device {
+typedef struct kvm_io_device {
 	struct kvm_lapic *lapic;
 	const struct kvm_io_device_ops *ops;
-};
+} kvm_io_device_t;
 
 static void kvm_iodevice_init(struct kvm_io_device *dev,
 				     const struct kvm_io_device_ops *ops)

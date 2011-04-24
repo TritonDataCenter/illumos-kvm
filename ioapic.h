@@ -36,7 +36,7 @@ struct kvm_vcpu;
 #define	IOAPIC_INIT			0x5
 #define	IOAPIC_EXTINT			0x7
 
-struct kvm_ioapic {
+typedef struct kvm_ioapic {
 	uint64_t base_address;
 	uint32_t ioregsel;
 	uint32_t id;
@@ -53,7 +53,7 @@ struct kvm_ioapic {
 #else
 	unsigned long handled_vectors[BT_BITOUL(256)];
 #endif /*XXX*/
-};
+} kvm_ioapic_t;
 
 static struct kvm_ioapic *ioapic_irqchip(struct kvm *kvm)
 {

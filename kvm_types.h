@@ -54,7 +54,7 @@ union kvm_ioapic_redirect_entry {
 	} fields;
 };
 
-struct kvm_lapic_irq {
+typedef struct kvm_lapic_irq {
 	uint32_t vector;
 	uint32_t delivery_mode;
 	uint32_t dest_mode;
@@ -62,6 +62,6 @@ struct kvm_lapic_irq {
 	uint32_t trig_mode;
 	uint32_t shorthand;
 	uint32_t dest_id;
-};
+} kvm_lapic_irq_t;
 
 #endif /* __KVM_TYPES_H__ */

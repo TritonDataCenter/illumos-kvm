@@ -1,7 +1,7 @@
 #ifndef __TSS_SEGMENT_H
 #define __TSS_SEGMENT_H
 
-struct tss_segment_32 {
+typedef struct tss_segment_32 {
 	uint32_t prev_task_link;
 	uint32_t esp0;
 	uint32_t ss0;
@@ -29,9 +29,9 @@ struct tss_segment_32 {
 	uint32_t ldt_selector;
 	uint16_t t;
 	uint16_t io_map;
-};
+} tss_segment_32_t;
 
-struct tss_segment_16 {
+typedef struct tss_segment_16 {
 	uint16_t prev_task_link;
 	uint16_t sp0;
 	uint16_t ss0;
@@ -54,6 +54,6 @@ struct tss_segment_16 {
 	uint16_t ss;
 	uint16_t ds;
 	uint16_t ldt;
-};
+} tss_segment_16_t;
 
 #endif

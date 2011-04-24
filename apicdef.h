@@ -417,6 +417,8 @@ struct local_apic {
 
 } __attribute__ ((packed));
 
+typedef struct local_apic local_apic_t;
+
 #undef uint32_t
 
 #ifdef CONFIG_X86_32

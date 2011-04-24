@@ -42,7 +42,7 @@ struct kvm_vcpu;
 
 typedef void irq_request_func(void *opaque, int level);
 
-struct kvm_kpic_state {
+typedef struct kvm_kpic_state {
 	uint8_t last_irr;	/* edge detection */
 	uint8_t irr;		/* interrupt request register */
 	uint8_t imr;		/* interrupt mask register */
@@ -61,9 +61,9 @@ struct kvm_kpic_state {
 	uint8_t elcr;		/* PIIX edge/trigger selection */
 	uint8_t elcr_mask;
 	struct kvm_pic *pics_state;
-};
+} kvm_kpic_state_t;
 
-struct kvm_pic {
+typedef struct kvm_pic {
 	kmutex_t lock;
 	unsigned pending_acks;
 	struct kvm *kvm;
@@ -74,7 +74,7 @@ struct kvm_pic {
 	struct kvm_io_device dev;
 	void (*ack_notifier)(void *opaque, int irq);
 	unsigned long irq_states[16];
-};
+} kvm_pic_t;
 
 struct kvm_pic *kvm_create_pic(struct kvm *kvm);
 void kvm_destroy_pic(struct kvm *kvm);

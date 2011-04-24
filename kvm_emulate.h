@@ -51,7 +51,7 @@ struct x86_emulate_ctxt;
 #define X86EMUL_PROPAGATE_FAULT 2 /* propagate a generated fault to guest */
 #define X86EMUL_RETRY_INSTR     2 /* retry the instruction for some reason */
 #define X86EMUL_CMPXCHG_FAILED  2 /* cmpxchg did not see expected value */
-struct x86_emulate_ops {
+typedef struct x86_emulate_ops {
 	/*
 	 * read_std: Read bytes of standard (non-emulated/special) memory.
 	 *           Used for descriptor reading.
@@ -109,23 +109,23 @@ struct x86_emulate_ops {
 				unsigned int bytes,
 				struct kvm_vcpu *vcpu);
 
-};
+} x86_emulate_ops_t;
 #endif /*_KERNEL*/
 
 /* Type, address-of, and value of an instruction's operand. */
-struct operand {
+typedef struct operand {
 	enum { OP_REG, OP_MEM, OP_IMM, OP_NONE } type;
 	unsigned int bytes;
 	unsigned long val, orig_val, *ptr;
-};
+} operand_t;
 
-struct fetch_cache {
+typedef struct fetch_cache {
 	uint8_t data[15];
 	unsigned long start;
 	unsigned long end;
-};
+} fetch_cache_t;
 
-struct decode_cache {
+typedef struct decode_cache {
 	uint8_t twobyte;
 	uint8_t b;
 	uint8_t lock_prefix;
@@ -152,12 +152,12 @@ struct decode_cache {
 	void *modrm_ptr;
 	unsigned long modrm_val;
 	struct fetch_cache fetch;
-};
+} decode_cache_t;
 
 #define X86_SHADOW_INT_MOV_SS  1
 #define X86_SHADOW_INT_STI     2
 
-struct x86_emulate_ctxt {
+typedef struct x86_emulate_ctxt {
 	/* Register state before/after emulation. */
 	struct kvm_vcpu *vcpu;
 
@@ -171,7 +171,7 @@ struct x86_emulate_ctxt {
 
 	/* decode cache */
 	struct decode_cache decode;
-};
+} x86_emulate_ctxt_t;
 
 /* Repeat String Operation Prefix */
 #define REPE_PREFIX	1
