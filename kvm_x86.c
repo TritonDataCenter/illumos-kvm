@@ -2906,7 +2906,7 @@ static void
 mmu_free_rmap_desc(struct kvm_rmap_desc *rd)
 {
 	if (rd)
-		kmem_free(rd, sizeof (struct kvm_rmap_desc));
+		kmem_cache_free(rmap_desc_cache, rd);
 }
 
 static void
