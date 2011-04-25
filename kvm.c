@@ -4560,8 +4560,8 @@ unsigned long vmcs_readl(unsigned long field)
 		cmn_err(CE_WARN, "vmcs_readl field = %lx: value = %lx\n",
 			field, value);
 	}
-#else
-	XXX_KVM_PROBE;
+	/*#else
+	  XXX_KVM_PROBE;*/
 #endif /*XXX*/
 	return value;
 }
@@ -13867,9 +13867,11 @@ kvm_apic_post_state_restore(struct kvm_vcpu *vcpu)
 	kvm_apic_set_version(vcpu);
 
 	apic_update_ppr(apic);
+	mutex_enter(&cpu_lock);
 	if (apic->lapic_timer.active)
 		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
 	apic->lapic_timer.active = 0;
+	mutex_exit(&cpu_lock);
 	update_divide_count(apic);
 	start_apic_timer(apic);
 	apic->irr_pending = 1;
