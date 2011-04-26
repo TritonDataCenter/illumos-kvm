@@ -45,7 +45,7 @@ install: kvm
 	@pfexec cp kvm.conf /usr/kernel/drv
 
 check:
-	@$(CSTYLE) kvm_mdb.c emulate.c kvm_x86.c irq.c lapic.c i8254.c
+	@$(CSTYLE) kvm.c kvm_mdb.c emulate.c kvm_x86.c irq.c lapic.c i8254.c
 	@./tools/xxxcheck kvm_x86.c kvm.c irq.c lapic.c i8254.c
 
 load: install
