@@ -11829,7 +11829,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	XXX_KVM_PROBE;
 #endif /*XXX*/
 
-	if (vcpu->requests || need_resched() /* || signal_pending(current)*/) {
+	if (vcpu->requests || need_resched() || issig(JUSTLOOKING)) {
 		set_bit(KVM_REQ_KICK, &vcpu->requests);
 		sti();
 		kpreempt_enable();
@@ -12156,15 +12156,15 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 			++vcpu->stat.request_irq_exits;
 #endif /*XXX*/
 		}
-#ifdef XXX
-		if (signal_pending(current)) {
+
+		if (issig(JUSTLOOKING)) {
 			r = -EINTR;
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
+#ifdef XXX_KVM_STAT
 			++vcpu->stat.signal_exits;
-		}
-#else
-		XXX_KVM_PROBE;
 #endif /*XXX*/
+		}
+
 		if (need_resched()) {
 #ifdef XXX
 			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
