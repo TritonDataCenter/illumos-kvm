@@ -1433,7 +1433,7 @@ static const struct kvm_io_device_ops apic_mmio_ops = {
 	.write	= apic_mmio_write,
 };
 
-static int
+static void
 __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
 {
 	int restart_timer = 0;
@@ -1462,7 +1462,6 @@ __kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
 #else
 	XXX_KVM_PROBE;
 #endif
-	return (ktimer->t_ops->is_periodic(ktimer));
 }
 
 void
@@ -1476,8 +1475,7 @@ kvm_timer_fn(void *arg)
 	if (!vcpu)
 		return;
 
-	if (__kvm_timer_fn(vcpu, ktimer) == 0)
-		cyclic_reprogram(ktimer->kvm_cyclic_id, max);
+	__kvm_timer_fn(vcpu, ktimer);
 }
 
 static int
