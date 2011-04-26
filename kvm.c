@@ -3666,6 +3666,15 @@ kvm_create_vm(void)
 		return (NULL);
 	}
 
+#ifdef CONFIG_HAVE_KVM_IRQCHIP
+	list_create(&kvmp->mask_notifier_list,
+		    sizeof (struct kvm_irq_mask_notifier),
+		    offsetof(struct kvm_irq_mask_notifier, link));
+	list_create(&kvmp->irq_ack_notifier_list,
+		    sizeof (struct kvm_irq_ack_notifier),
+		    offsetof(struct kvm_irq_ack_notifier, link));
+#endif
+
 	kvmp->memslots = kmem_zalloc(sizeof (struct kvm_memslots), KM_NOSLEEP);
 
 	if (kvmp->memslots == NULL) {
@@ -12051,8 +12060,8 @@ void kvm_lapic_reset(struct kvm_vcpu *vcpu)
 		apic_set_reg(apic, APIC_TMR + 0x10 * i, 0);
 	}
 	apic->irr_pending = 0;
-#ifdef XXX
 	update_divide_count(apic);
+#ifdef XXX
 	atomic_set(&apic->lapic_timer.pending, 0);
 #else
 	apic->lapic_timer.pending = 0;
@@ -12763,13 +12772,18 @@ void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, int mask)
 
 #ifdef XXX
 	rcu_read_lock();
+#else
+	XXX_KVM_SYNC_PROBE;
+#endif
 
-	hlist_for_each_entry_rcu(kimn, n, &kvm->mask_notifier_list, link)
+	for (kimn = list_head(&kvm->mask_notifier_list); kimn;
+	     kimn = list_next(&kvm->mask_notifier_list, kimn))
 		if (kimn->irq == irq)
 			kimn->func(kimn, mask);
+#ifdef XXX
 	rcu_read_unlock();
 #else
-	XXX_KVM_PROBE;
+	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 }
 
@@ -13834,6 +13848,40 @@ void kvm_pit_reset(struct kvm_pit *pit)
 	pit->pit_state.irq_ack = 1;
 }
 
+
+void kvm_register_irq_ack_notifier(struct kvm *kvm,
+				   struct kvm_irq_ack_notifier *kian)
+{
+	mutex_enter(&kvm->irq_lock);
+	list_insert_head(&kvm->irq_ack_notifier_list, &kian);
+	mutex_exit(&kvm->irq_lock);
+}
+
+static void pit_mask_notifer(struct kvm_irq_mask_notifier *kimn, int mask)
+{
+	struct kvm_pit *pit = (struct kvm_pit *)(((caddr_t)kimn)
+					  - offsetof(struct kvm_pit,
+						     mask_notifier));
+	if (!mask) {
+#ifdef XXX
+		atomic_set(&pit->pit_state.pit_timer.pending, 0);
+#else
+		pit->pit_state.pit_timer.pending = 0;
+		XXX_KVM_PROBE;
+#endif /*XXX*/
+		pit->pit_state.irq_ack = 1;
+	}
+}
+
+void kvm_register_irq_mask_notifier(struct kvm *kvm, int irq,
+				    struct kvm_irq_mask_notifier *kimn)
+{
+	mutex_enter(&kvm->irq_lock);
+	kimn->irq = irq;
+	list_insert_head(&kvm->mask_notifier_list, kimn);
+	mutex_exit(&kvm->irq_lock);
+}
+
 /* Caller must hold slots_lock */
 struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 {
@@ -13870,23 +13918,18 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 #endif /*XXX*/
 	pit_state->irq_ack_notifier.gsi = 0;
 	pit_state->irq_ack_notifier.irq_acked = kvm_pit_ack_irq;
-#ifdef XXX
+
 	kvm_register_irq_ack_notifier(kvm, &pit_state->irq_ack_notifier);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
+
 	pit_state->pit_timer.reinject = 1;
 	pit_state->pit_timer.active = 0;
 
 	mutex_exit(&pit->pit_state.lock);
 
 	kvm_pit_reset(pit);
-#ifdef XXX
+
 	pit->mask_notifier.func = pit_mask_notifer;
 	kvm_register_irq_mask_notifier(kvm, 0, &pit->mask_notifier);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
 
 	kvm_iodevice_init(&pit->dev, &pit_dev_ops);
 	ret = kvm_io_bus_register_dev(kvm, KVM_PIO_BUS, &pit->dev);

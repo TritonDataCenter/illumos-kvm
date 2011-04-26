@@ -1235,11 +1235,11 @@ typedef struct kvm {
 #endif
 
 	kmutex_t irq_lock;
-/*#ifdef CONFIG_HAVE_KVM_IRQCHIP*/
+#ifdef CONFIG_HAVE_KVM_IRQCHIP
 	struct kvm_irq_routing_table *irq_routing;
 	list_t mask_notifier_list;
 	list_t irq_ack_notifier_list;
-/*#endif*/
+#endif
 
 #if defined(KVM_ARCH_WANT_MMU_NOTIFIER)  && defined(CONFIG_MMU_NOTIFIER)
 	struct mmu_notifier mmu_notifier;
@@ -1933,13 +1933,11 @@ typedef struct vcpu_vmx {
 
 extern struct kvm_vcpu *kvm_get_vcpu(struct kvm *kvm, int i);
 
-#ifdef XXX
 typedef struct kvm_irq_mask_notifier {
-	void (*func)(struct kvm_irq_mask_notifier *kimn, bool masked);
+	void (*func)(struct kvm_irq_mask_notifier *kimn, int masked);
 	int irq;
 	struct list_node link;
 } kvm_irq_mask_notifier_t;
-#endif /*XXX*/
 
 #ifdef __KVM_HAVE_IOAPIC
 void kvm_get_intr_delivery_bitmask(struct kvm_ioapic *ioapic,
@@ -2023,9 +2021,7 @@ typedef struct kvm_pit {
 	struct kvm *kvm;
 	struct kvm_kpit_state pit_state;
 	int irq_source_id;
-#ifdef XXX
 	struct kvm_irq_mask_notifier mask_notifier;
-#endif /*XXX*/
 } kvm_pit_t;
 
 #define KVM_PIT_BASE_ADDRESS	    0x40
