@@ -11344,12 +11344,16 @@ void kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin)
 	XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 	gsi = (kvm->irq_routing)->chip[irqchip][pin];
-#ifdef XXX
-	if (gsi != -1)
-		hlist_for_each_entry_rcu(kian, n, &kvm->irq_ack_notifier_list,
-					 link)
+
+	if (gsi != -1) {
+		for (kian = list_head(&kvm->irq_ack_notifier_list);
+		     kian;
+		     kian = list_next(&kvm->irq_ack_notifier_list, kian)) {
 			if (kian->gsi == gsi)
 				kian->irq_acked(kian);
+		}
+	}
+#ifdef XXX
 	rcu_read_unlock();
 #else
 	XXX_KVM_SYNC_PROBE;
@@ -13375,17 +13379,14 @@ unlock:
 
 static void kvm_pit_ack_irq(struct kvm_irq_ack_notifier *kian)
 {
-#ifdef XXX
-	struct kvm_kpit_state *ps = container_of(kian, struct kvm_kpit_state,
-						 irq_ack_notifier);
-	raw_spin_lock(&ps->inject_lock);
-	if (atomic_dec_return(&ps->pit_timer.pending) < 0)
-		atomic_inc(&ps->pit_timer.pending);
+	struct kvm_kpit_state *ps = (struct kvm_kpit_state *)(((caddr_t)kian) -
+				     offsetof(struct kvm_kpit_state,
+					      irq_ack_notifier));
+	mutex_enter(&ps->inject_lock);
+	if (ps->pit_timer.pending-- < 0)
+		ps->pit_timer.pending++;
 	ps->irq_ack = 1;
-	raw_spin_unlock(&ps->inject_lock);
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
+	mutex_exit(&ps->inject_lock);
 }
 
 static int64_t
@@ -13853,7 +13854,7 @@ void kvm_register_irq_ack_notifier(struct kvm *kvm,
 				   struct kvm_irq_ack_notifier *kian)
 {
 	mutex_enter(&kvm->irq_lock);
-	list_insert_head(&kvm->irq_ack_notifier_list, &kian);
+	list_insert_head(&kvm->irq_ack_notifier_list, kian);
 	mutex_exit(&kvm->irq_lock);
 }
 
