@@ -13408,9 +13408,9 @@ __kpit_elapsed(struct kvm *kvm)
 	 * from there.
 	 */
 	now = gethrtime();
-	remaining = now - ps->pit_timer.start -
+	elapsed = now - ps->pit_timer.start -
 	    ps->pit_timer.period * ps->pit_timer.intervals;
-	elapsed = ps->pit_timer.period - remaining;
+	remaining = ps->pit_timer.period - elapsed;
 	elapsed = mod_64(elapsed, ps->pit_timer.period);
 
 	return (elapsed);
@@ -13688,7 +13688,7 @@ create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
 
 	pt->start = gethrtime();
 	if (is_period) {
-		pt->kvm_cyc_when.cyt_when = 0;
+		pt->kvm_cyc_when.cyt_when = pt->start + pt->period;
 		pt->kvm_cyc_when.cyt_interval = pt->period;
 	} else {
 		pt->kvm_cyc_when.cyt_when = pt->start + pt->period;
