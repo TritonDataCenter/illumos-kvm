@@ -3134,51 +3134,14 @@ out:
 int
 _init(void)
 {
-	int e, r;
 
-	if ((e = ddi_soft_state_init(&kvm_state,
-	    sizeof (kvm_devstate_t), 1)) != 0) {
-		return (e);
-	}
-
-	if ((e = mod_install(&modlinkage)) != 0)  {
-		ddi_soft_state_fini(&kvm_state);
-	}
-
-	if (enable_vpid) {
-		vpid_bitmap_words = howmany(VMX_NR_VPIDS, 64);
-		vmx_vpid_bitmap =
-		    kmem_zalloc(sizeof (ulong_t) * vpid_bitmap_words, KM_SLEEP);
-		mutex_init(&vmx_vpid_lock, NULL, MUTEX_DRIVER, NULL);
-	}
-
-	mutex_init(&kvm_lock, NULL, MUTEX_DRIVER, 0);  /* XXX */
-	kvm_x86_ops = &vmx_x86_ops;
-	if ((r = vmx_init()) != DDI_SUCCESS) {
-		mutex_destroy(&kvm_lock);
-		if (vmx_vpid_bitmap) {
-			kmem_free(vmx_vpid_bitmap,
-			    sizeof (ulong_t) * vpid_bitmap_words);
-			mutex_destroy(&vmx_vpid_lock);
-		}
-		mod_remove(&modlinkage);
-		ddi_soft_state_fini(&kvm_state);
-		return (r);
-	}
-	return (e);
+	return (mod_install(&modlinkage));
 }
 
 int
 _fini(void)
 {
-	int e;
-
-	return (EBUSY);		/* XXX */
-	if ((e = mod_remove(&modlinkage)) != 0)  {
-		return (e);
-	}
-	ddi_soft_state_fini(&kvm_state);
-	return (e);
+	return (mod_remove(&modlinkage));
 }
 
 int
@@ -3198,10 +3161,32 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	if (kvm_dip != NULL)
 		return (DDI_FAILURE);
 
+	if (ddi_soft_state_init(&kvm_state, sizeof (kvm_devstate_t), 1) != 0)
+		return (DDI_FAILURE);
+
 	instance = ddi_get_instance(dip);
 	if (ddi_create_minor_node(dip, "kvm",
-	    S_IFCHR, instance, DDI_PSEUDO, 0) == DDI_FAILURE)
+	    S_IFCHR, instance, DDI_PSEUDO, 0) == DDI_FAILURE) {
+		ddi_soft_state_fini(&kvm_state);
 		return (DDI_FAILURE);
+	}
+
+	if (enable_vpid) {
+		vpid_bitmap_words = howmany(VMX_NR_VPIDS, 64);
+		vmx_vpid_bitmap = kmem_zalloc(sizeof (ulong_t) *
+		    vpid_bitmap_words, KM_SLEEP);
+		mutex_init(&vmx_vpid_lock, NULL, MUTEX_DRIVER, NULL);
+	}
+
+	kvm_x86_ops = &vmx_x86_ops;
+	if (vmx_init() != DDI_SUCCESS) {
+		ddi_soft_state_fini(&kvm_state);
+		ddi_remove_minor_node(dip, NULL);
+		mutex_destroy(&vmx_vpid_lock);
+		kmem_free(vmx_vpid_bitmap, sizeof (ulong_t) *
+		    vpid_bitmap_words);
+		return (DDI_FAILURE);
+	}
 
 	kvm_dip = dip;
 	kvm_base_minor = instance;
@@ -3212,6 +3197,7 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	    offsetof(struct kvm, vm_list));
 	kvm_minor = vmem_create("kvm_minor", (void *)1, UINT32_MAX - 1, 1,
 	    NULL, NULL, NULL, 0, VM_SLEEP | VMC_IDENTIFIER);
+	mutex_init(&kvm_lock, NULL, MUTEX_DRIVER, 0);
 
 	ddi_report_dev(dip);
 
@@ -3235,6 +3221,13 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	list_destroy(&vm_list);
 	vmem_destroy(kvm_minor);
 	kvm_dip = NULL;
+
+	if (vmx_vpid_bitmap) {
+		kmem_free(vmx_vpid_bitmap,
+		    sizeof (ulong_t) * vpid_bitmap_words);
+		mutex_destroy(&vmx_vpid_lock);
+	}
+	ddi_soft_state_fini(&kvm_state);
 
 	return (DDI_SUCCESS);
 }
