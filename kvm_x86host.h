@@ -658,8 +658,7 @@ typedef struct kvm_x86_ops {
 	void (*cpuid_update)(struct kvm_vcpu *vcpu);
 
 	/* Create, but do not attach this VCPU */
-	struct kvm_vcpu *(*vcpu_create)(struct kvm *kvm,
-					struct kvm_vcpu_ioc *arg, unsigned id);
+	struct kvm_vcpu *(*vcpu_create)(struct kvm *kvm, unsigned id);
 	void (*vcpu_free)(struct kvm_vcpu *vcpu);
 	int (*vcpu_reset)(struct kvm_vcpu *vcpu);
 

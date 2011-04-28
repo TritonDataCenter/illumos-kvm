@@ -42,6 +42,7 @@
 #include "ioapic.h"
 #include "irq.h"
 #include "i8254.h"
+#include "lapic.h"
 
 #undef DEBUG
 
@@ -64,6 +65,10 @@ extern void kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val);
 extern int kvm_is_mmio_pfn(pfn_t pfn);
 extern ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask);
 extern int is_long_mode(struct kvm_vcpu *vcpu);
+extern void kvm_mmu_unload(struct kvm_vcpu *);
+extern void __vcpu_clear(void *);
+extern void kvm_free_physmem_slot(struct kvm_memory_slot *,
+    struct kvm_memory_slot *);
 
 unsigned long
 segment_base(uint16_t selector)
@@ -209,6 +214,34 @@ kvm_iommu_unmap_guest(struct kvm *kvm)
 }
 #endif /* IOMMU */
 
+static void
+kvm_unload_vcpu_mmu(struct kvm_vcpu *vcpu)
+{
+	vcpu_load(vcpu);
+	kvm_mmu_unload(vcpu);
+	vcpu_put(vcpu);
+}
+
+static void
+kvm_free_vcpus(struct kvm *kvmp)
+{
+	int ii, maxcpus;
+
+	maxcpus = kvmp->online_vcpus;
+	XXX_KVM_SYNC_PROBE;
+	for (ii = 0; ii < maxcpus; ii++)
+		kvm_unload_vcpu_mmu(kvmp->vcpus[ii]);
+
+	for (ii = 0; ii < maxcpus; ii++)
+		kvm_arch_vcpu_free(kvmp->vcpus[ii]);
+
+	mutex_enter(&kvmp->lock);
+	for (ii = 0; ii < maxcpus; ii++)
+		kvmp->vcpus[ii] = NULL;
+	kvmp->online_vcpus = 0;
+	mutex_exit(&kvmp->lock);
+}
+
 /*
  * This function exists because of a difference in methodologies from our
  * ancestor. With our ancestors, there is no imputus to clean up lists and
@@ -236,15 +269,9 @@ kvm_arch_destroy_vm_comps(struct kvm *kvmp)
 	XXX_KVM_PROBE;
 #endif /* IOMMU */
 	kvm_free_pit(kvmp);
-#ifdef VPIC
-	if (kvm->arch.vpic) {
-		kmem_free(kvm->arch.vpic, sizeof (kvm->arch.vpic));
-		kvm->arch.vpic = 0;
-	}
-#endif /* VPIC */
+	kvm_free_vcpus(kvmp);
+	kvm_free_physmem(kvmp);
 #ifdef XXX
-	kvm_free_vcpus(kvm);
-	kvm_free_physmem(kvm);
 #ifdef APIC
 	if (kvm->arch.apic_access_page)
 		put_page(kvm->arch.apic_access_page);
@@ -1580,7 +1607,7 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 
 	r = kvm_mmu_create(vcpu);
 	if (r < 0)
-		goto fail_free_pio_data;
+		goto fail;
 
 	if (irqchip_in_kernel(kvm)) {
 		r = kvm_create_lapic(vcpu);
@@ -1600,24 +1627,20 @@ kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 
 	return (0);
 fail_free_lapic:
-#ifdef XXX
 	kvm_free_lapic(vcpu);
-#else
-	XXX_KVM_PROBE;
-#endif
 fail_mmu_destroy:
-#ifdef XXX
 	kvm_mmu_destroy(vcpu);
-#else
-	XXX_KVM_PROBE;
-#endif
-fail_free_pio_data:
-	/*
-	 * kmem_free(page, PAGESIZE);
-	 * vcpu->arch.pio_data = 0;
-	 */
 fail:
 	return (r);
+}
+
+void
+kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu)
+{
+	kmem_free(vcpu->arch.mce_banks, sizeof (uint64_t) * 4 *
+	    KVM_MAX_MCE_BANKS);
+	kvm_free_lapic(vcpu);
+	kvm_mmu_destroy(vcpu);
 }
 
 static int coalesced_mmio_write(struct kvm_io_device *this,
@@ -1803,6 +1826,16 @@ out:
 	return (r);
 }
 
+static void
+vcpu_clear(struct vcpu_vmx *vmx)
+{
+	if (vmx->vcpu.cpu == -1)
+		return;
+
+	XXX_KVM_SYNC_PROBE;
+	__vcpu_clear(vmx);
+}
+
 struct kvm_vcpu *
 vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 {
@@ -1882,13 +1915,46 @@ free_vcpu:
 	return (NULL);
 }
 
+void
+vmx_destroy_vcpu(struct kvm_vcpu *vcpu)
+{
+	/* XXX don't assume it's the first element */
+	vcpu_vmx_t *vmx = (vcpu_vmx_t *)vcpu;
+
+	if (vmx->vmcs != NULL) {
+		vcpu_clear(vmx);
+		kmem_free(vmx->vmcs, PAGESIZE);
+		vmx->vmcs = NULL;
+	}
+	if (vmx->guest_msrs != NULL)
+		kmem_free(vmx->guest_msrs, PAGESIZE);
+	kvm_vcpu_uninit(vcpu);
+	mutex_enter(&vmx_vpid_lock);
+	if (vmx->vpid != 0)
+		__clear_bit(vmx->vpid, vmx_vpid_bitmap);
+	mutex_exit(&vmx_vpid_lock);
+	kmem_cache_free(kvm_vcpu_cache, vmx);
+}
+
 struct kvm_vcpu *
 kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 {
 	/* for right now, assume always on x86 */
 	/* later, if needed, we'll add something here */
 	/* to call architecture dependent routine */
-	return (vmx_create_vcpu(kvm, id));
+	return (kvm_x86_ops->vcpu_create(kvm, id));
+}
+
+void
+kvm_arch_vcpu_free(struct kvm_vcpu *vcpu)
+{
+	if (vcpu->arch.time_page) {
+		/* XXX We aren't doing anything with the time page */
+		XXX_KVM_PROBE;
+		vcpu->arch.time_page = NULL;
+	}
+
+	kvm_x86_ops->vcpu_free(vcpu);
 }
 
 void
@@ -4741,4 +4807,16 @@ kvm_arch_vcpu_runnable(struct kvm_vcpu *vcpu)
 	    vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED ||
 	    vcpu->arch.nmi_pending ||
 	    (kvm_arch_interrupt_allowed(vcpu) && kvm_cpu_has_interrupt(vcpu)));
+}
+
+void
+kvm_free_physmem(struct kvm *kvm)
+{
+	int ii;
+	struct kvm_memslots *slots = kvm->memslots;
+
+	for (ii = 0; ii < slots->nmemslots; ii++)
+		kvm_free_physmem_slot(&slots->memslots[ii], NULL);
+
+	kmem_free(kvm->memslots, sizeof (struct kvm_memslots));
 }

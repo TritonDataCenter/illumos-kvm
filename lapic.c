@@ -37,6 +37,7 @@ extern uint32_t apic_get_reg(struct kvm_lapic *, int);
 extern int apic_enabled(struct kvm_lapic *);
 extern int apic_hw_enabled(struct kvm_lapic *);
 extern int __apic_accept_irq(struct kvm_lapic *, int, int, int, int);
+extern caddr_t page_address(page_t *);
 
 static int
 apic_lvt_enabled(struct kvm_lapic *apic, int lvt_type)
@@ -102,4 +103,22 @@ kvm_apic_nmi_wd_deliver(struct kvm_vcpu *vcpu)
 
 	if (apic)
 		kvm_apic_local_deliver(apic, APIC_LVT0);
+}
+
+void
+kvm_free_lapic(struct kvm_vcpu *vcpu)
+{
+	struct kvm_lapic *apic = vcpu->arch.apic;
+	if (apic == NULL)
+		return;
+
+	mutex_enter(&cpu_lock);
+	if (apic->lapic_timer.active)
+		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
+	mutex_exit(&cpu_lock);
+
+	if (apic->regs_page)
+		kmem_free(page_address(apic->regs_page), PAGESIZE);
+
+	kmem_free(vcpu->arch.apic, sizeof (struct kvm_lapic));
 }

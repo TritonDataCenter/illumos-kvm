@@ -2238,6 +2238,8 @@ int kvm_arch_vcpu_runnable(struct kvm_vcpu *vcpu);
 
 void kvm_free_physmem(struct kvm *kvm);
 
+void kvm_vcpu_uninit(struct kvm_vcpu *);
+
 struct  kvm *kvm_arch_create_vm(void);
 void kvm_arch_destroy_vm(struct kvm *kvm);
 void kvm_arch_destroy_vm_comps(struct kvm *kvm);

@@ -144,7 +144,8 @@ extern long kvm_vm_ioctl(struct kvm *kvmp, unsigned int ioctl,
 static void hardware_enable(void *junk);
 static void hardware_disable(void *junk);
 extern struct kvm_vcpu *vmx_create_vcpu(struct kvm *kvm,
-    struct kvm_vcpu_ioc *arg, unsigned int id);
+    unsigned int id);
+extern void vmx_destroy_vcpu(struct kvm_vcpu *);
 extern int vmx_vcpu_reset(struct kvm_vcpu *vcpu);
 void vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
 void vmx_vcpu_put(struct kvm_vcpu *vcpu);
@@ -644,7 +645,7 @@ static struct kvm_x86_ops vmx_x86_ops = {
 
 	.cpu_has_accelerated_tpr = report_flexpriority,
 	.vcpu_create = vmx_create_vcpu,
-	.vcpu_free = (void(*)(struct kvm_vcpu *))nulldev, /* XXX */
+	.vcpu_free = vmx_destroy_vcpu, /* XXX */
 	.vcpu_reset = vmx_vcpu_reset,
 
 	.prepare_guest_switch = vmx_save_host_state,
@@ -3771,7 +3772,6 @@ kvm_destroy_vm(struct kvm *kvmp)
 		kmem_free(kvmp->buses[ii], sizeof (struct kvm_io_bus));
 
 	rw_destroy(&kvmp->kvm_rwlock);
-	kmem_free(kvmp->memslots, sizeof (struct kvm_memslots));
 #ifdef CONFIG_HAVE_KVM_IRQCHIP
 	/*
 	 * These lists are contained by the pic. However, the pic isn't
@@ -3961,7 +3961,7 @@ kvm_arch_commit_memory_region(struct kvm *kvm,
 /*
  * Free any memory in @free but not in @dont.
  */
-static void
+void
 kvm_free_physmem_slot(struct kvm_memory_slot *free,
     struct kvm_memory_slot *dont)
 {
@@ -4553,7 +4553,8 @@ vmcs_clear(struct vmcs *vmcs)
 			vmcs, phys_addr);
 }
 
-static void __vcpu_clear(void *arg)
+void
+__vcpu_clear(void *arg)
 {
 	struct vcpu_vmx *vmx = arg;
 	int cpu = CPU->cpu_id;
@@ -15594,5 +15595,12 @@ kvm_on_user_return(struct kvm_vcpu *vcpu, struct kvm_user_return_notifier *urn)
 	}
 	locals->registered = 0;
 	kvm_user_return_notifier_unregister(vcpu, urn);
+}
+
+void
+kvm_vcpu_uninit(struct kvm_vcpu *vcpu)
+{
+	kvm_arch_vcpu_uninit(vcpu);
+	ddi_umem_free(vcpu->cookie);
 }
 /* END CSTYLED */
