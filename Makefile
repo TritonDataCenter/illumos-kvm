@@ -16,25 +16,25 @@ CSTYLE=$(KERNEL_SOURCE)/usr/src/tools/scripts/cstyle
 
 all: kvm kvm.so
 
-kvm: kvm.c kvm_x86.c emulate.c kvm.h kvm_x86host.h msr.h bitops.h kvm_subr.c irq.c i8254.c lapic.c kvm_mmu.c
+kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h msr.h bitops.h kvm_subr.c kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
-	$(CC) $(CFLAGS) $(INCLUDEDIR) emulate.c
+	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_emulate.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_subr.c
-	$(CC) $(CFLAGS) $(INCLUDEDIR) irq.c
-	$(CC) $(CFLAGS) $(INCLUDEDIR) i8254.c
-	$(CC) $(CFLAGS) $(INCLUDEDIR) lapic.c
+	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_irq.c
+	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_i8254.c
+	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_lapic.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_mmu.c
 	$(CTFCONVERT) -i -L VERSION kvm.o
 	$(CTFCONVERT) -i -L VERSION kvm_x86.o
-	$(CTFCONVERT) -i -L VERSION emulate.o
+	$(CTFCONVERT) -i -L VERSION kvm_emulate.o
 	$(CTFCONVERT) -i -L VERSION kvm_subr.o
-	$(CTFCONVERT) -i -L VERSION irq.o
-	$(CTFCONVERT) -i -L VERSION i8254.o
-	$(CTFCONVERT) -i -L VERSION lapic.o
+	$(CTFCONVERT) -i -L VERSION kvm_irq.o
+	$(CTFCONVERT) -i -L VERSION kvm_i8254.o
+	$(CTFCONVERT) -i -L VERSION kvm_lapic.o
 	$(CTFCONVERT) -i -L VERSION kvm_mmu.o
-	$(LD) -r -o kvm kvm.o kvm_x86.o emulate.o kvm_subr.o irq.o i8254.o lapic.o kvm_mmu.o
-	$(CTFMERGE) -L VERSION -o kvm kvm.o kvm_x86.o emulate.o kvm_subr.o irq.o i8254.o lapic.o kvm_mmu.o
+	$(LD) -r -o kvm kvm.o kvm_x86.o kvm_emulate.o kvm_subr.o kvm_irq.o kvm_i8254.o kvm_lapic.o kvm_mmu.o
+	$(CTFMERGE) -L VERSION -o kvm kvm.o kvm_x86.o kvm_emulate.o kvm_subr.o kvm_irq.o kvm_i8254.o kvm_lapic.o kvm_mmu.o
 
 kvm.so: kvm_mdb.c
 	gcc -m64 -shared \
@@ -47,8 +47,8 @@ install: kvm
 	@pfexec cp kvm.conf /usr/kernel/drv
 
 check:
-	@$(CSTYLE) kvm.c kvm_mdb.c emulate.c kvm_x86.c irq.c lapic.c i8254.c kvm_mmu.c
-	@./tools/xxxcheck kvm_x86.c kvm.c irq.c lapic.c i8254.c kvm_mmu.c
+	@$(CSTYLE) kvm.c kvm_mdb.c kvm_emulate.c kvm_x86.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c
+	@./tools/xxxcheck kvm_x86.c kvm.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c
 
 load: install
 	@echo "==> Loading kvm module"

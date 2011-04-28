@@ -1,5 +1,5 @@
-#ifndef __I8254_H
-#define __I8254_h
+#ifndef __KVM_I8254_H
+#define __KVM_I8254_H
 
 /* XXX Our header files suck */
 struct kvm;

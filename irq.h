@@ -30,7 +30,7 @@
 
 #include "iodev.h"
 #include "ioapic.h"
-#include "lapic.h"
+#include "kvm_lapic.h"
 #endif /*XXX*/
 
 #define PIC_NUM_PINS 16

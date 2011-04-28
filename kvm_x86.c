@@ -41,8 +41,8 @@
 #include "kvm.h"
 #include "ioapic.h"
 #include "irq.h"
-#include "i8254.h"
-#include "lapic.h"
+#include "kvm_i8254.h"
+#include "kvm_lapic.h"
 
 #undef DEBUG
 
