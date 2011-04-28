@@ -5820,7 +5820,6 @@ kvm_is_error_hva(unsigned long addr)
 /* kernelbase is used by kvm_read_guest_page/kvm_write_guest_page */
 extern uintptr_t kernelbase;
 
-/* BEGIN CSTYLED */
 int
 kvm_read_guest_page(struct kvm *kvm, gfn_t gfn, void *data, int offset, int len)
 {
@@ -5835,7 +5834,7 @@ kvm_read_guest_page(struct kvm *kvm, gfn_t gfn, void *data, int offset, int len)
 	if (addr >= kernelbase) {
 		bcopy((caddr_t)(addr+offset), data, len);
 	} else {
-		r = copyin((caddr_t)(addr + offset), data, len); 
+		r = copyin((caddr_t)(addr + offset), data, len);
 	}
 
 	if (r)
@@ -5873,11 +5872,9 @@ load_pdptrs(struct kvm_vcpu *vcpu, unsigned long cr3)
 	}
 	ret = 1;
 
-	memcpy(vcpu->arch.pdptrs, pdpte, sizeof(vcpu->arch.pdptrs));
-	__set_bit(VCPU_EXREG_PDPTR,
-		  (unsigned long *)&vcpu->arch.regs_avail);
-	__set_bit(VCPU_EXREG_PDPTR,
-		  (unsigned long *)&vcpu->arch.regs_dirty);
+	memcpy(vcpu->arch.pdptrs, pdpte, sizeof (vcpu->arch.pdptrs));
+	__set_bit(VCPU_EXREG_PDPTR, (unsigned long *)&vcpu->arch.regs_avail);
+	__set_bit(VCPU_EXREG_PDPTR, (unsigned long *)&vcpu->arch.regs_dirty);
 out:
 	return (ret);
 }
@@ -5899,7 +5896,7 @@ fls(int x)
 	int r = 32;
 
 	if (!x)
-		return 0;
+		return (0);
 
 	if (!(x & 0xffff0000u)) {
 		x <<= 16;
@@ -5967,7 +5964,8 @@ kvm_lapic_find_highest_irr(struct kvm_vcpu *vcpu)
 	struct kvm_lapic *apic = vcpu->arch.apic;
 	int highest_irr;
 
-	/* This may race with setting of irr in __apic_accept_irq() and
+	/*
+	 * This may race with setting of irr in __apic_accept_irq() and
 	 * value returned may be wrong, but kvm_vcpu_kick() in __apic_accept_irq
 	 * will cause vmexit immediately and the value will be recalculated
 	 * on the next vmentry.
@@ -6063,7 +6061,8 @@ update_transition_efer(struct vcpu_vmx *vmx, int efer_offset)
 	guest_efer |= host_efer & ignore_bits;
 	vmx->guest_msrs[efer_offset].data = guest_efer;
 	vmx->guest_msrs[efer_offset].mask = ~ignore_bits;
-	return 1;
+
+	return (1);
 }
 
 /*
@@ -6071,7 +6070,8 @@ update_transition_efer(struct vcpu_vmx *vmx, int efer_offset)
  * msrs.  Don't touch the 64-bit msrs if the guest is in legacy
  * mode, as fiddling with msrs is very expensive.
  */
-void setup_msrs(struct vcpu_vmx *vmx)
+void
+setup_msrs(struct vcpu_vmx *vmx)
 {
 	int save_nmsrs, index;
 	unsigned long *msr_bitmap;
@@ -6117,7 +6117,8 @@ void setup_msrs(struct vcpu_vmx *vmx)
 	}
 }
 
-void vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer)
+void
+vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	struct shared_msr_entry *msr = find_msr_entry(vmx, MSR_EFER);
@@ -6133,31 +6134,33 @@ void vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer)
 	vcpu->arch.efer = efer;
 	if (efer & EFER_LMA) {
 		vmcs_write32(VM_ENTRY_CONTROLS,
-			     vmcs_read32(VM_ENTRY_CONTROLS) |
-			     VM_ENTRY_IA32E_MODE);
+		    vmcs_read32(VM_ENTRY_CONTROLS) | VM_ENTRY_IA32E_MODE);
 		msr->data = efer;
 	} else {
 		vmcs_write32(VM_ENTRY_CONTROLS,
-			     vmcs_read32(VM_ENTRY_CONTROLS) &
-			     ~VM_ENTRY_IA32E_MODE);
+		    vmcs_read32(VM_ENTRY_CONTROLS) & ~VM_ENTRY_IA32E_MODE);
 
 		msr->data = efer & ~EFER_LME;
 	}
+
 	setup_msrs(vmx);
 }
 
-static inline int is_protmode(struct kvm_vcpu *vcpu)
+static inline int
+is_protmode(struct kvm_vcpu *vcpu)
 {
-	return kvm_read_cr0_bits(vcpu, X86_CR0_PE);
+	return (kvm_read_cr0_bits(vcpu, X86_CR0_PE));
 }
 
 
-int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu)
+int
+kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu)
 {
-	return vcpu->kvm->bsp_vcpu_id == vcpu->vcpu_id;
+	return (vcpu->kvm->bsp_vcpu_id == vcpu->vcpu_id);
 }
 
-void kvm_pic_clear_isr_ack(struct kvm *kvm)
+void
+kvm_pic_clear_isr_ack(struct kvm *kvm)
 {
 	struct kvm_pic *s = pic_irqchip(kvm);
 
@@ -6167,18 +6170,20 @@ void kvm_pic_clear_isr_ack(struct kvm *kvm)
 	mutex_exit(&s->lock);
 }
 
-
-unsigned long find_next_bit(const unsigned long *addr, unsigned long size,
-			    unsigned long offset)
+unsigned long
+find_next_bit(const unsigned long *addr,
+    unsigned long size, unsigned long offset)
 {
 	const unsigned long *p = addr + (offset/64);
 	unsigned long result = offset & ~(64-1);
 	unsigned long tmp;
 
 	if (offset >= size)
-		return size;
+		return (size);
+
 	size -= result;
 	offset %= 64;
+
 	if (offset) {
 		tmp = *(p++);
 		tmp &= (~0UL << offset);
@@ -6195,20 +6200,21 @@ unsigned long find_next_bit(const unsigned long *addr, unsigned long size,
 		result += 64;
 		size -= 64;
 	}
+
 	if (!size)
-		return result;
+		return (result);
 	tmp = *p;
 
 found_first:
 	tmp &= (~0UL >> (64 - size));
 	if (tmp == 0UL)		/* Are any bits set? */
-		return result + size;	/* Nope. */
+		return (result + size);	/* Nope. */
 found_middle:
-	return result + __ffs(tmp);
+	return (result + __ffs(tmp));
 }
 
-int kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu,
-				  struct kvm_sregs *sregs)
+int
+kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 {
 	int mmu_reset_needed = 0;
 	int pending_vec, max_bits;
@@ -6239,6 +6245,7 @@ int kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu,
 
 	mmu_reset_needed |= kvm_read_cr4(vcpu) != sregs->cr4;
 	kvm_x86_ops->set_cr4(vcpu, sregs->cr4);
+
 	if (!is_long_mode(vcpu) && is_pae(vcpu)) {
 		load_pdptrs(vcpu, vcpu->arch.cr3);
 		mmu_reset_needed = 1;
@@ -6247,13 +6254,13 @@ int kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu,
 	if (mmu_reset_needed)
 		kvm_mmu_reset_context(vcpu);
 
-	max_bits = (sizeof sregs->interrupt_bitmap) << 3;
-	pending_vec = find_next_bit((const unsigned long *)sregs->interrupt_bitmap, max_bits, 0);
+	max_bits = (sizeof (sregs->interrupt_bitmap)) << 3;
+	pending_vec =
+	    find_next_bit((const unsigned long *)sregs->interrupt_bitmap,
+	    max_bits, 0);
+
 	if (pending_vec < max_bits) {
 		kvm_queue_interrupt(vcpu, pending_vec, 0);
-#ifdef DEBUG
-		cmn_err(CE_NOTE, "Set back pending irq %d\n", pending_vec);
-#endif /*DEBUG*/
 		if (irqchip_in_kernel(vcpu->kvm))
 			kvm_pic_clear_isr_ack(vcpu->kvm);
 	}
@@ -6276,14 +6283,15 @@ int kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu,
 	    sregs->cs.selector == 0xf000 && sregs->cs.base == 0xffff0000 &&
 	    !is_protmode(vcpu))
 		vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
-#endif /*CONFIG_KVM_APIC_ARCHITECTURE*/
+#endif /* CONFIG_KVM_APIC_ARCHITECTURE */
 
 	vcpu_put(vcpu);
 
-	return 0;
+	return (0);
 }
 
-static void kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
+static void
+kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 {
 	static int version;
 	struct pvclock_wall_clock wc;
@@ -6294,7 +6302,7 @@ static void kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 
 	version++;
 
-	kvm_write_guest(kvm, wall_clock, &version, sizeof(version));
+	kvm_write_guest(kvm, wall_clock, &version, sizeof (version));
 
 	/*
 	 * The guest calculates current wall clock time by adding
@@ -6309,88 +6317,71 @@ static void kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 	wc.nsec = boot.tv_nsec;
 	wc.version = version;
 
-	kvm_write_guest(kvm, wall_clock, &wc, sizeof(wc));
+	kvm_write_guest(kvm, wall_clock, &wc, sizeof (wc));
 
 	version++;
-	kvm_write_guest(kvm, wall_clock, &version, sizeof(version));
+	kvm_write_guest(kvm, wall_clock, &version, sizeof (version));
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 }
 
-static int next_segment(unsigned long len, int offset)
+static int
+next_segment(unsigned long len, int offset)
 {
 	if (len > PAGESIZE - offset)
-		return PAGESIZE - offset;
+		return (PAGESIZE - offset);
 	else
-		return len;
+		return (len);
 }
 
-#define	generic_test_le_bit(nr, addr) test_bit(nr, addr)
-#define	generic___set_le_bit(nr, addr) __set_bit(nr, addr)
-
-void mark_page_dirty(struct kvm *kvm, gfn_t gfn)
+void
+mark_page_dirty(struct kvm *kvm, gfn_t gfn)
 {
 	struct kvm_memory_slot *memslot;
 
 	gfn = unalias_gfn(kvm, gfn);
 	memslot = gfn_to_memslot_unaliased(kvm, gfn);
+
 	if (memslot && memslot->dirty_bitmap) {
 		unsigned long rel_gfn = gfn - memslot->base_gfn;
-		unsigned long *p = memslot->dirty_bitmap +
-			rel_gfn / 64;
+		unsigned long *p = memslot->dirty_bitmap + rel_gfn / 64;
 		int offset = rel_gfn % 64;
 
 		/* avoid RMW */
-#ifndef XXX
-		if (!generic_test_le_bit(offset, p))
-			generic___set_le_bit(offset, p);
-#else
-		/* XXX - assume little endian */
-		if (!BT_TEST(p, offset))  /* XXX why ask if we're going to set it??? */
-			BT_SET(p, offset);
-#endif /*XXX*/
+		if (!test_bit(offset, p))
+			__set_bit(offset, p);
 	}
 }
 
-int kvm_write_guest_page(struct kvm *kvm, gfn_t gfn, const void *data,
-			 int offset, int len)
+int
+kvm_write_guest_page(struct kvm *kvm,
+    gfn_t gfn, const void *data, int offset, int len)
 {
 	int r = 0;
 	unsigned long addr;
 
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "kvm_write_guest_page: gfn = %lx, data = %p, offset = %x, len = %x\n",
-		gfn, data, offset, len);
-#endif /*DEBUG*/
 	addr = gfn_to_hva(kvm, gfn);
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "kvm_write_guest_page: gfn = %lx, hva = %lx\n", gfn, addr);
-#endif /*DEBUG*/
+
 	if (kvm_is_error_hva(addr))
-		return -EFAULT;
+		return (-EFAULT);
+
 	/* XXX - addr could be user or kernel */
 	if (addr >= kernelbase) {
-#ifdef DEBUG
-		cmn_err(CE_CONT, "kvm_write_guest_page: bcopy(%p, %lx, %x)\n",
-			data, (addr+offset), len);
-#endif /*DEBUG*/
 		bcopy(data, (caddr_t)(addr+offset), len);
 	} else {
-#ifdef DEBUG
-		cmn_err(CE_CONT, "kvm_write_guest_page: copyout(%p, %lx, %x)\n",
-			data, (addr+offset), len);
-#endif /*DEBUG*/
 		r = copyout(data, (caddr_t)(addr + offset), len);
 	}
+
 	if (r)
-		return -EFAULT;
+		return (-EFAULT);
+
 	mark_page_dirty(kvm, gfn);
-	return 0;
+	return (0);
 }
 
-int kvm_write_guest(struct kvm *kvm, gpa_t gpa, const void *data,
-		    unsigned long len)
+int
+kvm_write_guest(struct kvm *kvm, gpa_t gpa, const void *data, unsigned long len)
 {
 	gfn_t gfn = gpa >> PAGESHIFT;
 	int seg;
@@ -6401,23 +6392,27 @@ int kvm_write_guest(struct kvm *kvm, gpa_t gpa, const void *data,
 	while ((seg = next_segment(len, offset)) != 0) {
 		ret = kvm_write_guest_page(kvm, gfn, (void *)dp, offset, seg);
 		if (ret < 0)
-			return ret;
+			return (ret);
 		offset = 0;
 		len -= seg;
 		dp += seg;
 		++gfn;
 	}
-	return 0;
+
+	return (0);
 }
 
-static int xen_hvm_config(struct kvm_vcpu *vcpu, uint64_t data)
+static int
+xen_hvm_config(struct kvm_vcpu *vcpu, uint64_t data)
 {
 	struct kvm *kvm = vcpu->kvm;
 	int lm = is_long_mode(vcpu);
-	uint8_t *blob_addr = lm ? (uint8_t *)(long)kvm->arch.xen_hvm_config.blob_addr_64
-		: (uint8_t *)(long)kvm->arch.xen_hvm_config.blob_addr_32;
-	uint8_t blob_size = lm ? kvm->arch.xen_hvm_config.blob_size_64
-		: kvm->arch.xen_hvm_config.blob_size_32;
+	uint8_t *blob_addr = lm ?
+	    (uint8_t *)(long)kvm->arch.xen_hvm_config.blob_addr_64 :
+	    (uint8_t *)(long)kvm->arch.xen_hvm_config.blob_addr_32;
+	uint8_t blob_size = lm ?
+	    kvm->arch.xen_hvm_config.blob_size_64 :
+	    kvm->arch.xen_hvm_config.blob_size_32;
 	uint32_t page_num = data & ~PAGEMASK;
 	uint64_t page_addr = data & PAGEMASK;
 	uint8_t *page;
@@ -6437,21 +6432,22 @@ static int xen_hvm_config(struct kvm_vcpu *vcpu, uint64_t data)
 out_free:
 	kmem_free(page, PAGESIZE);
 out:
-	return r;
+	return (r);
 }
 
 int ignore_msrs = 0;
 extern int is_paging(struct kvm_vcpu *vcpu);
 
-static void set_efer(struct kvm_vcpu *vcpu, uint64_t efer)
+static void
+set_efer(struct kvm_vcpu *vcpu, uint64_t efer)
 {
 	if (efer & efer_reserved_bits) {
 		kvm_inject_gp(vcpu, 0);
 		return;
 	}
 
-	if (is_paging(vcpu)
-	    && (vcpu->arch.efer & EFER_LME) != (efer & EFER_LME)) {
+	if (is_paging(vcpu) &&
+	    (vcpu->arch.efer & EFER_LME) != (efer & EFER_LME)) {
 		kvm_inject_gp(vcpu, 0);
 		return;
 	}
@@ -6487,7 +6483,8 @@ static void set_efer(struct kvm_vcpu *vcpu, uint64_t efer)
 	kvm_mmu_reset_context(vcpu);
 }
 
-static int msr_mtrr_valid(unsigned msr)
+static int
+msr_mtrr_valid(unsigned msr)
 {
 	switch (msr) {
 	case 0x200 ... 0x200 + 2 * KVM_NR_VAR_MTRR - 1:
@@ -6504,62 +6501,68 @@ static int msr_mtrr_valid(unsigned msr)
 	case MSR_MTRRfix4K_F8000:
 	case MSR_MTRRdefType:
 	case MSR_IA32_CR_PAT:
-		return 1;
+		return (1);
 	case 0x2f8:
-		return 1;
+		return (1);
 	}
-	return 0;
+
+	return (0);
 }
 
 
-static int valid_pat_type(unsigned t)
+static int
+valid_pat_type(unsigned t)
 {
-	return t < 8 && (1 << t) & 0xf3; /* 0, 1, 4, 5, 6, 7 */
+	return (t < 8 && (1 << t) & 0xf3); /* 0, 1, 4, 5, 6, 7 */
 }
 
-static int valid_mtrr_type(unsigned t)
+static int
+valid_mtrr_type(unsigned t)
 {
-	return t < 8 && (1 << t) & 0x73; /* 0, 1, 4, 5, 6 */
+	return (t < 8 && (1 << t) & 0x73); /* 0, 1, 4, 5, 6 */
 }
 
-static int mtrr_valid(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
+static int
+mtrr_valid(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 {
 	int i;
 
 	if (!msr_mtrr_valid(msr))
-		return 0;
+		return (0);
 
 	if (msr == MSR_IA32_CR_PAT) {
 		for (i = 0; i < 8; i++)
 			if (!valid_pat_type((data >> (i * 8)) & 0xff))
-				return 0;
-		return 1;
+				return (0);
+		return (1);
 	} else if (msr == MSR_MTRRdefType) {
 		if (data & ~0xcff)
-			return 0;
-		return valid_mtrr_type(data & 0xff);
+			return (0);
+		return (valid_mtrr_type(data & 0xff));
 	} else if (msr >= MSR_MTRRfix64K_00000 && msr <= MSR_MTRRfix4K_F8000) {
-		for (i = 0; i < 8 ; i++)
+		for (i = 0; i < 8; i++)
 			if (!valid_mtrr_type((data >> (i * 8)) & 0xff))
-				return 0;
-		return 1;
+				return (0);
+		return (1);
 	}
 
 	/* variable MTRRs */
-	return valid_mtrr_type(data & 0xff);
+	return (valid_mtrr_type(data & 0xff));
 }
 
-
-static int set_msr_mtrr(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
+static int
+set_msr_mtrr(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 {
-	uint64_t *p = (uint64_t *)&vcpu->arch.mtrr_state.fixed_ranges;
+	struct mtrr_state_type *state = &vcpu->arch.mtrr_state;
+
+	uint64_t *p = (uint64_t *)&state->fixed_ranges;
 
 	if (!mtrr_valid(vcpu, msr, data))
-		return 1;
+		return (1);
 
 	if (msr == MSR_MTRRdefType) {
-		vcpu->arch.mtrr_state.def_type = data;
-		vcpu->arch.mtrr_state.enabled = (data & 0xc00) >> 10;
+		state->def_type = data;
+		state->enabled = (data & 0xc00) >> 10;
 	} else if (msr == MSR_MTRRfix64K_00000)
 		p[0] = data;
 	else if (msr == MSR_MTRRfix16K_80000 || msr == MSR_MTRRfix16K_A0000)
@@ -6574,93 +6577,105 @@ static int set_msr_mtrr(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 
 		idx = (msr - 0x200) / 2;
 		is_mtrr_mask = msr - 0x200 - 2 * idx;
-		if (!is_mtrr_mask)
-			pt =
-			  (uint64_t *)&vcpu->arch.mtrr_state.var_ranges[idx].base_lo;
-		else
-			pt =
-			  (uint64_t *)&vcpu->arch.mtrr_state.var_ranges[idx].mask_lo;
+
+		if (!is_mtrr_mask) {
+			pt = (uint64_t *)&state->var_ranges[idx].base_lo;
+		} else {
+			pt = (uint64_t *)&state->var_ranges[idx].mask_lo;
+		}
+
 		*pt = data;
 	}
 
 	kvm_mmu_reset_context(vcpu);
-	return 0;
+
+	return (0);
 }
 
-static inline int apic_x2apic_mode(struct kvm_lapic *apic)
+static inline int
+apic_x2apic_mode(struct kvm_lapic *apic)
 {
-	return apic->vcpu->arch.apic_base & X2APIC_ENABLE;
+	return (apic->vcpu->arch.apic_base & X2APIC_ENABLE);
 }
 
 extern int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val);
 
-int kvm_x2apic_msr_write(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
+int
+kvm_x2apic_msr_write(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 	uint32_t reg = (msr - APIC_BASE_MSR) << 4;
 
 	if (!irqchip_in_kernel(vcpu->kvm) || !apic_x2apic_mode(apic))
-		return 1;
+		return (1);
 
 	/* if this is ICR write vector before command */
 	if (msr == 0x830)
 		apic_reg_write(apic, APIC_ICR2, (uint32_t)(data >> 32));
-	return apic_reg_write(apic, reg, (uint32_t)data);
+
+	return (apic_reg_write(apic, reg, (uint32_t)data));
 }
 
-extern int apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len,
-			 void *data);
+extern int apic_reg_read(struct kvm_lapic *apic,
+    uint32_t offset, int len, void *data);
 
-int kvm_x2apic_msr_read(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *data)
+int
+kvm_x2apic_msr_read(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *data)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 	uint32_t reg = (msr - APIC_BASE_MSR) << 4, low, high = 0;
 
 	if (!irqchip_in_kernel(vcpu->kvm) || !apic_x2apic_mode(apic))
-		return 1;
+		return (1);
 
 	if (apic_reg_read(apic, reg, 4, &low))
-		return 1;
+		return (1);
+
 	if (msr == 0x830)
 		apic_reg_read(apic, APIC_ICR2, 4, &high);
 
 	*data = (((uint64_t)high) << 32) | low;
 
-	return 0;
+	return (0);
 }
 
-int kvm_hv_vapic_msr_write(struct kvm_vcpu *vcpu, uint32_t reg, uint64_t data)
+int
+kvm_hv_vapic_msr_write(struct kvm_vcpu *vcpu, uint32_t reg, uint64_t data)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 
 	if (!irqchip_in_kernel(vcpu->kvm))
-		return 1;
+		return (1);
 
 	/* if this is ICR write vector before command */
 	if (reg == APIC_ICR)
 		apic_reg_write(apic, APIC_ICR2, (uint32_t)(data >> 32));
-	return apic_reg_write(apic, reg, (uint32_t)data);
+
+	return (apic_reg_write(apic, reg, (uint32_t)data));
 }
 
-int kvm_hv_vapic_msr_read(struct kvm_vcpu *vcpu, uint32_t reg, uint64_t *data)
+int
+kvm_hv_vapic_msr_read(struct kvm_vcpu *vcpu, uint32_t reg, uint64_t *data)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 	uint32_t low, high = 0;
 
 	if (!irqchip_in_kernel(vcpu->kvm))
-		return 1;
+		return (1);
 
 	if (apic_reg_read(apic, reg, 4, &low))
-		return 1;
+		return (1);
+
 	if (reg == APIC_ICR)
 		apic_reg_read(apic, APIC_ICR2, 4, &high);
 
 	*data = (((uint64_t)high) << 32) | low;
 
-	return 0;
+	return (0);
 }
 
-int clear_user(void *addr, unsigned long size)
+int
+clear_user(void *addr, unsigned long size)
 {
 	caddr_t ka;
 	int rval = 0;
@@ -6669,13 +6684,13 @@ int clear_user(void *addr, unsigned long size)
 	rval = copyout(ka, addr, size);
 	kmem_free(ka, size);
 
-	return rval;
+	return (rval);
 }
 
-static int set_msr_hyperv(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
+static int
+set_msr_hyperv(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 {
 	switch (msr) {
-
 	case HV_X64_MSR_APIC_ASSIST_PAGE: {
 		unsigned long addr;
 
@@ -6683,32 +6698,38 @@ static int set_msr_hyperv(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 			vcpu->arch.hv_vapic = data;
 			break;
 		}
-		addr = gfn_to_hva(vcpu->kvm, data >>
-				  HV_X64_MSR_APIC_ASSIST_PAGE_ADDRESS_SHIFT);
+
+		addr = gfn_to_hva(vcpu->kvm,
+		    data >> HV_X64_MSR_APIC_ASSIST_PAGE_ADDRESS_SHIFT);
+
 		if (kvm_is_error_hva(addr))
-			return 1;
+			return (1);
+
 		if (clear_user((void *)addr, PAGESIZE))
-			return 1;
+			return (1);
+
 		vcpu->arch.hv_vapic = data;
 		break;
 	}
+
 	case HV_X64_MSR_EOI:
-		return kvm_hv_vapic_msr_write(vcpu, APIC_EOI, data);
+		return (kvm_hv_vapic_msr_write(vcpu, APIC_EOI, data));
 	case HV_X64_MSR_ICR:
-		return kvm_hv_vapic_msr_write(vcpu, APIC_ICR, data);
+		return (kvm_hv_vapic_msr_write(vcpu, APIC_ICR, data));
 	case HV_X64_MSR_TPR:
-		return kvm_hv_vapic_msr_write(vcpu, APIC_TASKPRI, data);
+		return (kvm_hv_vapic_msr_write(vcpu, APIC_TASKPRI, data));
 
 	default:
 		cmn_err(CE_WARN, "HYPER-V unimplemented wrmsr: 0x%x "
-			  "data 0x%lx\n", msr, data);
-		return 1;
+		    "data 0x%lx\n", msr, data);
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
-static int set_msr_hyperv_pw(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
+static int
+set_msr_hyperv_pw(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 {
 	struct kvm *kvm = vcpu->kvm;
 
@@ -6734,23 +6755,25 @@ static int set_msr_hyperv_pw(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 		gfn = data >> HV_X64_MSR_HYPERCALL_PAGE_ADDRESS_SHIFT;
 		addr = gfn_to_hva(kvm, gfn);
 		if (kvm_is_error_hva(addr))
-			return 1;
+			return (1);
 		kvm_x86_ops->patch_hypercall(vcpu, instructions);
 		((unsigned char *)instructions)[3] = 0xc3; /* ret */
 		if (copyout(instructions, (caddr_t)addr, 4))
-			return 1;
+			return (1);
 		kvm->arch.hv_hypercall = data;
 		break;
 	}
 	default:
 		cmn_err(CE_WARN, "HYPER-V unimplemented wrmsr: 0x%x "
-			  "data 0x%lx\n", msr, data);
-		return 1;
+		    "data 0x%lx\n", msr, data);
+		return (1);
 	}
-	return 0;
+
+	return (0);
 }
 
-static int set_msr_mce(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
+static int
+set_msr_mce(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 {
 	uint64_t mcg_cap = vcpu->arch.mcg_cap;
 	unsigned bank_num = mcg_cap & 0xff;
@@ -6761,32 +6784,34 @@ static int set_msr_mce(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 		break;
 	case MSR_IA32_MCG_CTL:
 		if (!(mcg_cap & MCG_CTL_P))
-			return 1;
+			return (1);
 		if (data != 0 && data != ~(uint64_t)0)
-			return -1;
+			return (-1);
 		vcpu->arch.mcg_ctl = data;
 		break;
 	default:
 		if (msr >= MSR_IA32_MC0_CTL &&
 		    msr < MSR_IA32_MC0_CTL + 4 * bank_num) {
 			uint32_t offset = msr - MSR_IA32_MC0_CTL;
-			/* only 0 or all 1s can be written to IA32_MCi_CTL
+			/*
+			 * only 0 or all 1s can be written to IA32_MCi_CTL
 			 * some Linux kernels though clear bit 10 in bank 4 to
 			 * workaround a BIOS/GART TBL issue on AMD K8s, ignore
 			 * this to avoid an uncatched #GP in the guest
 			 */
 			if ((offset & 0x3) == 0 &&
 			    data != 0 && (data | (1 << 10)) != ~(uint64_t)0)
-				return -1;
+				return (-1);
 			vcpu->arch.mce_banks[offset] = data;
 			break;
 		}
-		return 1;
+		return (1);
 	}
-	return 0;
+	return (0);
 }
 
-static int kvm_hv_msr_partition_wide(uint32_t msr)
+static int
+kvm_hv_msr_partition_wide(uint32_t msr)
 {
 	int r = 0;
 	switch (msr) {
@@ -6796,15 +6821,18 @@ static int kvm_hv_msr_partition_wide(uint32_t msr)
 		break;
 	}
 
-	return r;
-}
-inline page_t *compound_head(page_t *page)
-{
-	/* XXX - linux links page_t together. */
-	return page;
+	return (r);
 }
 
-inline void get_page(page_t *page)
+inline page_t *
+compound_head(page_t *page)
+{
+	/* XXX - linux links page_t together. */
+	return (page);
+}
+
+inline void
+get_page(page_t *page)
 {
 	page = compound_head(page);
 }
@@ -6815,74 +6843,61 @@ extern pfn_t physmax;
 #define	pfn_valid(pfn) ((pfn < physmax) && (pfn != PFN_INVALID))
 #else
 #define	pfn_valid(pfn) (pfn != PFN_INVALID)
-#endif /*XXX*/
+#endif
 
-inline int kvm_is_mmio_pfn(pfn_t pfn)
+inline int
+kvm_is_mmio_pfn(pfn_t pfn)
 {
 	if (pfn_valid(pfn)) {
 #ifdef XXX
 		struct page *page = compound_head(pfn_to_page(pfn));
-		return PageReserved(page);
+		return (PageReserved(page));
 #else
 		XXX_KVM_PROBE;
 #endif
-		return 0;
+		return (0);
 	} else
-		return 1;
+		return (1);
 }
 
-page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn)
+page_t *
+gfn_to_page(struct kvm *kvm, gfn_t gfn)
 {
-	pfn_t pfn;
-	page_t *page;
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "gfn_to_page: gfn = %lx\n", gfn);
-#endif /*DEBUG*/
-	pfn = gfn_to_pfn(kvm, gfn);
-#ifdef DEBUG
-	cmn_err(CE_CONT, "gfn_to_page: pfn = %lx\n", pfn);
-#endif /*DEBUG*/
+	pfn_t pfn = gfn_to_pfn(kvm, gfn);
 
-	if (!kvm_is_mmio_pfn(pfn)) {
-		page = pfn_to_page(pfn);
-#ifdef DEBUG
-		cmn_err(CE_CONT, "gfn_to_page: page = %p\n", page);
-#endif /*DEBUG*/
-		return page;
-	}
+	if (!kvm_is_mmio_pfn(pfn))
+		return (pfn_to_page(pfn));
+
 	get_page(bad_page);
-#ifdef DEBUG
-	cmn_err(CE_CONT, "gfn_to_page: returning bad_page addr (%p)\n", bad_page);
-#endif /*DEBUG*/
-	return bad_page;
+	return (bad_page);
 }
 
-void kvm_release_page_dirty(page_t *page)
+void
+kvm_release_page_dirty(page_t *page)
 {
 	kvm_release_pfn_dirty(page_to_pfn(page));
 }
 
-
-int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
+int
+kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 {
-
 	switch (msr) {
 	case MSR_EFER:
 		set_efer(vcpu, data);
 		break;
 	case MSR_K7_HWCR:
-		data &= ~(uint64_t)0x40;	/* ignore flush filter disable */
+		data &= ~(uint64_t)0x40; /* ignore flush filter disable */
 		if (data != 0) {
-			cmn_err(CE_NOTE, "unimplemented HWCR wrmsr: 0x%lx\n",
-				data);
-			return 1;
+			cmn_err(CE_NOTE,
+			    "unimplemented HWCR wrmsr: 0x%lx\n", data);
+			return (1);
 		}
 		break;
 	case MSR_FAM10H_MMIO_CONF_BASE:
 		if (data != 0) {
 			cmn_err(CE_NOTE, "unimplemented MMIO_CONF_BASE wrmsr: "
 				"0x%lx\n", data);
-			return 1;
+			return (1);
 		}
 		break;
 	case MSR_AMD64_NB_CFG:
@@ -6892,9 +6907,11 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 			/* We support the non-activated case already */
 			break;
 		} else if (data & ~(DEBUGCTLMSR_LBR | DEBUGCTLMSR_BTF)) {
-			/* Values other than LBR and BTF are vendor-specific,
-			   thus reserved and should throw a #GP */
-			return 1;
+			/*
+			 * Values other than LBR and BTF are vendor-specific,
+			 * thus reserved and should throw a #GP
+			 */
+			return (1);
 		}
 		cmn_err(CE_NOTE, "%s: MSR_IA32_DEBUGCTLMSR 0x%lx, nop\n",
 			__func__, data);
@@ -6905,12 +6922,12 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 	case MSR_AMD64_PATCH_LOADER:
 		break;
 	case 0x200 ... 0x2ff:
-		return set_msr_mtrr(vcpu, msr, data);
+		return (set_msr_mtrr(vcpu, msr, data));
 	case MSR_IA32_APICBASE:
 		kvm_set_apic_base(vcpu, data);
 		break;
 	case APIC_BASE_MSR ... APIC_BASE_MSR + 0x3ff:
-		return kvm_x2apic_msr_write(vcpu, msr, data);
+		return (kvm_x2apic_msr_write(vcpu, msr, data));
 	case MSR_IA32_MISC_ENABLE:
 		vcpu->arch.ia32_misc_enable_msr = data;
 		break;
@@ -6926,7 +6943,7 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 		}
 #else
 		XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 
 		vcpu->arch.time = data;
 
@@ -6948,18 +6965,18 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 		kvm_request_guest_time_update(vcpu);
 #else
 		XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 		break;
 	}
 	case MSR_IA32_MCG_CTL:
 	case MSR_IA32_MCG_STATUS:
 	case MSR_IA32_MC0_CTL ... MSR_IA32_MC0_CTL + 4 * KVM_MAX_MCE_BANKS - 1:
-		return set_msr_mce(vcpu, msr, data);
+		return (set_msr_mce(vcpu, msr, data));
 
-	/* Performance counters are not protected by a CPUID bit,
-	 * so we should check all of them in the generic path for the sake of
-	 * cross vendor migration.
-	 * Writing a zero into the event select MSRs disables them,
+	/*
+	 * Performance counters are not protected by a CPUID bit, so we should
+	 * check all of them in the generic path for the sake of cross vendor
+	 * migration. Writing a zero into the event select MSRs disables them,
 	 * which we perfectly emulate ;-). Any other value should be at least
 	 * reported, some guests depend on them.
 	 */
@@ -6973,7 +6990,8 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 			cmn_err(CE_NOTE, "unimplemented perfctr wrmsr: "
 				"0x%x data 0x%lx\n", msr, data);
 		break;
-	/* at least RHEL 4 unconditionally writes to the perfctr registers,
+	/*
+	 * at least RHEL 4 unconditionally writes to the perfctr registers,
 	 * so we ignore writes to make it happy.
 	 */
 	case MSR_P6_PERFCTR0:
@@ -6991,38 +7009,41 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 			mutex_enter(&vcpu->kvm->lock);
 			r = set_msr_hyperv_pw(vcpu, msr, data);
 			mutex_exit(&vcpu->kvm->lock);
-			return r;
+			return (r);
 		} else
-			return set_msr_hyperv(vcpu, msr, data);
+			return (set_msr_hyperv(vcpu, msr, data));
 		break;
 	default:
 		if (msr && (msr == vcpu->kvm->arch.xen_hvm_config.msr))
-			return xen_hvm_config(vcpu, data);
+			return (xen_hvm_config(vcpu, data));
 		if (!ignore_msrs) {
 			cmn_err(CE_NOTE, "unhandled wrmsr: 0x%x data %lx\n",
 				msr, data);
-			return 1;
+			return (1);
 		} else {
 			cmn_err(CE_NOTE, "ignored wrmsr: 0x%x data %lx\n",
 				msr, data);
 			break;
 		}
 	}
-	return 0;
+
+	return (0);
 }
 
 
 
-static int get_msr_mtrr(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
+static int
+get_msr_mtrr(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 {
-	uint64_t *p = (uint64_t *)&vcpu->arch.mtrr_state.fixed_ranges;
+	struct mtrr_state_type *state = &vcpu->arch.mtrr_state;
+	uint64_t *p = (uint64_t *)&state->fixed_ranges;
 
 	if (!msr_mtrr_valid(msr))
-		return 1;
+		return (1);
 
 	if (msr == MSR_MTRRdefType)
 		*pdata = vcpu->arch.mtrr_state.def_type +
-			 (vcpu->arch.mtrr_state.enabled << 10);
+		    (vcpu->arch.mtrr_state.enabled << 10);
 	else if (msr == MSR_MTRRfix64K_00000)
 		*pdata = p[0];
 	else if (msr == MSR_MTRRfix16K_80000 || msr == MSR_MTRRfix16K_A0000)
@@ -7037,21 +7058,21 @@ static int get_msr_mtrr(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 
 		idx = (msr - 0x200) / 2;
 		is_mtrr_mask = msr - 0x200 - 2 * idx;
-		if (!is_mtrr_mask)
-			pt =
-			  (uint64_t *)&vcpu->arch.mtrr_state.var_ranges[idx].base_lo;
-		else
-			pt =
-			  (uint64_t *)&vcpu->arch.mtrr_state.var_ranges[idx].mask_lo;
+		if (!is_mtrr_mask) {
+			pt = (uint64_t *)&state->var_ranges[idx].base_lo;
+		} else {
+			pt = (uint64_t *)&state->var_ranges[idx].mask_lo;
+		}
+
 		*pdata = *pt;
 	}
 
-	return 0;
+	return (0);
 }
 
 
-
-static int get_msr_hyperv(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
+static int
+get_msr_hyperv(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 {
 	uint64_t data = 0;
 
@@ -7065,20 +7086,22 @@ static int get_msr_hyperv(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 		break;
 	}
 	case HV_X64_MSR_EOI:
-		return kvm_hv_vapic_msr_read(vcpu, APIC_EOI, pdata);
+		return (kvm_hv_vapic_msr_read(vcpu, APIC_EOI, pdata));
 	case HV_X64_MSR_ICR:
-		return kvm_hv_vapic_msr_read(vcpu, APIC_ICR, pdata);
+		return (kvm_hv_vapic_msr_read(vcpu, APIC_ICR, pdata));
 	case HV_X64_MSR_TPR:
-		return kvm_hv_vapic_msr_read(vcpu, APIC_TASKPRI, pdata);
+		return (kvm_hv_vapic_msr_read(vcpu, APIC_TASKPRI, pdata));
 	default:
 		cmn_err(CE_WARN, "Hyper-V unhandled rdmsr: 0x%x\n", msr);
-		return 1;
+		return (1);
 	}
+
 	*pdata = data;
-	return 0;
+	return (0);
 }
 
-static int get_msr_hyperv_pw(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
+static int
+get_msr_hyperv_pw(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 {
 	uint64_t data = 0;
 	struct kvm *kvm = vcpu->kvm;
@@ -7092,11 +7115,12 @@ static int get_msr_hyperv_pw(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdat
 		break;
 	default:
 		cmn_err(CE_WARN, "Hyper-V unhandled rdmsr: 0x%x\n", msr);
-		return 1;
+		return (1);
 	}
 
 	*pdata = data;
-	return 0;
+
+	return (0);
 }
 
 static int get_msr_mce(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
@@ -7115,7 +7139,7 @@ static int get_msr_mce(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 		break;
 	case MSR_IA32_MCG_CTL:
 		if (!(mcg_cap & MCG_CTL_P))
-			return 1;
+			return (1);
 		data = vcpu->arch.mcg_ctl;
 		break;
 	case MSR_IA32_MCG_STATUS:
@@ -7128,14 +7152,14 @@ static int get_msr_mce(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 			data = vcpu->arch.mce_banks[offset];
 			break;
 		}
-		return 1;
+		return (1);
 	}
 	*pdata = data;
-	return 0;
+	return (0);
 }
 
-
-int kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
+int
+kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 {
 	uint64_t data;
 
@@ -7166,7 +7190,7 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 		data = 0x500 | KVM_NR_VAR_MTRR;
 		break;
 	case 0x200 ... 0x2ff:
-		return get_msr_mtrr(vcpu, msr, pdata);
+		return (get_msr_mtrr(vcpu, msr, pdata));
 	case 0xcd: /* fsb frequency */
 		data = 3;
 		break;
@@ -7174,7 +7198,7 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 		data = kvm_get_apic_base(vcpu);
 		break;
 	case APIC_BASE_MSR ... APIC_BASE_MSR + 0x3ff:
-		return kvm_x2apic_msr_read(vcpu, msr, pdata);
+		return (kvm_x2apic_msr_read(vcpu, msr, pdata));
 		break;
 	case MSR_IA32_MISC_ENABLE:
 		data = vcpu->arch.ia32_misc_enable_msr;
@@ -7200,21 +7224,21 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 	case MSR_IA32_MCG_CTL:
 	case MSR_IA32_MCG_STATUS:
 	case MSR_IA32_MC0_CTL ... MSR_IA32_MC0_CTL + 4 * KVM_MAX_MCE_BANKS - 1:
-		return get_msr_mce(vcpu, msr, pdata);
+		return (get_msr_mce(vcpu, msr, pdata));
 	case HV_X64_MSR_GUEST_OS_ID ... HV_X64_MSR_SINT15:
 		if (kvm_hv_msr_partition_wide(msr)) {
 			int r;
 			mutex_enter(&vcpu->kvm->lock);
 			r = get_msr_hyperv_pw(vcpu, msr, pdata);
 			mutex_exit(&vcpu->kvm->lock);
-			return r;
+			return (r);
 		} else
-			return get_msr_hyperv(vcpu, msr, pdata);
+			return (get_msr_hyperv(vcpu, msr, pdata));
 		break;
 	default:
 		if (!ignore_msrs) {
 			cmn_err(CE_NOTE, "unhandled rdmsr: 0x%x\n", msr);
-			return 1;
+			return (1);
 		} else {
 			cmn_err(CE_NOTE, "ignored rdmsr: 0x%x\n", msr);
 			data = 0;
@@ -7222,11 +7246,8 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 		break;
 	}
 	*pdata = data;
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "kvm_get_msr_common: msr = %x, data = %lx\n",
-		msr, data);
-#endif /*DEBUG*/
-	return 0;
+
+	return (0);
 }
 
 /*
@@ -7235,9 +7256,8 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
  * @return number of msrs set successfully.
  */
 static int __msr_io(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs,
-		    struct kvm_msr_entry *entries,
-		    int (*do_msr)(struct kvm_vcpu *vcpu,
-				  unsigned index, uint64_t *data))
+    struct kvm_msr_entry *entries, int (*do_msr)(struct kvm_vcpu *vcpu,
+    unsigned index, uint64_t *data))
 {
 	int i, idx;
 
@@ -7248,9 +7268,11 @@ static int __msr_io(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs,
 #else
 	XXX_KVM_SYNC_PROBE;
 #endif
-	for (i = 0; i < msrs->nmsrs; ++i)
+	for (i = 0; i < msrs->nmsrs; i++) {
 		if (do_msr(vcpu, entries[i].index, &entries[i].data))
 			break;
+	}
+
 #ifdef XXX
 	srcu_read_unlock(&vcpu->kvm->srcu, idx);
 #else
@@ -7258,14 +7280,16 @@ static int __msr_io(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs,
 #endif
 	vcpu_put(vcpu);
 
-	return i;
+	return (i);
 }
 
+/* BEGIN CSTYLED */
 /*
  * reads and returns guest's timestamp counter "register"
  * guest_tsc = host_tsc + tsc_offset    -- 21.3
  */
-static uint64_t guest_read_tsc(void)
+static uint64_t
+guest_read_tsc(void)
 {
 	uint64_t host_tsc, tsc_offset;
 
