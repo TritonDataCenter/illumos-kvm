@@ -9431,21 +9431,6 @@ static int guest_state_valid(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
-int need_resched()
-{
-	return (curthread->t_cpu->cpu_runrun || curthread->t_cpu->cpu_kprunrun);
-}
-
-void kvm_resched(struct kvm_vcpu *vcpu)
-{
-	preempt();
-}
-
-void schedule()
-{
-	preempt();
-}
-
 static int handle_invalid_guest_state(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -9474,9 +9459,6 @@ static int handle_invalid_guest_state(struct kvm_vcpu *vcpu)
 #else
 		XXX_KVM_PROBE;
 #endif /*XXX*/
-
-		if (need_resched())
-			schedule();
 	}
 
 	vmx->emulation_required = 0;
@@ -11911,7 +11893,7 @@ static int vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	XXX_KVM_PROBE;
 #endif /*XXX*/
 
-	if (vcpu->requests || need_resched() || issig(JUSTLOOKING)) {
+	if (vcpu->requests || issig(JUSTLOOKING)) {
 		set_bit(KVM_REQ_KICK, &vcpu->requests);
 		sti();
 		kpreempt_enable();
@@ -12022,43 +12004,27 @@ static void post_kvm_run_save(struct kvm_vcpu *vcpu)
  */
 void kvm_vcpu_block(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX
-	DEFINE_WAIT(wait);
-
-	for (;;) {
-		prepare_to_wait(&vcpu->wq, &wait, TASK_INTERRUPTIBLE);
-
-		if (kvm_arch_vcpu_runnable(vcpu)) {
-			set_bit(KVM_REQ_UNHALT, &vcpu->requests);
-			break;
-		}
-		if (kvm_cpu_has_pending_timer(vcpu))
-			break;
-		if (signal_pending(current))
-			break;
-
-		schedule();
-	}
-
-	finish_wait(&vcpu->wq, &wait);
-#else
-	XXX_KVM_PROBE;
-
 	for (;;) {
 		if (kvm_arch_vcpu_runnable(vcpu)) {
 			set_bit(KVM_REQ_UNHALT, &vcpu->requests);
 			break;
 		}
-
-		if (kvm_cpu_has_pending_timer(vcpu))
-			break;
 
 		if (issig(JUSTLOOKING))
 			break;
 
-		preempt();
+		mutex_enter(&vcpu->kvcpu_timer_lock);
+		
+		if (kvm_cpu_has_pending_timer(vcpu)) {
+			mutex_exit(&vcpu->kvcpu_timer_lock);
+			break;
+		}
+
+		(void) cv_wait_sig_swap(&vcpu->kvcpu_timer_cv,
+		    &vcpu->kvcpu_timer_lock);
+
+		mutex_exit(&vcpu->kvcpu_timer_lock);
 	}
-#endif /*XXX*/
 }
 
 static void vapic_enter(struct kvm_vcpu *vcpu)
@@ -12244,20 +12210,6 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
 #ifdef XXX_KVM_STAT
 			++vcpu->stat.signal_exits;
-#endif /*XXX*/
-		}
-
-		if (need_resched()) {
-#ifdef XXX
-			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
-#else
-			XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
-			kvm_resched(vcpu);
-#ifdef XXX
-			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
-#else
-			XXX_KVM_SYNC_PROBE;
 #endif /*XXX*/
 		}
 	}
@@ -13455,6 +13407,29 @@ unlock:
 	return irq_source_id;
 }
 
+void
+kvm_timer_fire(void *arg)
+{
+	struct kvm_timer *timer = (struct kvm_timer *)arg;
+	struct kvm_vcpu *vcpu = timer->vcpu;
+
+	if (vcpu == NULL)
+		return;
+
+	mutex_enter(&vcpu->kvcpu_timer_lock);
+
+	if (timer->reinject || !timer->pending) {
+		atomic_add_32(&timer->pending, 1);
+		set_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
+	}
+
+	timer->intervals++;
+
+	cv_broadcast(&vcpu->kvcpu_timer_cv);
+
+	mutex_exit(&vcpu->kvcpu_timer_lock);
+}
+
 static void kvm_pit_ack_irq(struct kvm_irq_ack_notifier *kian)
 {
 	struct kvm_kpit_state *ps = (struct kvm_kpit_state *)(((caddr_t)kian) -
@@ -13714,9 +13689,6 @@ static void destroy_pit_timer(struct kvm_timer *pt)
 #endif /*XXX*/
 }
 
-extern void kvm_timer_fn(void *arg);
-
-
 static int kpit_is_periodic(struct kvm_timer *ktimer)
 {
 	struct kvm_kpit_state *ps = (struct kvm_kpit_state *)(((caddr_t)ktimer)
@@ -13737,10 +13709,6 @@ create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
 
 	interval = muldiv64(val, NSEC_PER_SEC, KVM_PIT_FREQ);
 
-#ifdef KVM_DEBUG
-	cmn_err(CMN_NOTE, "pit: create pit timer, interval is %llu nsec\n", interval);
-#endif
-
 	mutex_enter(&cpu_lock);
 	/* TODO The new value only affected after the retriggered */
 	if (pt->active) {
@@ -13750,22 +13718,17 @@ create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
 	pt->period = interval;
 	ps->is_periodic = is_period;
 
-	pt->kvm_cyc_handler.cyh_func = kvm_timer_fn;
+	pt->kvm_cyc_handler.cyh_func = kvm_timer_fire;
 	pt->kvm_cyc_handler.cyh_level = CY_LOW_LEVEL;
 	pt->kvm_cyc_handler.cyh_arg = pt;
-#ifdef XXX
-	hrtimer_data_pointer(&pt->timer);
-#else
-	XXX_KVM_PROBE;
-#endif
 	pt->t_ops = &kpit_ops;
 	pt->kvm = ps->pit->kvm;
 	pt->vcpu = pt->kvm->bsp_vcpu;
 
 	pt->pending = 0;  /*XXX need protection?*/
 	ps->irq_ack = 1;
-
 	pt->start = gethrtime();
+
 	if (is_period) {
 		pt->kvm_cyc_when.cyt_when = pt->start + pt->period;
 		pt->kvm_cyc_when.cyt_interval = pt->period;

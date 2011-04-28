@@ -392,9 +392,10 @@ typedef struct kvm_vcpu {
 
 	int fpu_active;
 	int guest_fpu_loaded;
-#ifdef NOTNOW
-	wait_queue_head_t wq;
-#endif /*NOTNOW*/
+
+	kmutex_t kvcpu_timer_lock;
+	kcondvar_t kvcpu_timer_cv;
+
 	int sigset_active;
 	sigset_t sigset;
 	struct kstat stat;

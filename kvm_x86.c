@@ -1457,51 +1457,6 @@ static const struct kvm_io_device_ops apic_mmio_ops = {
 	.write	= apic_mmio_write,
 };
 
-static void
-__kvm_timer_fn(struct kvm_vcpu *vcpu, struct kvm_timer *ktimer)
-{
-	int restart_timer = 0;
-#ifdef XXX
-	wait_queue_head_t *q = &vcpu->wq;
-#else
-	XXX_KVM_PROBE;
-#endif
-
-	/*
-	 * There is a race window between reading and incrementing, but we do
-	 * not care about potentially loosing timer events in the !reinject
-	 * case anyway.
-	 */
-	/* XXX may need protectionn on pending */
-	if (ktimer->reinject || !ktimer->pending) {
-	    atomic_add_32(&ktimer->pending, 1);
-		/* FIXME: this code should not know anything about vcpus */
-		set_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
-	}
-
-	ktimer->intervals++;
-#ifdef XXX
-	if (waitqueue_active(q))
-		wake_up_interruptible(q);
-#else
-	XXX_KVM_PROBE;
-#endif
-}
-
-void
-kvm_timer_fn(void *arg)
-{
-	hrtime_t max = INT64_MAX;
-	struct kvm_timer *ktimer = (struct kvm_timer *)arg;
-	struct kvm_vcpu *vcpu;
-
-	vcpu = ktimer->vcpu;
-	if (!vcpu)
-		return;
-
-	__kvm_timer_fn(vcpu, ktimer);
-}
-
 static int
 lapic_is_periodic(struct kvm_timer *ktimer)
 {
@@ -1514,6 +1469,8 @@ lapic_is_periodic(struct kvm_timer *ktimer)
 static struct kvm_timer_ops lapic_timer_ops = {
 	.is_periodic = lapic_is_periodic,
 };
+
+extern void kvm_timer_fire(void *);
 
 int
 kvm_create_lapic(struct kvm_vcpu *vcpu)
@@ -1538,7 +1495,7 @@ kvm_create_lapic(struct kvm_vcpu *vcpu)
 	memset(apic->regs, 0, PAGESIZE);
 	apic->vcpu = vcpu;
 
-	apic->lapic_timer.kvm_cyc_handler.cyh_func = kvm_timer_fn;
+	apic->lapic_timer.kvm_cyc_handler.cyh_func = kvm_timer_fire;
 	apic->lapic_timer.kvm_cyc_handler.cyh_arg = &apic->lapic_timer;
 	apic->lapic_timer.kvm_cyc_handler.cyh_level = CY_LOW_LEVEL;
 	apic->lapic_timer.active = 0;
