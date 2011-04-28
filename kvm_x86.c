@@ -398,14 +398,44 @@ kvm_arch_hardware_enable(void *garbage)
 	return (vmx_hardware_enable(garbage));
 }
 
+static void vmclear_local_vcpus(void)
+{
+#ifdef XXX
+	int cpu = raw_smp_processor_id();
+	struct vcpu_vmx *vmx, *n;
+
+	list_for_each_entry_safe(vmx, n, &per_cpu(vcpus_on_cpu, cpu),
+	    local_vcpus_link)
+		__vcpu_clear(vmx);
+#else
+	XXX_KVM_PROBE;
+#endif /* XXX */
+}
+
+
+/*
+ * Just like cpu_vmxoff(), but with the __kvm_handle_fault_on_reboot()
+ * tricks.
+ */
+static void kvm_cpu_vmxoff(void)
+{
+	/* BEGIN CSTYLED */
+	__asm__ volatile ((ASM_VMX_VMXOFF) : : : "cc");
+	/* END CSTYLED */
+	setcr4(getcr4() & ~X86_CR4_VMXE);
+}
+
+static void vmx_hardware_disable(void *garbage)
+{
+	vmclear_local_vcpus();
+	kvm_cpu_vmxoff();
+}
+
+
 void
 kvm_arch_hardware_disable(void *garbage)
 {
-#ifdef XXX
-	hardware_disable(garbage);
-#else
-	XXX_KVM_PROBE;
-#endif
+	vmx_hardware_disable(garbage);
 #if defined(CONFIG_MMU_NOTIFIER) && defined(KVM_ARCH_WANT_MMU_NOTIFIER)
 	drop_user_return_notifiers(garbage);
 #endif
