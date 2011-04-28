@@ -4253,22 +4253,6 @@ kvm_vm_ioctl_set_tss_addr(struct kvm *kvmp, caddr_t addr)
 	return (vmx_set_tss_addr(kvmp, addr));
 }
 
-struct kvm *
-find_kvm_id(int id)
-{
-	struct kvm *kvmp;
-
-	mutex_enter(&kvm_lock);
-	kvmp = list_head(&vm_list);
-	while (kvmp != NULL) {
-		if (kvmp->kvmid == id)
-			break;
-		kvmp = list_next(&vm_list, kvmp);
-	}
-	mutex_exit(&kvm_lock);
-	return (kvmp);
-}
-
 extern int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p);
 
 static inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
@@ -14290,7 +14274,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			kmem_free(kvm_create_pit_ioc, sizeof(struct kvm_create_pit_ioc));
 			break;
 		}
-		kvmp = find_kvm_id(kvm_create_pit_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(kvm_create_pit_ioc, sizeof(struct kvm_create_pit_ioc));
@@ -14344,7 +14328,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_irq_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(kvm_irq_ioc, sizeof(struct kvm_irq_ioc));
@@ -14408,7 +14392,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_run_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(kvm_run_ioc, sizeof(struct kvm_run_ioc));
@@ -14449,7 +14433,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	  if (ddi_copyin((caddr_t)arg, &mcg_cap_ioc, sizeof mcg_cap_ioc, mode))
 		  break;
 
-	  kvmp = find_kvm_id(mcg_cap_ioc.kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 	  if (kvmp == NULL) {
 		  rval = EINVAL;
 		  break;
@@ -14477,7 +14461,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			rval = EFAULT;
 			break;
 		}
-		kvmp = find_kvm_id(kvm_msrs_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		rval = EINVAL;
 		if (!kvmp || kvm_msrs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
@@ -14518,7 +14502,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			kmem_free(kvm_id_map_addr_ioc, sizeof(struct kvm_id_map_addr_ioc));
 			break;
 		}
-		kvmp = find_kvm_id(kvm_id_map_addr_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			break;
@@ -14544,7 +14528,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		}
 
 		rval = EINVAL;
-		kvmp = find_kvm_id(kvm_msrs_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || kvm_msrs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
 			break;
@@ -14582,7 +14566,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		  rval = EFAULT;
 		  break;
 		}
-		kvmp = find_kvm_id(kvm_mp_state_ioc.kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL)
 			break;
 		if (!kvmp || kvm_mp_state_ioc.kvm_cpu_index >= kvmp->online_vcpus)
@@ -14610,7 +14594,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		  rval = EFAULT;
 		  break;
 		}
-		kvmp = find_kvm_id(kvm_mp_state_ioc.kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL)
 			break;
 		if (!kvmp || kvm_mp_state_ioc.kvm_cpu_index >= kvmp->online_vcpus)
@@ -14652,7 +14636,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvmioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(kvmioc, sizeof(struct kvm_set_user_memory_ioc));
@@ -14745,7 +14729,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_regs_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 
 		if (!kvmp || kvm_regs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
@@ -14781,7 +14765,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_regs_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || kvm_regs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
@@ -14811,7 +14795,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_fpu_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || kvm_fpu_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
@@ -14848,7 +14832,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_fpu_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || kvm_fpu_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
@@ -14878,7 +14862,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_sregs_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || kvm_sregs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
@@ -14913,7 +14897,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_sregs_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || kvm_sregs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
@@ -14946,7 +14930,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(cpuid2_ioc->kvm_id);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || cpuid2_ioc->cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
@@ -14987,7 +14971,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(cpuid2_ioc->kvm_id);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || cpuid2_ioc->cpu_index >= kvmp->online_vcpus) {
 			kmem_free(cpuid2_data, sizeof(struct kvm_cpuid2));
 			kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
@@ -15029,7 +15013,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(events_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || events_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
@@ -15061,7 +15045,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(lapic_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || lapic_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
@@ -15099,7 +15083,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(lapic_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || lapic_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
@@ -15135,7 +15119,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(events_ioc->kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || events_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
@@ -15165,7 +15149,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_tss.kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			break;
@@ -15183,7 +15167,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(irq_ioc.kvm_kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (!kvmp || irq_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			break;
@@ -15208,7 +15192,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(boot_cpu_id_ioc.kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			break;
@@ -15243,7 +15227,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
 			break;
 		}
-		kvmp = find_kvm_id(zone_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
@@ -15269,7 +15253,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(zone_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
@@ -15300,7 +15284,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(kvm_irq_routing_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(kvm_irq_routing_ioc, sizeof(struct kvm_irq_routing_ioc));
@@ -15334,7 +15318,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(irq_event_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(irq_event_ioc, sizeof(struct kvm_irq_level_ioc));
@@ -15371,7 +15355,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(irqchip_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
@@ -15435,7 +15419,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		kvmp = find_kvm_id(irqchip_ioc->kvmid);
+		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
 			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
