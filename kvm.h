@@ -118,7 +118,6 @@
 
 /* for ioctl KVM_X86_SETUP_MCE */
 typedef struct mcg_cap_ioc {
-	int kvm_kvmid;
 	int kvm_cpu_index;
 	uint64_t mcg_cap;
 } mcg_cap_ioc_t;
@@ -641,7 +640,6 @@ typedef struct kvm_irqchip {
 /* for KVM_GET_IRQCHIP */
 typedef struct kvm_irqchip_ioc {
 	struct kvm_irqchip chip;
-	int kvmid;
 } kvm_irqchip_ioc_t;
 
 
@@ -664,7 +662,6 @@ typedef struct kvm_regs {
 typedef struct kvm_regs_ioc {
 	struct kvm_regs kvm_regs;
 	int kvm_cpu_index;
-	int kvm_kvmid;
 } kvm_regs_ioc_t;
 
 typedef struct kvm_mp_state {
@@ -674,7 +671,6 @@ typedef struct kvm_mp_state {
 typedef struct kvm_mp_state_ioc {
 	struct kvm_mp_state mp_state;
 	int kvm_cpu_index;
-	int kvm_kvmid;
 } kvm_mp_state_ioc_t;
 
 /* for KVM_GET_LAPIC and KVM_SET_LAPIC */
@@ -685,7 +681,6 @@ typedef struct kvm_lapic_state {
 
 typedef struct kvm_lapic_ioc {
 	int kvm_cpu_index;
-	int kvm_kvmid;
 	struct kvm_lapic_state s;
 } kvm_lapic_ioc_t;
 
@@ -722,7 +717,6 @@ typedef struct kvm_sregs {
 typedef struct kvm_sregs_ioc {
 	struct kvm_sregs sregs;
 	int kvm_cpu_index;
-	int kvm_kvmid;
 } kvm_sregs_ioc_t;
 
 /* When set in flags, include corresponding fields on KVM_SET_VCPU_EVENTS */
@@ -758,7 +752,6 @@ typedef struct kvm_vcpu_events {
 typedef struct kvm_vcpu_events_ioc {
 	struct kvm_vcpu_events events;
 	int kvm_cpu_index;
-	int kvm_kvmid;
 } kvm_vcpu_events_ioc_t;
 
 #define KVM_CAP_IRQ_ROUTING 25
@@ -986,7 +979,6 @@ typedef struct kvm_fpu {
 typedef struct kvm_fpu_ioc {
 	struct kvm_fpu fpu;
 	int kvm_cpu_index;
-	int kvm_kvmid;
 } kvm_fpu_ioc_t;
 
 typedef struct kvm_msr_entry {
@@ -1006,7 +998,6 @@ typedef struct kvm_msrs {
 typedef struct kvm_msrs_ioc {
 	struct kvm_msrs kvm_msrs;
 	int kvm_cpu_index;
-	int kvm_kvmid;
 } kvm_msrs_ioc_t;
 	
 /* for KVM_GET_MSR_INDEX_LIST */
@@ -1036,7 +1027,6 @@ typedef struct kvm_cpuid_ioc {
 	uint32_t padding;
 	struct kvm_cpuid_entry entries[100];  /* XXX is 100 enough? */
 	int kvm_cpu_index;
-	int kvm_kvmid;
 } kvm_cpuid_ioc_t;
 
 /* for KVM_GET_PIT and KVM_SET_PIT */
@@ -1057,7 +1047,6 @@ typedef struct kvm_pit_channel_state {
 } kvm_pit_channel_state_t;
 
 typedef struct kvm_pit_ioc {
-	int kvmid;
 	int pad;
 	struct kvm_pic_state s;
 } kvm_pit_ioc_t;
@@ -1165,7 +1154,6 @@ typedef struct kvm_kirq_routing {
 
 typedef struct kvm_irq_routing_ioc {
 	struct kvm_kirq_routing kvm_kirq_routing;
-	int kvmid;
 } kvm_irq_routing_ioc_t;
 
 /*#endif  __KVM_HAVE_IOAPIC*/
@@ -1512,7 +1500,6 @@ typedef struct kvm_cpuid2_ioc {
 
 /* for KVM_RUN */
 typedef struct kvm_run_ioc {
-	int kvm_kvmid;
 	int kvm_cpu_index;
 } kvm_run_ioc_t;
 
@@ -1540,13 +1527,11 @@ typedef struct kvm_signal_mask {
 } kvm_signal_mask_t;
 
 typedef struct kvm_pit_s2_ioc {
-	int kvmid;
 	int pad;
 	struct kvm_pit_state2 s;
 } kvm_pit_s2_ioc_t;
 
 typedef struct kvm_set_boot_cpu_id_ioc {
-	int kvmid;
 	int id;
 } kvm_set_boot_cpu_id_ioc_t;
 
@@ -1619,7 +1604,6 @@ typedef struct kvm_irq_level {
 
 typedef struct kvm_irq_level_ioc {
 	struct kvm_irq_level event;
-	int kvmid;
 } kvm_irq_level_ioc_t;
 
 /*
@@ -1627,24 +1611,13 @@ typedef struct kvm_irq_level_ioc {
  */
 
 typedef struct kvm_id_map_addr {
-	int kvmid;
 	int pad;
 	uint64_t addr;
 } kvm_id_map_addr_t;
 
-typedef struct kvm_create_pit_ioc {
-	int kvmid;
-} kvm_create_pit_ioc_t;
-
-/* for KVM_CREATE_IRQCHIP */
-typedef struct kvm_irq_ioc {
-	int kvmid;
-} kvm_irq_ioc_t;
-
 /* for KVM_SET_IDENTITY_MAP_ADDR */
 typedef struct kvm_id_map_addr_ioc {
 	uint64_t ident_addr;
-	int kvmid;
 } kvm_id_map_addr_ioc_t;
 
 
@@ -1727,7 +1700,6 @@ typedef struct kvm_interrupt {
 
 typedef struct kvm_interrupt_ioc {
 	struct kvm_interrupt intr;
-	int kvm_kvmid;
 	int kvm_cpu_index;
 } kvm_interrupt_ioc_t;
 
@@ -1743,7 +1715,6 @@ typedef struct kvm_dirty_log {
 
 typedef struct kvm_dirty_log_ioc {
 	struct kvm_dirty_log d;
-	int kvmid;
 } kvm_dirty_log_ioc_t;
 
 typedef struct kvm_coalesced_mmio {
@@ -1769,7 +1740,6 @@ typedef struct kvm_vapic_addr {
 
 typedef struct kvm_vapic_ioc {
 	int kvm_cpu_index;
-	int kvm_kvmid;
 	struct kvm_vapic_addr va;
 } kvm_vapic_ioc_t;
 
@@ -1832,7 +1802,6 @@ typedef struct kvm_userspace_memory_region {
 /* for KVM_SET_USER_MEMORY_REGION */
 typedef struct kvm_set_user_memory_ioc {
 	struct kvm_userspace_memory_region kvm_userspace_map;
-	int32_t kvmid;
 	int32_t pad;
 } kvm_set_user_memory_ioc_t;
 
@@ -1847,13 +1816,11 @@ typedef struct kvm_set_user_memory_ioc {
 /* for KVM_SET_TSS_ADDR ioctl */
 typedef struct kvm_tss {
 	uint64_t addr; /* in */
-	int kvmid;
 } kvm_tss_t;
 
 /* for KVM_CREATE_VCPU */
 typedef struct kvm_vcpu_ioc {
 	uint32_t id;  /*IN*/
-	int32_t kvmid;
 	uint64_t kvm_run_addr; /*OUT*/
 	uint64_t kvm_vcpu_addr; /* OUT, id is not unique across VMs */
 } kvm_vcpu_ioc_t;

@@ -14263,21 +14263,11 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		break;
 	case KVM_CREATE_PIT:
 	{
-		struct kvm_create_pit_ioc *kvm_create_pit_ioc;
 		struct kvm *kvmp;
 
-		kvm_create_pit_ioc =
-		    kmem_zalloc(sizeof (struct kvm_create_pit_ioc), KM_SLEEP);
-
-		if (ddi_copyin((const char *)arg, kvm_create_pit_ioc, sizeof (struct kvm_create_pit_ioc), mode)) {
-			rval = EFAULT;
-			kmem_free(kvm_create_pit_ioc, sizeof(struct kvm_create_pit_ioc));
-			break;
-		}
 		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
-			kmem_free(kvm_create_pit_ioc, sizeof(struct kvm_create_pit_ioc));
 			break;
 		}
 
@@ -14292,7 +14282,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			rval = 0;
 	create_pit_unlock:
 		mutex_exit(&kvmp->slots_lock);
-		kmem_free(kvm_create_pit_ioc, sizeof(struct kvm_create_pit_ioc));
 		break;
 	}
 #ifdef XXX_KVM_DECLARATION
@@ -14317,21 +14306,11 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	case KVM_CREATE_IRQCHIP:
 	{
 		struct kvm_pic *vpic;
-		struct kvm_irq_ioc *kvm_irq_ioc;
 		struct kvm *kvmp;
-
-		kvm_irq_ioc = kmem_zalloc(sizeof (kvm_irq_ioc_t), KM_SLEEP);
-
-		if (ddi_copyin((const caddr_t)arg, kvm_irq_ioc, sizeof(struct kvm_irq_ioc), mode)) {
-			rval = EFAULT;
-			kmem_free(kvm_irq_ioc, sizeof(struct kvm_irq_ioc));
-			break;
-		}
 
 		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
-			kmem_free(kvm_irq_ioc, sizeof(struct kvm_irq_ioc));
 			break;
 		}
 
@@ -14346,7 +14325,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			if (rval) {
 				kvm_io_bus_unregister_dev(kvmp, KVM_PIO_BUS,
 							  &vpic->dev);
-				kmem_free(vpic,sizeof(struct kvm_pic));
 				goto create_irqchip_unlock;
 			}
 		} else
@@ -14371,7 +14349,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		}
 	create_irqchip_unlock:
 		mutex_exit(&kvmp->lock);
-		kmem_free(kvm_irq_ioc, sizeof(struct kvm_irq_ioc));
 		break;
 	}
 	case KVM_RUN: {
