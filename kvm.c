@@ -208,11 +208,14 @@ extern void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu);
 extern int mmu_topup_memory_caches(struct kvm_vcpu *vcpu);
 extern int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 				    struct kvm_lapic_irq *irq);
+static int hardware_enable_all(void);
+static void hardware_disable_all(void);
 extern int sigprocmask(int, const sigset_t *, sigset_t *);
 extern void start_apic_timer(struct kvm_lapic *);
 extern void update_divide_count(struct kvm_lapic *);
 extern void cli(void);
 extern void sti(void);
+static void kvm_destroy_vm(struct kvm *);
 
 
 int get_ept_level(void);
@@ -3178,14 +3181,34 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 		mutex_init(&vmx_vpid_lock, NULL, MUTEX_DRIVER, NULL);
 	}
 
+	mutex_init(&kvm_lock, NULL, MUTEX_DRIVER, 0);
 	kvm_x86_ops = &vmx_x86_ops;
 	if (vmx_init() != DDI_SUCCESS) {
 		ddi_soft_state_fini(&kvm_state);
 		ddi_remove_minor_node(dip, NULL);
-		mutex_destroy(&vmx_vpid_lock);
-		kmem_free(vmx_vpid_bitmap, sizeof (ulong_t) *
-		    vpid_bitmap_words);
+		mutex_destroy(&kvm_lock);
+		if (enable_vpid && vmx_vpid_bitmap != NULL) {
+			kmem_free(vmx_vpid_bitmap,
+			    sizeof (ulong_t) * vpid_bitmap_words);
+			mutex_destroy(&vmx_vpid_lock);
+		}
+
 		return (DDI_FAILURE);
+	}
+
+	if (hardware_enable_all() != 0) {
+		/* XXX Missing vmx_fini */
+		ddi_soft_state_fini(&kvm_state);
+		ddi_remove_minor_node(dip, NULL);
+		mutex_destroy(&kvm_lock);
+		if (enable_vpid && vmx_vpid_bitmap != NULL) {
+			kmem_free(vmx_vpid_bitmap,
+			    sizeof (ulong_t) * vpid_bitmap_words);
+			mutex_destroy(&vmx_vpid_lock);
+		}
+
+		return (DDI_FAILURE);
+
 	}
 
 	kvm_dip = dip;
@@ -3197,7 +3220,6 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	    offsetof(struct kvm, vm_list));
 	kvm_minor = vmem_create("kvm_minor", (void *)1, UINT32_MAX - 1, 1,
 	    NULL, NULL, NULL, 0, VM_SLEEP | VMC_IDENTIFIER);
-	mutex_init(&kvm_lock, NULL, MUTEX_DRIVER, 0);
 
 	ddi_report_dev(dip);
 
@@ -3222,12 +3244,16 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	vmem_destroy(kvm_minor);
 	kvm_dip = NULL;
 
-	if (vmx_vpid_bitmap) {
+	hardware_disable_all();
+	if (enable_vpid && vmx_vpid_bitmap != NULL) {
 		kmem_free(vmx_vpid_bitmap,
 		    sizeof (ulong_t) * vpid_bitmap_words);
 		mutex_destroy(&vmx_vpid_lock);
 	}
+	mutex_destroy(&kvm_lock);
 	ddi_soft_state_fini(&kvm_state);
+
+	/* XXX Mising vmx_fini */
 
 	return (DDI_SUCCESS);
 }
@@ -3310,8 +3336,7 @@ kvm_close(dev_t dev, int flag, int otyp, cred_t *cred)
 	/*
 	 * XXX We need to clean up the vcpus / kvm structs we allocated.
 	 */
-	if (ksp->kds_kvmp != NULL)
-		list_remove(&vm_list, ksp->kds_kvmp);
+	kvm_destroy_vm(ksp->kds_kvmp);
 	ddi_soft_state_free(kvm_state, minor);
 	vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
 
@@ -3600,6 +3625,11 @@ static int kvm_init_mmu_notifier(struct kvm *kvm)
 	return (0);
 }
 
+static void
+kvm_fini_mmu_notifier(struct kvm *kvm)
+{
+}
+
 #endif /* CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER */
 
 void
@@ -3651,13 +3681,6 @@ kvm_create_vm(void)
 
 	if (kvmp == NULL)
 		return (NULL);
-
-	rval = hardware_enable_all();
-
-	if (rval != 0) {
-		kvm_arch_destroy_vm(kvmp);
-		return (NULL);
-	}
 
 #ifdef CONFIG_HAVE_KVM_IRQCHIP
 	list_create(&kvmp->mask_notifier_list,
@@ -3719,6 +3742,44 @@ kvm_create_vm(void)
 #endif
 
 	return (kvmp);
+}
+
+static void
+kvm_destroy_vm(struct kvm *kvmp)
+{
+	int ii;
+
+	if (kvmp == NULL)
+		return;
+
+	kvm_arch_destroy_vm_comps(kvmp);
+
+#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
+	kvm_coalesced_mmio_free(kvmp);
+#endif
+
+	list_remove(&vm_list, kvmp);
+	mutex_destroy(&kvmp->slots_lock);
+	mutex_destroy(&kvmp->irq_lock);
+	mutex_destroy(&kvmp->lock);
+	mutex_destroy(&kvmp->requests_lock);
+	mutex_destroy(&kvmp->mmu_lock);
+	kvmp->mm = NULL;
+	kvm_fini_mmu_notifier(kvmp);
+
+	for (ii = 0; ii < KVM_NR_BUSES; ii++)
+		kmem_free(kvmp->buses[ii], sizeof (struct kvm_io_bus));
+
+	rw_destroy(&kvmp->kvm_rwlock);
+	kmem_free(kvmp->memslots, sizeof (struct kvm_memslots));
+#ifdef CONFIG_HAVE_KVM_IRQCHIP
+	/*
+	 * These lists are contained by the pic. However, the pic isn't
+	 */
+	list_destroy(&kvmp->irq_ack_notifier_list);
+	list_destroy(&kvmp->mask_notifier_list);
+#endif
+	kvm_arch_destroy_vm(kvmp);
 }
 
 static int
@@ -13851,6 +13912,15 @@ void kvm_register_irq_ack_notifier(struct kvm *kvm,
 	mutex_exit(&kvm->irq_lock);
 }
 
+void
+kvm_unregister_irq_ack_notifier(struct kvm *kvm,
+   struct kvm_irq_ack_notifier *kian)
+{
+	mutex_enter(&kvm->irq_lock);
+	list_remove(&kvm->irq_ack_notifier_list, kian);
+	mutex_exit(&kvm->irq_lock);
+}
+
 static void pit_mask_notifer(struct kvm_irq_mask_notifier *kimn, int mask)
 {
 	struct kvm_pit *pit = (struct kvm_pit *)(((caddr_t)kimn)
@@ -13873,6 +13943,15 @@ void kvm_register_irq_mask_notifier(struct kvm *kvm, int irq,
 	mutex_enter(&kvm->irq_lock);
 	kimn->irq = irq;
 	list_insert_head(&kvm->mask_notifier_list, kimn);
+	mutex_exit(&kvm->irq_lock);
+}
+
+void
+kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
+    struct kvm_irq_mask_notifier *kimn)
+{
+	mutex_enter(&kvm->irq_lock);
+	list_remove(&kvm->mask_notifier_list, kimn);
 	mutex_exit(&kvm->irq_lock);
 }
 

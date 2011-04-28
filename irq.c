@@ -31,6 +31,10 @@
 #include "iodev.h"
 #include "kvm.h"
 #include "irq.h"
+#include "ioapic.h"
+
+/* XXX This should never exist */
+extern int irqchip_in_kernel(struct kvm *);
 
 /*
  * check if there are pending timer events
@@ -53,4 +57,37 @@ kvm_inject_pending_timer_irqs(struct kvm_vcpu *vcpu)
 	kvm_inject_apic_timer_irqs(vcpu);
 	kvm_inject_pit_timer_irqs(vcpu);
 	/* TODO: PIT, RTC etc. */
+}
+
+void
+kvm_free_irq_source_id(struct kvm *kvm, int irq_source_id)
+{
+	int i;
+
+	ASSERT(irq_source_id != KVM_USERSPACE_IRQ_SOURCE_ID);
+
+	mutex_enter(&kvm->irq_lock);
+	if (irq_source_id < 0 ||
+	    irq_source_id >= BITS_PER_LONG) {
+#ifdef XXX
+		printk(KERN_ERR "kvm: IRQ source ID out of range!\n");
+#else
+		XXX_KVM_PROBE;
+#endif
+		goto unlock;
+	}
+	clear_bit(irq_source_id, &kvm->arch.irq_sources_bitmap);
+	if (!irqchip_in_kernel(kvm))
+		goto unlock;
+
+	for (i = 0; i < KVM_IOAPIC_NUM_PINS; i++) {
+		clear_bit(irq_source_id, &kvm->arch.vioapic->irq_states[i]);
+		if (i >= 16)
+			continue;
+#ifdef CONFIG_X86
+		clear_bit(irq_source_id, &pic_irqchip(kvm)->irq_states[i]);
+#endif
+	}
+unlock:
+	mutex_exit(&kvm->irq_lock);
 }

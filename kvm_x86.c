@@ -41,6 +41,7 @@
 #include "kvm.h"
 #include "ioapic.h"
 #include "irq.h"
+#include "i8254.h"
 
 #undef DEBUG
 
@@ -208,18 +209,33 @@ kvm_iommu_unmap_guest(struct kvm *kvm)
 }
 #endif /* IOMMU */
 
+/*
+ * This function exists because of a difference in methodologies from our
+ * ancestor. With our ancestors, there is no imputus to clean up lists and
+ * mutexes. This is unfortunate, because they seem to even have debug kernels
+ * which would seemingly check for these kinds of things. But because in the
+ * common case mutex_exit is currently a #define to do {} while(0), it seems
+ * that they just ignore this.
+ *
+ * This leads to the following behavior: during our time we create a lot of
+ * auxillary structs potentially related to pits, apics, etc. Tearing down these
+ * structures relies on having the correct locks, etc. However
+ * kvm_arch_destroy_vm() is designed to be the final death blow, i.e. it's doing
+ * the kmem_free. Logically these auxillary structures need to be freed and
+ * dealt with before we go back and do the rest of the tear down related to the
+ * device.
+ */
 void
-kvm_arch_destroy_vm(struct kvm *kvm)
+kvm_arch_destroy_vm_comps(struct kvm *kvmp)
 {
-	if (!kvm)
-		return;  /* nothing to do here */
+	if (kvmp == NULL)
 
 #ifdef IOMMU
-	kvm_iommu_unmap_guest(kvm);
+	kvm_iommu_unmap_guest(kvmp);
+#else
+	XXX_KVM_PROBE;
 #endif /* IOMMU */
-#ifdef PIT /* i8254 programmable interrupt timer support */
-	kvm_free_pit(kvm);
-#endif /* PIT */
+	kvm_free_pit(kvmp);
 #ifdef VPIC
 	if (kvm->arch.vpic) {
 		kmem_free(kvm->arch.vpic, sizeof (kvm->arch.vpic));
@@ -241,11 +257,19 @@ kvm_arch_destroy_vm(struct kvm *kvm)
 #if defined(CONFIG_MMU_NOTIFIER) && defined(KVM_ARCH_WANT_MMU_NOTIFIER)
 	cleanup_srcu_struct(&kvm->srcu);
 #endif /* CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER */
-	if (kvm->arch.aliases) {
-		kmem_free(kvm->arch.aliases, sizeof (struct kvm_mem_aliases));
-		kvm->arch.aliases = 0;
+}
+
+void
+kvm_arch_destroy_vm(struct kvm *kvmp)
+{
+	if (kvmp == NULL)
+		return;  /* nothing to do here */
+
+	if (kvmp->arch.aliases) {
+		kmem_free(kvmp->arch.aliases, sizeof (struct kvm_mem_aliases));
+		kvmp->arch.aliases = NULL;
 	}
-	kmem_free(kvm, sizeof (struct kvm));
+	kmem_free(kvmp, sizeof (struct kvm));
 }
 
 extern int getcr4(void);
@@ -1636,7 +1660,7 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
 
 	if (r != 0) {
 		vcpu->run = NULL;
-		ddi_umem_free(&vcpu->cookie);
+		ddi_umem_free(vcpu->cookie);
 		return (r);
 	}
 
@@ -4490,6 +4514,7 @@ kvm_io_bus_unregister_dev(struct kvm *kvm,
 	synchronize_srcu_expedited(&kvm->srcu);
 #else
 	XXX_KVM_SYNC_PROBE;
+	kvm->buses[bus_idx] = new_bus;
 #endif
 	kmem_free(bus, sizeof (struct kvm_io_bus));
 	return (r);
@@ -4521,12 +4546,13 @@ coalesced_mmio_write(struct kvm_io_device *this, gpa_t addr,
 	return (0);
 }
 
-static void coalesced_mmio_destructor(struct kvm_io_device *this)
+/*
+ * We used to free the struct that contained us. We don't do that any more. It's
+ * just wrong in this case.
+ */
+static void
+coalesced_mmio_destructor(struct kvm_io_device *this)
 {
-	struct kvm_coalesced_mmio_dev *dev = to_mmio(this);
-
-	if (dev)
-		kmem_free(dev, sizeof (struct kvm_coalesced_mmio_dev));
 }
 
 int
@@ -4569,10 +4595,17 @@ out_free_page:
 }
 
 void
-kvm_coalesced_mmio_free(struct kvm *kvm)
+kvm_coalesced_mmio_free(struct kvm *kvmp)
 {
-	if (kvm->coalesced_mmio_ring)
-		kmem_free(kvm->coalesced_mmio_ring, PAGESIZE);
+	struct kvm_coalesced_mmio_dev *dev = kvmp->coalesced_mmio_dev;
+	mutex_destroy(&dev->lock);
+	mutex_enter(&kvmp->slots_lock);
+	kvm_io_bus_unregister_dev(kvmp, KVM_MMIO_BUS, &dev->dev);
+	mutex_exit(&kvmp->slots_lock);
+	kvm_iodevice_destructor(&dev->dev);
+	kmem_free(dev, sizeof (struct kvm_coalesced_mmio_dev));
+	if (kvmp->coalesced_mmio_ring)
+		ddi_umem_free(kvmp->mmio_cookie);
 }
 
 int

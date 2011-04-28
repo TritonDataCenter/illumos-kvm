@@ -2239,19 +2239,18 @@ void kvm_free_physmem(struct kvm *kvm);
 
 struct  kvm *kvm_arch_create_vm(void);
 void kvm_arch_destroy_vm(struct kvm *kvm);
+void kvm_arch_destroy_vm_comps(struct kvm *kvm);
 void kvm_free_all_assigned_devices(struct kvm *kvm);
 void kvm_arch_sync_events(struct kvm *kvm);
 
 int kvm_cpu_has_pending_timer(struct kvm_vcpu *vcpu);
 void kvm_vcpu_kick(struct kvm_vcpu *vcpu);
 
-#ifdef XXX
 void kvm_register_irq_mask_notifier(struct kvm *kvm, int irq,
 				    struct kvm_irq_mask_notifier *kimn);
 void kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 				      struct kvm_irq_mask_notifier *kimn);
-void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, bool mask);
-#endif /*XXX*/
+void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, int mask);
 
 int kvm_iommu_map_pages(struct kvm *kvm, struct kvm_memory_slot *slot);
 int kvm_iommu_map_guest(struct kvm *kvm);
@@ -2267,6 +2266,8 @@ int kvm_deassign_device(struct kvm *kvm,
 	     idx = bt_getlowbit(bitmap, idx+1, 512))
 
 #define PT_PAGE_SIZE_MASK (1ULL << 7)
+
+#define	BITS_PER_LONG	(sizeof (unsigned long) * 8)
 
 #endif
 #endif /*SOLARIS_KVM_H*/
