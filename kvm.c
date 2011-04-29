@@ -14352,38 +14352,22 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		break;
 	}
 	case KVM_RUN: {
-		struct kvm_run_ioc *kvm_run_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
-
-		if (!arg) {
-			rval = EINVAL;
-			break;
-		}
-
-		kvm_run_ioc = kmem_zalloc(sizeof(struct kvm_run_ioc), KM_SLEEP);
-
-		if (ddi_copyin((caddr_t)arg, kvm_run_ioc, sizeof (struct kvm_run_ioc), mode)) {
-			rval = EFAULT;
-			kmem_free(kvm_run_ioc, sizeof(struct kvm_run_ioc));
-			break;
-		}
+		int cpu = (int)arg;
 
 		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
-			kmem_free(kvm_run_ioc, sizeof(struct kvm_run_ioc));
 			break;
 		}
-		if (!kvmp || kvm_run_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if (!kvmp || cpu >= kvmp->online_vcpus) {
 			rval = EINVAL;
-			kmem_free(kvm_run_ioc, sizeof(struct kvm_run_ioc));
 			break;
 		}
-		vcpu = kvmp->vcpus[kvm_run_ioc->kvm_cpu_index];
+		vcpu = kvmp->vcpus[cpu];
 		
 		rval = kvm_arch_vcpu_ioctl_run(vcpu, vcpu->run);
-		kmem_free(kvm_run_ioc, sizeof(struct kvm_run_ioc));
 		break;
 	}
 	case KVM_CHECK_EXTENSION:
@@ -14600,30 +14584,24 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	}
 
  	case KVM_SET_USER_MEMORY_REGION: {
-		struct kvm_set_user_memory_ioc *kvmioc;
+		struct kvm_userspace_memory_region map;
 		struct kvm *kvmp;
 		
-		kvmioc = kmem_zalloc(sizeof (struct kvm_set_user_memory_ioc),
-		    KM_SLEEP);
-
-		if (ddi_copyin((const void *)arg, kvmioc,
-			       sizeof(struct kvm_set_user_memory_ioc), mode) != 0) {
+		if (ddi_copyin((const void *)arg, &map,
+			       sizeof(struct kvm_userspace_memory_region), mode) != 0) {
 			rval = EFAULT;
-			kmem_free(kvmioc, sizeof(struct kvm_set_user_memory_ioc));
 			break;
 		}
 
 		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
-			kmem_free(kvmioc, sizeof(struct kvm_set_user_memory_ioc));
 			break;
 		}
 
- 		rval = kvm_vm_ioctl_set_memory_region(kvmp, &kvmioc->kvm_userspace_map, 1); 
+ 		rval = kvm_vm_ioctl_set_memory_region(kvmp, &map, 1); 
  		if (rval != 0)
 			rval = EINVAL;
-		kmem_free(kvmioc, sizeof(struct kvm_set_user_memory_ioc));
  		break; 
 	}
 	case KVM_GET_SUPPORTED_CPUID: {
@@ -15248,38 +15226,40 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 #endif
 #ifdef KVM_CAP_IRQ_ROUTING
 	case KVM_SET_GSI_ROUTING: {
-		struct kvm_irq_routing_ioc *kvm_irq_routing_ioc;
+		struct kvm_kirq_routing *route;
 		struct kvm *kvmp;
 		struct kvm_irq_routing_entry *entries;
 
-		kvm_irq_routing_ioc = kmem_zalloc(sizeof(struct kvm_irq_routing_ioc), KM_SLEEP);
-
+		/*
+		 * Note the route must be allocated on the heap. The sizeof
+		 * (kvm_kirq_routing) is approximately 0xc038 currently.
+		 */
+		route = kmem_zalloc(sizeof (kvm_kirq_routing_t), KM_SLEEP);
 		rval = EFAULT;
-		if (ddi_copyin((const char *)arg, kvm_irq_routing_ioc,
-			       sizeof(struct kvm_irq_routing_ioc), mode)) {
-			kmem_free(kvm_irq_routing_ioc, sizeof(struct kvm_irq_routing_ioc));
+		if (ddi_copyin((const char *)arg, route,
+			       sizeof(struct kvm_kirq_routing), mode)) {
+			kmem_free(route, sizeof (kvm_kirq_routing_t));
 			break;
 		}
 
 		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
-			kmem_free(kvm_irq_routing_ioc, sizeof(struct kvm_irq_routing_ioc));
+			kmem_free(route, sizeof (kvm_kirq_routing_t));
 			break;
 		}
 
 		rval = EINVAL;
 		
-		if ((kvm_irq_routing_ioc->kvm_kirq_routing.nr >= KVM_MAX_IRQ_ROUTES) ||
-		    (kvm_irq_routing_ioc->kvm_kirq_routing.flags)) {
-			kmem_free(kvm_irq_routing_ioc, sizeof(struct kvm_irq_routing_ioc));
+		if (route->nr >= KVM_MAX_IRQ_ROUTES || route->flags) {
+			kmem_free(route, sizeof (kvm_kirq_routing_t));
 			break;
 		}
-		rval = kvm_set_irq_routing(kvmp, kvm_irq_routing_ioc->kvm_kirq_routing.entries,
-					   kvm_irq_routing_ioc->kvm_kirq_routing.nr,
-					   kvm_irq_routing_ioc->kvm_kirq_routing.flags);
+
+		rval = kvm_set_irq_routing(kvmp, route->entries,
+		   route->nr, route->flags);
 		*rval_p = 0;
-		kmem_free(kvm_irq_routing_ioc, sizeof(struct kvm_irq_routing_ioc));
+		kmem_free(route, sizeof (kvm_kirq_routing_t));
 		break;
 	}
 #endif /* KVM_CAP_IRQ_ROUTING */
@@ -15321,38 +15301,27 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	}
 
 	case KVM_GET_IRQCHIP: {
-		struct kvm_irqchip_ioc *irqchip_ioc;
 		struct kvm *kvmp;
+		struct kvm_irqchip chip;
 		/* 0: PIC master, 1: PIC slave, 2: IOAPIC */
-
-		irqchip_ioc = kmem_zalloc(sizeof(struct kvm_irqchip_ioc), KM_SLEEP);
-		rval = EFAULT;
-		if (ddi_copyin((caddr_t)arg, irqchip_ioc, sizeof irqchip_ioc, mode)) {
-			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
-			break;
-		}
 
 		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
-			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
 			break;
 		}
 
 		rval = ENXIO;
-		if (!irqchip_in_kernel(kvmp)) {
-			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
+		if (!irqchip_in_kernel(kvmp))
 			break;
-		}
-		rval = kvm_vm_ioctl_get_irqchip(kvmp, &irqchip_ioc->chip);
+
+		rval = kvm_vm_ioctl_get_irqchip(kvmp, &chip);
 		if (rval) {
-			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
 			break;
 		}
-		if (ddi_copyout(irqchip_ioc, (caddr_t)arg, sizeof (struct kvm_irqchip_ioc), mode))
+		if (ddi_copyout(&chip, (caddr_t)arg, sizeof (struct kvm_irqchip), mode))
 			rval = EFAULT;
 		rval = 0;
-		kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
 		break;
 	}
 	case KVM_SET_VAPIC_ADDR: {
@@ -15385,31 +15354,25 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	}
 
 	case KVM_SET_IRQCHIP: {
-		struct kvm_irqchip_ioc *irqchip_ioc;
 		struct kvm *kvmp;
+		struct kvm_irqchip chip;
 		/* 0: PIC master, 1: PIC slave, 2: IOAPIC */
 
-		irqchip_ioc = kmem_zalloc(sizeof(struct kvm_irqchip_ioc), KM_SLEEP);
 		rval = EFAULT;
-		if (ddi_copyin((caddr_t)arg, irqchip_ioc, sizeof (struct kvm_irqchip_ioc), mode)) {
-			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));			
+		if (ddi_copyin((caddr_t)arg, &chip, sizeof (struct kvm_irqchip), mode))
 			break;
-		}
 
 		kvmp = ksp->kds_kvmp;
 		if (kvmp == NULL) {
 			rval = EINVAL;
-			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
 			break;
 		}
 
 		rval = ENXIO;
 		if (!irqchip_in_kernel(kvmp)) {
-			kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
 			break;
 		}
-		rval = kvm_vm_ioctl_set_irqchip(kvmp, &irqchip_ioc->chip);
-		kmem_free(irqchip_ioc, sizeof(struct kvm_irqchip_ioc));
+		rval = kvm_vm_ioctl_set_irqchip(kvmp, &chip);
 		if (rval)
 			break;
 		rval = 0;

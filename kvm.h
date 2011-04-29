@@ -637,12 +637,6 @@ typedef struct kvm_irqchip {
 	} chip;
 } kvm_irqchip_t;
 
-/* for KVM_GET_IRQCHIP */
-typedef struct kvm_irqchip_ioc {
-	struct kvm_irqchip chip;
-} kvm_irqchip_ioc_t;
-
-
 /* for KVM_CREATE_PIT2 */
 typedef struct kvm_pit_config {
 	uint32_t flags;
@@ -1046,11 +1040,6 @@ typedef struct kvm_pit_channel_state {
 	int64_t count_load_time;
 } kvm_pit_channel_state_t;
 
-typedef struct kvm_pit_ioc {
-	int pad;
-	struct kvm_pic_state s;
-} kvm_pit_ioc_t;
-
 typedef struct kvm_debug_exit_arch {
 	uint32_t exception;
 	uint32_t pad;
@@ -1151,10 +1140,6 @@ typedef struct kvm_kirq_routing {
 	uint32_t flags;
 	struct kvm_irq_routing_entry entries[KVM_MAX_IRQ_ROUTES+1];
 } kvm_kirq_routing_t;
-
-typedef struct kvm_irq_routing_ioc {
-	struct kvm_kirq_routing kvm_kirq_routing;
-} kvm_irq_routing_ioc_t;
 
 /*#endif  __KVM_HAVE_IOAPIC*/
 
@@ -1499,9 +1484,6 @@ typedef struct kvm_cpuid2_ioc {
 } kvm_cpuid2_ioc_t;
 
 /* for KVM_RUN */
-typedef struct kvm_run_ioc {
-	int kvm_cpu_index;
-} kvm_run_ioc_t;
 
 /* x86 MCE */
 typedef struct kvm_x86_mce {
@@ -1525,11 +1507,6 @@ typedef struct kvm_signal_mask {
 	uint32_t len;
 	uint8_t  sigset[1];
 } kvm_signal_mask_t;
-
-typedef struct kvm_pit_s2_ioc {
-	int pad;
-	struct kvm_pit_state2 s;
-} kvm_pit_s2_ioc_t;
 
 typedef struct kvm_set_boot_cpu_id_ioc {
 	int id;
@@ -1569,8 +1546,8 @@ typedef struct kvm_set_boot_cpu_id_ioc {
 #define KVM_GET_VCPU_EVENTS       _IOR(KVMIO,  0x9f, struct kvm_vcpu_events_ioc)
 #define KVM_SET_VCPU_EVENTS       _IOW(KVMIO,  0xa0, struct kvm_vcpu_events_ioc)
 /* Available with KVM_CAP_PIT_STATE2 */
-#define KVM_GET_PIT2              _IOR(KVMIO,  0x9f, struct kvm_pit_s2_ioc)
-#define KVM_SET_PIT2              _IOW(KVMIO,  0xa0, struct kvm_pit_s2_ioc)
+#define KVM_GET_PIT2              _IOR(KVMIO,  0x9f, struct kvm_pit_state2)
+#define KVM_SET_PIT2              _IOW(KVMIO,  0xa0, struct kvm_pit_state2)
 
 
 
@@ -1630,7 +1607,7 @@ typedef struct kvm_id_map_addr_ioc {
  * a vcpu fd.
  */
 #define KVM_CREATE_VCPU           _IO(KVMIO,   0x41)
-#define KVM_GET_DIRTY_LOG         _IOW(KVMIO,  0x42, struct kvm_dirty_log_ioc)
+#define KVM_GET_DIRTY_LOG         _IOW(KVMIO,  0x42, struct kvm_dirty_log)
 #define KVM_SET_NR_MMU_PAGES      _IO(KVMIO,   0x44)
 #define KVM_GET_NR_MMU_PAGES      _IO(KVMIO,   0x45)
 #define KVM_SET_TSS_ADDR          _IO(KVMIO,   0x47)
@@ -1639,14 +1616,14 @@ typedef struct kvm_id_map_addr_ioc {
 #define KVM_CREATE_IRQCHIP        _IO(KVMIO,   0x60)
 #define KVM_IRQ_LINE              _IOW(KVMIO,  0x61, struct kvm_irq_level_ioc)
 #define KVM_IRQ_LINE_STATUS       _IOWR(KVMIO, 0x67, struct kvm_irq_level_ioc)
-#define KVM_GET_IRQCHIP           _IOWR(KVMIO, 0x62, struct kvm_irqchip_ioc)
-#define KVM_SET_IRQCHIP           _IOR(KVMIO,  0x63, struct kvm_irqchip_ioc)
+#define KVM_GET_IRQCHIP           _IOWR(KVMIO, 0x62, struct kvm_irqchip)
+#define KVM_SET_IRQCHIP           _IOR(KVMIO,  0x63, struct kvm_irqchip)
 
 #define KVM_PIT_SPEAKER_DUMMY     1
 
 #define KVM_CREATE_PIT            _IO(KVMIO,   0x64)
-#define KVM_GET_PIT               _IOWR(KVMIO, 0x65, struct kvm_pit_ioc)
-#define KVM_SET_PIT               _IOR(KVMIO,  0x66, struct kvm_pit_ioc)
+#define KVM_GET_PIT               _IOWR(KVMIO, 0x65, struct kvm_pit_state)
+#define KVM_SET_PIT               _IOR(KVMIO,  0x66, struct kvm_pit_state)
 #define KVM_CREATE_PIT2		  _IOW(KVMIO,  0x77, struct kvm_pit_config_ioc)
 
 #define KVM_REGISTER_COALESCED_MMIO \
@@ -1654,7 +1631,7 @@ typedef struct kvm_id_map_addr_ioc {
 #define KVM_UNREGISTER_COALESCED_MMIO \
 			_IOW(KVMIO,  0x68, struct kvm_coalesced_mmio_zone_ioc)
 
-#define KVM_SET_GSI_ROUTING       _IOW(KVMIO,  0x6a, struct kvm_irq_routing_ioc)
+#define KVM_SET_GSI_ROUTING       _IOW(KVMIO,  0x6a, struct kvm_kirq_routing)
 
 /*
  * Check if a kvm extension is available.  Argument is extension number,
@@ -1712,10 +1689,6 @@ typedef struct kvm_dirty_log {
 		uint64_t padding2;
 	}v;
 } kvm_dirty_log_t;
-
-typedef struct kvm_dirty_log_ioc {
-	struct kvm_dirty_log d;
-} kvm_dirty_log_ioc_t;
 
 typedef struct kvm_coalesced_mmio {
 	uint64_t phys_addr;
@@ -1799,13 +1772,7 @@ typedef struct kvm_userspace_memory_region {
 	uint64_t userspace_addr; /* start of the userspace allocated memory */
 } kvm_userspace_memory_region_t;
 
-/* for KVM_SET_USER_MEMORY_REGION */
-typedef struct kvm_set_user_memory_ioc {
-	struct kvm_userspace_memory_region kvm_userspace_map;
-	int32_t pad;
-} kvm_set_user_memory_ioc_t;
-
-#ifdef XXX
+#ifndef XXX
 #define KVM_SET_USER_MEMORY_REGION _IOW(KVMIO, 0x46, \
 					struct kvm_userspace_memory_region)
 #else
