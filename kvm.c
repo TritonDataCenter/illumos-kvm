@@ -15381,6 +15381,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	default:
 #ifndef XXX
 		XXX_KVM_PROBE;
+		DTRACE_PROBE1(kvm__xxx__ioctl, int, cmd);
 #endif
 		rval = EINVAL;  /* x64, others may do other things... */
 	}
