@@ -256,6 +256,43 @@ kvm_mdb_gsiroutes(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 	return (DCMD_OK);
 }
 
+static int
+kvm_mdb_kvm_walk_init(mdb_walk_state_t *wsp)
+{
+	list_t list;
+	GElf_Sym sym;
+	if (wsp->walk_addr != NULL) {
+		mdb_warn("kvm does not support non-global walks\n");
+		return (WALK_ERR);
+	}
+
+	if (mdb_lookup_by_name("vm_list", &sym) != 0) {
+		mdb_warn("unable to locate vm_list\n");
+		return (WALK_ERR);
+	}
+
+	wsp->walk_addr = sym.st_value;
+
+	if (mdb_vread(&list, sizeof (list_t), wsp->walk_addr) == -1) {
+		mdb_warn("failed to read vm_list\n");
+		return (WALK_ERR);
+	}
+
+	if (mdb_layered_walk("list", wsp) == -1) {
+		mdb_warn("failed to walk 'list'\n");
+		return (WALK_ERR);
+	}
+
+	return (WALK_NEXT);
+}
+
+static int
+kvm_mdb_kvm_walk_step(mdb_walk_state_t *wsp)
+{
+	return (wsp->walk_callback(wsp->walk_addr, wsp->walk_layer,
+	    wsp->walk_cbdata));
+}
+
 static const mdb_dcmd_t dcmds[] = {
 	{ "kvm_gpa2qva", "?[address of kvm]", "translate a guest physical "
 	    "to a QEMU virtual address", kvm_mdb_gpa2qva },
@@ -269,6 +306,8 @@ static const mdb_walker_t walkers[] = {
 	    kvm_mdb_memory_slot_init, kvm_mdb_memory_slot_step },
 	{ "kvm_mem_alias", "walk kvm_mem_alias structures for a given kvm",
 	    kvm_mdb_mem_alias_init, kvm_mdb_mem_alias_step },
+	{ "kvm", "walk all the kvm structures",
+	    kvm_mdb_kvm_walk_init, kvm_mdb_kvm_walk_step },
 	{ NULL }
 };
 
