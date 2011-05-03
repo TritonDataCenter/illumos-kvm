@@ -219,9 +219,48 @@ kvm_mdb_gpa2qva(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 	return (DCMD_OK);
 }
 
+static int
+kvm_mdb_gsiroutes(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
+{
+	struct kvm kvm;
+	struct kvm_irq_routing_table *table;
+	int ii, jj;
+
+	if (argc > 1)
+		return (DCMD_USAGE);
+
+	if (mdb_vread(&kvm, sizeof (struct kvm), addr) == -1) {
+		mdb_warn("couldn't read kvm at %p", addr);
+		return (DCMD_ERR);
+	}
+
+	table = mdb_alloc(sizeof (struct kvm_irq_routing_table),
+	    UM_SLEEP | UM_GC);
+
+	if (mdb_vread(table, sizeof (struct kvm_irq_routing_table),
+	    (uintptr_t)kvm.irq_routing) == -1) {
+		mdb_warn("couldn't read kvm irq routing table at %p",
+		    kvm.irq_routing);
+		return (DCMD_ERR);
+	}
+
+	if (DCMD_HDRSPEC(flags))
+		mdb_printf("%s %7s %5s\n", "CHIP", "PORT", "GSI");
+
+	for (ii = 0; ii < KVM_NR_IRQCHIPS; ii++) {
+		for (jj = 0; jj < KVM_IOAPIC_NUM_PINS; jj++)
+			mdb_printf("%3d %7d    0x%x\n", ii, jj,
+			    table->chip[ii][jj]);
+	}
+
+	return (DCMD_OK);
+}
+
 static const mdb_dcmd_t dcmds[] = {
 	{ "kvm_gpa2qva", "?[address of kvm]", "translate a guest physical "
 	    "to a QEMU virtual address", kvm_mdb_gpa2qva },
+	{ "kvm_gsiroutes", NULL, "print out the global system "
+	    "interrupt (GSI) routing table", kvm_mdb_gsiroutes },
 	{ NULL }
 };
 
