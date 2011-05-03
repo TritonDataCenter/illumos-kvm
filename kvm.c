@@ -15229,6 +15229,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_kirq_routing *route;
 		struct kvm *kvmp;
 		struct kvm_irq_routing_entry *entries;
+		uint32_t nroutes;
 
 		/*
 		 * Note the route must be allocated on the heap. The sizeof
@@ -15236,8 +15237,20 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		 */
 		route = kmem_zalloc(sizeof (kvm_kirq_routing_t), KM_SLEEP);
 		rval = EFAULT;
+
+		/*
+		 * copyin the number of routes, then copyin the routes
+		 * themselves.
+		 */
+		if (ddi_copyin((const char *)arg, &nroutes,
+			       sizeof(nroutes), mode) || nroutes <= 0) {
+			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			break;
+		}
+
 		if (ddi_copyin((const char *)arg, route,
-			       sizeof(struct kvm_kirq_routing), mode)) {
+			       sizeof(struct kvm_irq_routing) +
+			       (nroutes-1)*sizeof (struct kvm_irq_routing_entry), mode)) {
 			kmem_free(route, sizeof (kvm_kirq_routing_t));
 			break;
 		}
