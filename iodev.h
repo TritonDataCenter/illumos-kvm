@@ -43,28 +43,15 @@ typedef struct kvm_io_device {
 	const struct kvm_io_device_ops *ops;
 } kvm_io_device_t;
 
-static void kvm_iodevice_init(struct kvm_io_device *dev,
-				     const struct kvm_io_device_ops *ops)
-{
-	dev->ops = ops;
-}
+void kvm_iodevice_init(struct kvm_io_device *,
+    const struct kvm_io_device_ops *);
 
-static int kvm_iodevice_read(struct kvm_io_device *dev,
-				    gpa_t addr, int l, void *v)
-{
-	return dev->ops->read ? dev->ops->read(dev, addr, l, v) : -EOPNOTSUPP;
-}
+int kvm_iodevice_read(struct kvm_io_device *,
+    gpa_t, int, void *);
 
-static int kvm_iodevice_write(struct kvm_io_device *dev,
-				     gpa_t addr, int l, const void *v)
-{
-	return dev->ops->write ? dev->ops->write(dev, addr, l, v) : -EOPNOTSUPP;
-}
+int kvm_iodevice_write(struct kvm_io_device *dev,
+     gpa_t addr, int l, const void *v);
 
-static void kvm_iodevice_destructor(struct kvm_io_device *dev)
-{
-	if (dev->ops->destructor)
-		dev->ops->destructor(dev);
-}
+void kvm_iodevice_destructor(struct kvm_io_device *dev);
 
 #endif /* __KVM_IODEV_H__ */
