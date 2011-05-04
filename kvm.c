@@ -5814,7 +5814,7 @@ kvm_read_guest_page(struct kvm *kvm, gfn_t gfn, void *data, int offset, int len)
 	addr = gfn_to_hva(kvm, gfn);
 
 	if (kvm_is_error_hva(addr))
-		return (EFAULT);
+		return (-EFAULT);
 
 	if (addr >= kernelbase) {
 		bcopy((caddr_t)(addr+offset), data, len);
@@ -5823,7 +5823,7 @@ kvm_read_guest_page(struct kvm *kvm, gfn_t gfn, void *data, int offset, int len)
 	}
 
 	if (r)
-		return (EFAULT);
+		return (-EFAULT);
 
 	return (0);
 }
