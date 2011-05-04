@@ -79,8 +79,8 @@ static int kvm_open(dev_t *devp, int flag, int otyp, cred_t *cred);
 static int kvm_close(dev_t dev, int flag, int otyp, cred_t *cred);
 static int kvm_read(dev_t dev, struct uio *uiop, cred_t *credp);
 static int kvm_write(dev_t dev, struct uio *uiop, cred_t *credp);
-static int kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode,
-    cred_t *cred_p, int *rval_p);
+static int kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md,
+    cred_t *cred_p, int *rv);
 static int kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off,
     size_t len, size_t *maplen, uint_t model);
 static int kvm_segmap(dev_t, off_t, struct as *, caddr_t *, off_t,
@@ -140,7 +140,7 @@ extern void kvm_arch_destroy_vm(struct kvm *kvmp);
 extern int kvm_arch_hardware_enable(void *garbage);
 extern void kvm_arch_hardware_disable(void *garbage);
 extern long kvm_vm_ioctl(struct kvm *kvmp, unsigned int ioctl,
-    unsigned long arg, int mode);
+    unsigned long arg, int md);
 static void hardware_enable(void *junk);
 static void hardware_disable(void *junk);
 extern struct kvm_vcpu *vmx_create_vcpu(struct kvm *kvm,
@@ -3783,25 +3783,25 @@ kvm_destroy_vm(struct kvm *kvmp)
 }
 
 static int
-kvm_dev_ioctl_create_vm(kvm_devstate_t *ksp, intptr_t arg, int mode,
-    int *rval_p)
+kvm_dev_ioctl_create_vm(kvm_devstate_t *ksp, intptr_t arg, int *rv)
 {
 	if (ksp->kds_kvmp != NULL)
 		return (EINVAL);
 
 	ksp->kds_kvmp = kvm_create_vm();
+
 	if (ksp->kds_kvmp == NULL) {
 		cmn_err(CE_WARN, "Could not create new vm\n");
 		return (EIO);
 	}
-	*rval_p = ksp->kds_kvmp->kvmid;
+	*rv = ksp->kds_kvmp->kvmid;
 	return (DDI_SUCCESS);
 }
 
-extern int kvm_dev_ioctl_check_extension(long ext, int *rval_p);
+extern int kvm_dev_ioctl_check_extension(long ext, int *rv);
 
 static long
-kvm_dev_ioctl_check_extension_generic(long arg, int *rval_p)
+kvm_dev_ioctl_check_extension_generic(long arg, int *rv)
 {
 	switch (arg) {
 	case KVM_CAP_USER_MEMORY:
@@ -3811,17 +3811,17 @@ kvm_dev_ioctl_check_extension_generic(long arg, int *rval_p)
 	case KVM_CAP_SET_BOOT_CPU_ID:
 #endif
 	case KVM_CAP_INTERNAL_ERROR_DATA:
-		*rval_p = 1;
+		*rv = 1;
 		return (DDI_SUCCESS);
 #ifdef CONFIG_HAVE_KVM_IRQCHIP
 	case KVM_CAP_IRQ_ROUTING:
-		*rval_p = KVM_MAX_IRQ_ROUTES;
+		*rv = KVM_MAX_IRQ_ROUTES;
 		return (DDI_SUCCESS);
 #endif
 	default:
 		break;
 	}
-	return (kvm_dev_ioctl_check_extension(arg, rval_p));
+	return (kvm_dev_ioctl_check_extension(arg, rv));
 }
 
 
@@ -4253,7 +4253,7 @@ kvm_vm_ioctl_set_tss_addr(struct kvm *kvmp, caddr_t addr)
 	return (vmx_set_tss_addr(kvmp, addr));
 }
 
-extern int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p);
+extern int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rv);
 
 static inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
 				unsigned int *ecx, unsigned int *edx)
@@ -4472,7 +4472,7 @@ do_cpuid_ent(struct kvm_cpuid_entry2 *entry, uint32_t function,
 
 static int
 kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *cpuid,
-    struct kvm_cpuid_entry2  *entries, int mode)
+    struct kvm_cpuid_entry2  *entries)
 {
 	struct kvm_cpuid_entry2 *cpuid_entries;
 	int limit, nent = 0, r = E2BIG;
@@ -4505,8 +4505,8 @@ kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *cpuid,
 		goto out_free;
 
 	r = EFAULT;
-	if (ddi_copyout(cpuid_entries, entries,
-	    nent * sizeof (kvm_cpuid_entry2_t), mode))
+	if (copyout(cpuid_entries, entries,
+	    nent * sizeof (kvm_cpuid_entry2_t)))
 		goto out_free;
 
 	cpuid->nent = nent;
@@ -5309,7 +5309,7 @@ kvm_apic_set_version(struct kvm_vcpu *vcpu)
 
 static int
 kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid,
-    struct kvm_cpuid_entry2 *entries, int mode)
+    struct kvm_cpuid_entry2 *entries)
 {
 	int r;
 
@@ -5331,7 +5331,7 @@ out:
 
 static int
 kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid,
-    struct kvm_cpuid_entry2 *entries, int mode)
+    struct kvm_cpuid_entry2 *entries)
 {
 	int r;
 
@@ -14321,13 +14321,15 @@ static int kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu,
 out:
 	return rval;
 }
+/* END CSTYLED */
 
 static int
-kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_p)
+kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 {
 	int rval = DDI_SUCCESS;
 	minor_t minor;
 	kvm_devstate_t *ksp;
+	void *argp = (void *)arg;
 
 	minor = getminor(dev);
 	ksp = ddi_get_soft_state(kvm_state, minor);
@@ -14339,24 +14341,41 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_pit_state2 ps2;
 #ifdef XXX_KVM_DECLARATION
 		struct kvm_memory_alias alias;
-#endif /*XXX*/
+#endif
 		struct kvm_pit_config pit_config;
 	} u;
 
-	switch(cmd) {
+	switch (cmd) {
 	case KVM_GET_API_VERSION:
-		cmn_err(CE_NOTE, "kvm_ioctl: KVM_GET_API_VERSION");
 		if (arg != NULL) {
 			rval = EINVAL;
 			break;
 		}
-		*rval_p = KVM_API_VERSION;
+		*rv = KVM_API_VERSION;
 		break;
+
 	case KVM_CREATE_VM:
-		rval = kvm_dev_ioctl_create_vm(ksp, arg, mode, rval_p);
+		if (arg != NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		rval = kvm_dev_ioctl_create_vm(ksp, arg, rv);
 		break;
-	case KVM_CREATE_PIT:
-	{
+
+	case KVM_CHECK_EXTENSION:
+		rval = kvm_dev_ioctl_check_extension_generic(arg, rv);
+		break;
+
+	case KVM_GET_VCPU_MMAP_SIZE:
+		if (arg != NULL) {
+			rval = EINVAL;
+			break;
+		}
+		*rv = ptob(KVM_VCPU_MMAP_LENGTH);
+		break;
+
+	case KVM_CREATE_PIT: {
 		struct kvm *kvmp;
 
 		kvmp = ksp->kds_kvmp;
@@ -14378,32 +14397,12 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		mutex_exit(&kvmp->slots_lock);
 		break;
 	}
-#ifdef XXX_KVM_DECLARATION
-	case KVM_CREATE_PIT2:
-		r = -EFAULT;
-		if (copy_from_user(&u.pit_config, argp,
-				   sizeof(struct kvm_pit_config)))
-			goto out;
-	create_pit:
-		mutex_lock(&kvm->slots_lock);
-		r = -EEXIST;
-		if (kvm->arch.vpit)
-			goto create_pit_unlock;
-		r = -ENOMEM;
-		kvm->arch.vpit = kvm_create_pit(kvm, u.pit_config.flags);
-		if (kvm->arch.vpit)
-			r = 0;
-	create_pit_unlock:
-		mutex_exit(&kvm->slots_lock);
-		break;
-#endif /*XXX*/		
-	case KVM_CREATE_IRQCHIP:
-	{
+
+	case KVM_CREATE_IRQCHIP: {
 		struct kvm_pic *vpic;
 		struct kvm *kvmp;
 
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
 			break;
 		}
@@ -14417,8 +14416,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		if (vpic) {
 			rval = kvm_ioapic_init(kvmp);
 			if (rval) {
-				kvm_io_bus_unregister_dev(kvmp, KVM_PIO_BUS,
-							  &vpic->dev);
+				kvm_io_bus_unregister_dev(kvmp,
+				    KVM_PIO_BUS, &vpic->dev);
 				goto create_irqchip_unlock;
 			}
 		} else
@@ -14427,13 +14426,13 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		smp_wmb();
 #else
 		XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 		kvmp->arch.vpic = vpic;
 #ifdef XXX
 		smp_wmb();
 #else
 		XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 		rval = kvm_setup_default_irq_routing(kvmp);
 		if (rval) {
 			mutex_enter(&kvmp->irq_lock);
@@ -14460,111 +14459,92 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 		vcpu = kvmp->vcpus[cpu];
-		
+
 		rval = kvm_arch_vcpu_ioctl_run(vcpu, vcpu->run);
 		break;
 	}
-	case KVM_CHECK_EXTENSION:
-		rval = kvm_dev_ioctl_check_extension_generic(arg, rval_p);
-		break;
 
 	case KVM_X86_GET_MCE_CAP_SUPPORTED: {
-		uint64_t mce_cap;
+		uint64_t mce_cap = KVM_MCE_CAP_SUPPORTED;
 
-		mce_cap = KVM_MCE_CAP_SUPPORTED;
-		rval = EFAULT;
-		if (ddi_copyout(&mce_cap, (caddr_t) arg, sizeof mce_cap, mode))
-			break;
-		rval = 0;
+		if (copyout(&mce_cap, argp, sizeof (mce_cap)))
+			rval = EFAULT;
+
 		break;
 	}
 
 	case KVM_X86_SETUP_MCE: {
-	  struct mcg_cap_ioc mcg_cap_ioc;
-	  struct kvm *kvmp;
-	  struct kvm_vcpu *vcpu;
+		struct mcg_cap_ioc mcg_cap_ioc;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
 
-	  rval = EFAULT;
-	  if (ddi_copyin((caddr_t)arg, &mcg_cap_ioc, sizeof mcg_cap_ioc, mode))
-		  break;
+		if (copyin(argp, &mcg_cap_ioc, sizeof (mcg_cap_ioc))) {
+			rval = EFAULT;
+			break;
+		}
 
-		kvmp = ksp->kds_kvmp;
-	  if (kvmp == NULL) {
-		  rval = EINVAL;
-		  break;
-	  }
-	  if (!kvmp || mcg_cap_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
-		  rval = EINVAL;
-		  break;
-	  }
-	  vcpu = kvmp->vcpus[mcg_cap_ioc.kvm_cpu_index];
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
 
-	  rval = kvm_vcpu_ioctl_x86_setup_mce(vcpu, mcg_cap_ioc.mcg_cap);
-	  break;
+		if (mcg_cap_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
+			rval = EINVAL;
+			break;
+		}
+
+		vcpu = kvmp->vcpus[mcg_cap_ioc.kvm_cpu_index];
+		rval = kvm_vcpu_ioctl_x86_setup_mce(vcpu, mcg_cap_ioc.mcg_cap);
+		break;
 	}
 
 	case KVM_GET_MSRS: {
 		struct kvm_msrs_ioc *kvm_msrs_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_msrs_ioc);
 
-		kvm_msrs_ioc =
-		    kmem_alloc(sizeof (struct kvm_msrs_ioc), KM_SLEEP);
+		kvm_msrs_ioc = kmem_alloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((const void *)arg, kvm_msrs_ioc,
-			       sizeof(struct kvm_msrs_ioc), mode) != 0) {
+		if (copyin(argp, kvm_msrs_ioc, sz) != 0) {
 			rval = EFAULT;
 			break;
 		}
-		kvmp = ksp->kds_kvmp;
-		rval = EINVAL;
-		if (!kvmp || kvm_msrs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		if (kvm_msrs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_msrs_ioc, sz);
+			rval = EINVAL;
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_msrs_ioc->kvm_cpu_index];
 
 		if (kvm_msrs_ioc->kvm_msrs.nmsrs >= MAX_IO_MSRS) {
+			kmem_free(kvm_msrs_ioc, sz);
 			rval = E2BIG;
-			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
 			break;
 		}
-		
-		rval = __msr_io(vcpu, &kvm_msrs_ioc->kvm_msrs, kvm_msrs_ioc->kvm_msrs.entries, kvm_get_msr);
 
-		if (rval < 0) {
-			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
+		if (__msr_io(vcpu, &kvm_msrs_ioc->kvm_msrs,
+		    kvm_msrs_ioc->kvm_msrs.entries, kvm_get_msr) < 0) {
+			kmem_free(kvm_msrs_ioc, sz);
 			rval = EINVAL;
 			break;
 		}
 
-		rval = ddi_copyout(kvm_msrs_ioc, (caddr_t)arg, sizeof(struct kvm_msrs_ioc), mode);
-		*rval_p = kvm_msrs_ioc->kvm_msrs.nmsrs;
-		kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));		
-		break;
-	}
-
-	case KVM_SET_IDENTITY_MAP_ADDR: {
-		struct kvm_id_map_addr_ioc *kvm_id_map_addr_ioc;
-		struct kvm *kvmp;
-
-		kvm_id_map_addr_ioc =
-		    kmem_zalloc(sizeof (struct kvm_id_map_addr_ioc), KM_SLEEP);
-
-		rval = EFAULT;
-		if (ddi_copyin((const char *)arg, kvm_id_map_addr_ioc, sizeof (struct kvm_id_map_addr_ioc), mode)) {
-			kmem_free(kvm_id_map_addr_ioc, sizeof(struct kvm_id_map_addr_ioc));
+		if (copyout(kvm_msrs_ioc, argp, sizeof (kvm_msrs_ioc_t) != 0)) {
+			kmem_free(kvm_msrs_ioc, sz);
+			rval = EFAULT;
 			break;
 		}
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
-			rval = EINVAL;
-			break;
-		}
-		
-		rval = kvm_vm_ioctl_set_identity_map_addr(kvmp, kvm_id_map_addr_ioc->ident_addr);
-		*rval_p = 0;
+
+		*rv = kvm_msrs_ioc->kvm_msrs.nmsrs;
+		kmem_free(kvm_msrs_ioc, sz);
 		break;
 	}
 
@@ -14572,42 +14552,71 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_msrs_ioc *kvm_msrs_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_msrs_ioc);
 		int n;
 
-		kvm_msrs_ioc =
-		    kmem_alloc(sizeof (struct kvm_msrs_ioc), KM_SLEEP);
-		if (ddi_copyin((const void *)arg, kvm_msrs_ioc,
-			       sizeof(struct kvm_msrs_ioc), mode) != 0) {
+		kvm_msrs_ioc = kmem_alloc(sz, KM_SLEEP);
+
+		if (copyin(argp, kvm_msrs_ioc, sz) != 0) {
 			rval = EFAULT;
 			break;
 		}
 
-		rval = EINVAL;
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || kvm_msrs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		if (kvm_msrs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_msrs_ioc, sz);
+			rval = EINVAL;
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_msrs_ioc->kvm_cpu_index];
-		
+
 		if (kvm_msrs_ioc->kvm_msrs.nmsrs >= MAX_IO_MSRS) {
-			kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
+			kmem_free(kvm_msrs_ioc, sz);
 			rval = E2BIG;
 			break;
 		}
 
-		
-		rval = n =  __msr_io(vcpu, &kvm_msrs_ioc->kvm_msrs, kvm_msrs_ioc->kvm_msrs.entries, do_set_msr);
+		n = __msr_io(vcpu, &kvm_msrs_ioc->kvm_msrs,
+		    kvm_msrs_ioc->kvm_msrs.entries, do_set_msr);
 
-		kmem_free(kvm_msrs_ioc, sizeof(struct kvm_msrs_ioc));
+		kmem_free(kvm_msrs_ioc, sz);
 
-		if (rval < 0) {
+		if (n < 0) {
 			rval = EINVAL;
 			break;
-		} else
-			rval = 0;  /* success */
-		*rval_p = n;
+		}
+
+		*rv = n;
+		break;
+	}
+
+	case KVM_SET_IDENTITY_MAP_ADDR: {
+		kvm_id_map_addr_ioc_t *kvm_id_map_addr_ioc;
+		size_t sz = sizeof (kvm_id_map_addr_ioc_t);
+		struct kvm *kvmp;
+
+		kvm_id_map_addr_ioc = kmem_zalloc(sz, KM_SLEEP);
+
+		if (copyin(argp, kvm_id_map_addr_ioc, sz) != 0) {
+			kmem_free(kvm_id_map_addr_ioc, sz);
+			rval = EFAULT;
+			break;
+		}
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		rval = kvm_vm_ioctl_set_identity_map_addr(kvmp,
+		    kvm_id_map_addr_ioc->ident_addr);
+
+		*rv = 0;
 		break;
 	}
 
@@ -14617,434 +14626,552 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		if (ddi_copyin((struct kvm_mp_state_ioc *)arg, &kvm_mp_state_ioc, sizeof(kvm_mp_state_ioc), mode)) {
-		  rval = EFAULT;
-		  break;
+		if (copyin(argp, &kvm_mp_state_ioc,
+		    sizeof (kvm_mp_state_ioc)) != 0) {
+			rval = EFAULT;
+			break;
 		}
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL)
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
 			break;
-		if (!kvmp || kvm_mp_state_ioc.kvm_cpu_index >= kvmp->online_vcpus)
+		}
+
+		if (kvm_mp_state_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
+			rval = EINVAL;
 			break;
+		}
 
 		vcpu = kvmp->vcpus[kvm_mp_state_ioc.kvm_cpu_index];
-		
+
 		rval = kvm_arch_vcpu_ioctl_get_mpstate(vcpu, &mp_state);
-		if (rval)
+
+		if (rval != 0)
 			break;
-		rval = EFAULT;
-		if (ddi_copyout(&mp_state, &kvm_mp_state_ioc.mp_state, sizeof (struct kvm_mp_state), mode))
+
+		if (copyout(&mp_state, &kvm_mp_state_ioc.mp_state,
+		    sizeof (struct kvm_mp_state)) != 0) {
+			rval = EFAULT;
 			break;
-		rval = 0;
-		*rval_p = 0;
+		}
+
+		*rv = 0;
 		break;
 	}
+
 	case KVM_SET_MP_STATE: {
-		struct kvm_mp_state mp_state;
 		struct kvm_mp_state_ioc kvm_mp_state_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		if (ddi_copyin((struct kvm_mp_state_ioc *)arg, &kvm_mp_state_ioc, sizeof(struct kvm_mp_state_ioc), mode)) {
-		  rval = EFAULT;
-		  break;
-		}
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL)
-			break;
-		if (!kvmp || kvm_mp_state_ioc.kvm_cpu_index >= kvmp->online_vcpus)
-			break;
-
-		vcpu = kvmp->vcpus[kvm_mp_state_ioc.kvm_cpu_index];
-
-		rval = kvm_arch_vcpu_ioctl_set_mpstate(vcpu, &kvm_mp_state_ioc.mp_state);
-		if (rval)
-			break;
-		*rval_p = 0;
-		rval = 0;
-		break;
-	}
-
- 	case KVM_CREATE_VCPU: {
-		uint32_t id;
-
-		id = (uintptr_t)arg;
-
- 		rval = kvm_vm_ioctl_create_vcpu(ksp->kds_kvmp, id, rval_p); 
- 		if (rval != 0)
-			rval = EINVAL;
-		
- 		break; 
-	}
-
- 	case KVM_SET_USER_MEMORY_REGION: {
-		struct kvm_userspace_memory_region map;
-		struct kvm *kvmp;
-		
-		if (ddi_copyin((const void *)arg, &map,
-			       sizeof(struct kvm_userspace_memory_region), mode) != 0) {
+		if (copyin(argp, &kvm_mp_state_ioc,
+		    sizeof (kvm_mp_state_ioc)) != 0) {
 			rval = EFAULT;
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
 			break;
 		}
 
- 		rval = kvm_vm_ioctl_set_memory_region(kvmp, &map, 1); 
- 		if (rval != 0)
+		if (kvm_mp_state_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
- 		break; 
+			break;
+		}
+
+		vcpu = kvmp->vcpus[kvm_mp_state_ioc.kvm_cpu_index];
+
+		if ((rval = kvm_arch_vcpu_ioctl_set_mpstate(vcpu,
+		    &kvm_mp_state_ioc.mp_state)) != 0)
+			break;
+
+		*rv = 0;
+		break;
 	}
+
+	case KVM_CREATE_VCPU: {
+		uint32_t id = (uintptr_t)arg;
+
+		rval = kvm_vm_ioctl_create_vcpu(ksp->kds_kvmp, id, rv);
+		break;
+	}
+
+	case KVM_SET_USER_MEMORY_REGION: {
+		struct kvm_userspace_memory_region map;
+		struct kvm *kvmp;
+
+		if (copyin(argp, &map, sizeof (map)) != 0) {
+			rval = EFAULT;
+			break;
+		}
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		rval = kvm_vm_ioctl_set_memory_region(kvmp, &map, 1);
+		break;
+	}
+
 	case KVM_GET_SUPPORTED_CPUID: {
 		struct kvm_cpuid2 *cpuid_arg = (struct kvm_cpuid2 *)arg;
 		struct kvm_cpuid2 *cpuid;
 
-		cpuid = kmem_zalloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
+		cpuid = kmem_zalloc(sizeof (struct kvm_cpuid2), KM_SLEEP);
 
-		if (ddi_copyin(cpuid_arg, cpuid, sizeof (struct kvm_cpuid2), mode)) {
+		if (copyin(argp, cpuid, sizeof (struct kvm_cpuid2)) != 0) {
+			kmem_free(cpuid, sizeof (struct kvm_cpuid2));
 			rval = EFAULT;
-			kmem_free(cpuid, sizeof(struct kvm_cpuid2));
-			break;
-		}
-		rval = kvm_dev_ioctl_get_supported_cpuid(cpuid,
-						      cpuid_arg->entries, mode);
-		if (rval) {
-			kmem_free(cpuid, sizeof(struct kvm_cpuid2));
 			break;
 		}
 
-		if (ddi_copyout(&cpuid->nent, cpuid_arg, sizeof (int), mode))
+		if ((rval = kvm_dev_ioctl_get_supported_cpuid(cpuid,
+		    cpuid_arg->entries)) != 0) {
+			kmem_free(cpuid, sizeof (struct kvm_cpuid2));
+			break;
+		}
+
+		if (copyout(&cpuid->nent, cpuid_arg, sizeof (int)))
 			rval = EFAULT;
-		kmem_free(cpuid, sizeof(struct kvm_cpuid2));
+
+		kmem_free(cpuid, sizeof (struct kvm_cpuid2));
 		break;
 	}
 
 	case KVM_GET_MSR_INDEX_LIST: {
 		struct kvm_msr_list *user_msr_list = (struct kvm_msr_list *)arg;
 		struct kvm_msr_list *msr_list;
+		size_t sz = sizeof (struct kvm_msr_list);
 		unsigned n;
 
-		msr_list = kmem_zalloc(sizeof (struct kvm_msr_list), KM_SLEEP);
+		msr_list = kmem_zalloc(sz, KM_SLEEP);
 
-		if (ddi_copyin(user_msr_list, msr_list, sizeof (struct kvm_msr_list), mode)) {
+		if (copyin(user_msr_list, msr_list, sz) != 0) {
+			kmem_free(msr_list, sz);
 			rval = EFAULT;
-			kmem_free(msr_list, sizeof(struct kvm_msr_list));
 			break;
 		}
 
 		n = msr_list->nmsrs;
 		msr_list->nmsrs = num_msrs_to_save + ARRAY_SIZE(emulated_msrs);
-		if (ddi_copyout(msr_list, user_msr_list, sizeof (struct kvm_msr_list), mode)) {
+
+		if (copyout(msr_list, user_msr_list, sz) != 0) {
+			kmem_free(msr_list, sz);
 			rval = EFAULT;
-			kmem_free(msr_list, sizeof(struct kvm_msr_list));
 			break;
 		}
+
 		if (n < msr_list->nmsrs) {
+			kmem_free(msr_list, sz);
 			rval = E2BIG;
-			kmem_free(msr_list, sizeof(struct kvm_msr_list));
 			break;
 		}
-		rval = EFAULT;
-		if (ddi_copyout(&msrs_to_save, user_msr_list->indices, 
-				num_msrs_to_save * sizeof(uint32_t), mode)) {
-			kmem_free(msr_list, sizeof(struct kvm_msr_list));
+
+		if (copyout(&msrs_to_save, user_msr_list->indices,
+		    num_msrs_to_save * sizeof (uint32_t))) {
+			kmem_free(msr_list, sz);
+			rval = EFAULT;
 			break;
 		}
-		if (ddi_copyout(&emulated_msrs,
-				user_msr_list->indices + num_msrs_to_save,
-				ARRAY_SIZE(emulated_msrs) * sizeof(uint32_t), mode)) {
-			kmem_free(msr_list, sizeof(struct kvm_msr_list));
+
+		if (copyout(&emulated_msrs, user_msr_list->indices +
+		    num_msrs_to_save, ARRAY_SIZE(emulated_msrs) *
+		    sizeof (uint32_t)) != 0) {
+			kmem_free(msr_list, sz);
+			rval = EFAULT;
 			break;
 		}
+
+		kmem_free(msr_list, sz);
+
 		rval = 0;
-		*rval_p = 0;
-		kmem_free(msr_list, sizeof(struct kvm_msr_list));
+		*rv = 0;
 		break;
 	}
+
 	case KVM_GET_REGS: {
 		struct kvm_regs_ioc *kvm_regs_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_regs_ioc);
 
-		kvm_regs_ioc =
-		    kmem_zalloc(sizeof (struct kvm_regs_ioc), KM_SLEEP);
+		kvm_regs_ioc = kmem_zalloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((caddr_t)arg, kvm_regs_ioc, sizeof (struct kvm_regs_ioc), mode)) {
+		if (copyin(argp, kvm_regs_ioc, sz) != 0) {
+			kmem_free(kvm_regs_ioc, sz);
 			rval = EFAULT;
-			kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-
-		if (!kvmp || kvm_regs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    kvm_regs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_regs_ioc, sz);
 			rval = EINVAL;
-			kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_regs_ioc->kvm_cpu_index];
-		
-		rval = kvm_arch_vcpu_ioctl_get_regs(vcpu, &kvm_regs_ioc->kvm_regs);
-		if (rval) {
-			rval = EINVAL;
-			kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
+
+		if ((rval = kvm_arch_vcpu_ioctl_get_regs(vcpu,
+		    &kvm_regs_ioc->kvm_regs)) != 0) {
+			kmem_free(kvm_regs_ioc, sz);
 			break;
 		}
-		if (ddi_copyout(kvm_regs_ioc, (caddr_t)arg, sizeof(struct kvm_regs_ioc), mode))
+
+		if (copyout(kvm_regs_ioc, argp, sz) != 0)
 			rval = EFAULT;
-		*rval_p = 0;
-		kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
+
+		*rv = 0;
+		kmem_free(kvm_regs_ioc, sz);
 		break;
 	}
+
 	case KVM_SET_REGS: {
 		struct kvm_regs_ioc *kvm_regs_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_regs_ioc);
 
-		kvm_regs_ioc =
-		    kmem_zalloc(sizeof (struct kvm_regs_ioc), KM_SLEEP);
+		kvm_regs_ioc = kmem_zalloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((caddr_t)arg, kvm_regs_ioc, sizeof (struct kvm_regs_ioc), mode)) {
+		if (copyin(argp, kvm_regs_ioc, sz) != 0) {
+			kmem_free(kvm_regs_ioc, sz);
 			rval = EFAULT;
-			kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || kvm_regs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    kvm_regs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_regs_ioc, sz);
 			rval = EINVAL;
-			kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_regs_ioc->kvm_cpu_index];
 
-		rval = kvm_arch_vcpu_ioctl_set_regs(vcpu, &kvm_regs_ioc->kvm_regs);
-		if (rval)
-			rval = EINVAL;
-		*rval_p = 0;
-		kmem_free(kvm_regs_ioc, sizeof(struct kvm_regs_ioc));
+		if ((rval = kvm_arch_vcpu_ioctl_set_regs(vcpu,
+		    &kvm_regs_ioc->kvm_regs)) != 0) {
+			kmem_free(kvm_regs_ioc, sz);
+			break;
+		}
+
+		*rv = 0;
+		kmem_free(kvm_regs_ioc, sz);
 		break;
 	}
+
+	case KVM_SET_SIGNAL_MASK: {
+		struct kvm_signal_mask *sigmask_arg = argp;
+		struct kvm_signal_mask kvm_sigmask;
+		sigset_t sigset;
+
+		if (copyin(argp, &kvm_sigmask, sizeof (kvm_sigmask)) != 0) {
+			rval = EFAULT;
+			break;
+		}
+
+		if (kvm_sigmask.len != sizeof (sigset)) {
+			rval = EINVAL;
+			break;
+		}
+
+		if (copyin(sigmask_arg->sigset,
+		    &sigset, sizeof (sigset)) != 0) {
+			rval = EINVAL;
+			break;
+		}
+
+#ifdef XXX
+		rval = kvm_vcpu_ioctl_set_sigmask(vcpu, &sigset);
+#else
+		XXX_KVM_PROBE;
+		rval = EINVAL;
+#endif
+		break;
+	}
+
 	case KVM_GET_FPU: {
 		struct kvm_fpu_ioc *kvm_fpu_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_fpu_ioc);
 
-		kvm_fpu_ioc =
-		    kmem_zalloc(sizeof(struct kvm_fpu_ioc), KM_SLEEP);
+		kvm_fpu_ioc = kmem_zalloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((caddr_t)arg, kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc), mode)) {
+		if (copyin(argp, kvm_fpu_ioc, sz) != 0) {
+			kmem_free(kvm_fpu_ioc, sz);
 			rval = EFAULT;
-			kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || kvm_fpu_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    kvm_fpu_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_fpu_ioc, sz);
 			rval = EINVAL;
-			kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_fpu_ioc->kvm_cpu_index];
 
 		rval = kvm_arch_vcpu_ioctl_get_fpu(vcpu, &kvm_fpu_ioc->fpu);
-		if (rval) {
-			rval = EINVAL;
-			kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
-			break;
-		}
 
-		if (ddi_copyout(kvm_fpu_ioc, (caddr_t)arg, sizeof(struct kvm_fpu_ioc), mode))
+		if (rval == 0 && copyout(kvm_fpu_ioc, argp, sz) != 0)
 			rval = EFAULT;
 
-		*rval_p = 0;
-		kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
+		kmem_free(kvm_fpu_ioc, sz);
+		*rv = 0;
 		break;
 	}
+
 	case KVM_SET_FPU: {
 		struct kvm_fpu_ioc *kvm_fpu_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_fpu_ioc);
 
-		kvm_fpu_ioc =
-		    kmem_zalloc(sizeof (struct kvm_fpu_ioc), KM_SLEEP);
+		kvm_fpu_ioc = kmem_zalloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((caddr_t)arg, kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc), mode)) {
+		if (copyin(argp, kvm_fpu_ioc, sz) != 0) {
+			kmem_free(kvm_fpu_ioc, sz);
 			rval = EFAULT;
-			kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || kvm_fpu_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    kvm_fpu_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_fpu_ioc, sz);
 			rval = EINVAL;
-			kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_fpu_ioc->kvm_cpu_index];
 
 		rval = kvm_arch_vcpu_ioctl_set_fpu(vcpu, &kvm_fpu_ioc->fpu);
-		if (rval)
-			rval = EINVAL;
-		*rval_p = 0;
-		kmem_free(kvm_fpu_ioc, sizeof(struct kvm_fpu_ioc));
+		kmem_free(kvm_fpu_ioc, sz);
+		*rv = 0;
 		break;
 	}
+
 	case KVM_GET_SREGS: {
 		struct kvm_sregs_ioc *kvm_sregs_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_sregs_ioc);
 
-		kvm_sregs_ioc =
-		    kmem_zalloc(sizeof (struct kvm_sregs_ioc), KM_SLEEP);
+		kvm_sregs_ioc = kmem_zalloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((caddr_t)arg, kvm_sregs_ioc, sizeof (struct kvm_sregs_ioc), mode)) {
+		if (copyin(argp, kvm_sregs_ioc, sz) != 0) {
+			kmem_free(kvm_sregs_ioc, sz);
 			rval = EFAULT;
-			kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || kvm_sregs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    kvm_sregs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_sregs_ioc, sz);
 			rval = EINVAL;
-			kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_sregs_ioc->kvm_cpu_index];
-		
-		rval = kvm_arch_vcpu_ioctl_get_sregs(vcpu, &kvm_sregs_ioc->sregs);
-		if (rval) {
-			rval = EINVAL;
-			kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
+
+		if ((rval = kvm_arch_vcpu_ioctl_get_sregs(vcpu,
+		    &kvm_sregs_ioc->sregs)) != 0) {
+			kmem_free(kvm_sregs_ioc, sz);
 			break;
 		}
-		if (ddi_copyout(kvm_sregs_ioc, (caddr_t)arg, sizeof(struct kvm_sregs_ioc), mode))
+
+		if (copyout(kvm_sregs_ioc, argp, sz) != 0)
 			rval = EFAULT;
-		*rval_p = 0;
-		kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
+
+		kmem_free(kvm_sregs_ioc, sz);
+		*rv = 0;
 		break;
 	}
+
 	case KVM_SET_SREGS: {
 		struct kvm_sregs_ioc *kvm_sregs_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_sregs_ioc);
 
-		kvm_sregs_ioc =
-		    kmem_zalloc(sizeof (struct kvm_sregs_ioc), KM_SLEEP);
+		kvm_sregs_ioc = kmem_zalloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((caddr_t)arg, kvm_sregs_ioc, sizeof (struct kvm_sregs_ioc), mode)) {
+		if (copyin(argp, kvm_sregs_ioc, sz) != 0) {
+			kmem_free(kvm_sregs_ioc, sz);
 			rval = EFAULT;
-			kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || kvm_sregs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    kvm_sregs_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(kvm_sregs_ioc, sz);
 			rval = EINVAL;
-			kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_sregs_ioc->kvm_cpu_index];
-		
-		rval = kvm_arch_vcpu_ioctl_set_sregs(vcpu, &kvm_sregs_ioc->sregs);
-		if (rval)
-			rval = EINVAL;
-		*rval_p = 0;
-		kmem_free(kvm_sregs_ioc, sizeof(struct kvm_sregs_ioc));
+		rval = kvm_arch_vcpu_ioctl_set_sregs(vcpu,
+		    &kvm_sregs_ioc->sregs);
+
+		kmem_free(kvm_sregs_ioc, sizeof (struct kvm_sregs_ioc));
+		*rv = 0;
 		break;
-	}	
+	}
+
 	case KVM_SET_CPUID2: {
 		struct kvm_cpuid2_ioc *cpuid2_ioc;
 		struct kvm_cpuid2 *cpuid2_data;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_cpuid2_ioc);
 
-		cpuid2_ioc =
-		    kmem_alloc(sizeof (struct kvm_cpuid2_ioc), KM_SLEEP);
-		cpuid2_data = kmem_alloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
+		cpuid2_ioc = kmem_alloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((const char *)arg, cpuid2_ioc, sizeof (struct kvm_cpuid2_ioc), mode)) {
-			kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
-			kmem_free(cpuid2_data, sizeof(struct kvm_cpuid2));
+		if (copyin(argp, cpuid2_ioc, sz) != 0) {
+			kmem_free(cpuid2_ioc, sz);
 			rval = EFAULT;
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || cpuid2_ioc->cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    cpuid2_ioc->cpu_index >= kvmp->online_vcpus) {
+			kmem_free(cpuid2_ioc, sz);
 			rval = EINVAL;
-			kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
-			kmem_free(cpuid2_data, sizeof(struct kvm_cpuid2));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[cpuid2_ioc->cpu_index];
-		
-		bcopy(&cpuid2_ioc->cpuid_data, cpuid2_data, sizeof (struct kvm_cpuid2));
+
+		cpuid2_data = kmem_alloc(sizeof (struct kvm_cpuid2), KM_SLEEP);
+		bcopy(&cpuid2_ioc->cpuid_data, cpuid2_data,
+		    sizeof (struct kvm_cpuid2));
+
 		rval = kvm_vcpu_ioctl_set_cpuid2(vcpu, cpuid2_data,
-						 cpuid2_data->entries, mode);
+		    cpuid2_data->entries);
 
+		kmem_free(cpuid2_data, sizeof (struct kvm_cpuid2));
+		kmem_free(cpuid2_ioc, sz);
 
-		kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
-		kmem_free(cpuid2_data, sizeof(struct kvm_cpuid2));
-
-		
-		if (rval)
-			rval = EINVAL;
 		break;
 	}
 
 	case KVM_GET_CPUID2: {
 		struct kvm_cpuid2_ioc *cpuid2_ioc;
 		struct kvm_cpuid2 *cpuid2_data;
-		struct kvm_vcpu *vcpu;
 		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_cpuid2_ioc);
 
-		cpuid2_ioc =
-		    kmem_zalloc(sizeof (struct kvm_cpuid2_ioc), KM_SLEEP);
-		cpuid2_data = kmem_zalloc(sizeof(struct kvm_cpuid2), KM_SLEEP);
+		cpuid2_ioc = kmem_alloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((const char *)arg, cpuid2_ioc, sizeof (struct kvm_cpuid2_ioc), mode)) {
-			kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
-			kmem_free(cpuid2_data, sizeof(struct kvm_cpuid2));
+		if (copyin(argp, cpuid2_ioc, sz) != 0) {
+			kmem_free(cpuid2_ioc, sz);
 			rval = EFAULT;
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || cpuid2_ioc->cpu_index >= kvmp->online_vcpus) {
-			kmem_free(cpuid2_data, sizeof(struct kvm_cpuid2));
-			kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    cpuid2_ioc->cpu_index >= kvmp->online_vcpus) {
+			kmem_free(cpuid2_ioc, sz);
 			rval = EINVAL;
 			break;
 		}
 
 		vcpu = kvmp->vcpus[cpuid2_ioc->cpu_index];
-		
-		bcopy(&cpuid2_ioc->cpuid_data, cpuid2_data, sizeof (struct kvm_cpuid2));
+
+		cpuid2_data = kmem_alloc(sizeof (struct kvm_cpuid2), KM_SLEEP);
+		bcopy(&cpuid2_ioc->cpuid_data, cpuid2_data,
+		    sizeof (struct kvm_cpuid2));
 
 		rval = kvm_vcpu_ioctl_get_cpuid2(vcpu, cpuid2_data,
-						 cpuid2_data->entries, mode);
+		    cpuid2_data->entries);
+
 		if (rval) {
-			kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
-			kmem_free(cpuid2_data, sizeof(struct kvm_cpuid2));
+			kmem_free(cpuid2_ioc, sz);
+			kmem_free(cpuid2_data, sizeof (struct kvm_cpuid2));
+			break;
+		}
+
+		if (copyout(cpuid2_ioc, argp, sz) != 0)
+			rval = EFAULT;
+
+		kmem_free(cpuid2_data, sizeof (struct kvm_cpuid2));
+		kmem_free(cpuid2_ioc, sz);
+		break;
+	}
+
+	case KVM_GET_LAPIC: {
+		struct kvm_lapic_ioc *lapic_ioc;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_lapic_ioc);
+
+		lapic_ioc = kmem_zalloc(sz, KM_SLEEP);
+
+		if (copyin(argp, lapic_ioc, sz) != 0) {
+			kmem_free(lapic_ioc, sz);
+			rval = EFAULT;
+			break;
+		}
+
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    lapic_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(lapic_ioc, sz);
 			rval = EINVAL;
 			break;
 		}
 
-		if (ddi_copyout(cpuid2_ioc, (char *)arg, sizeof (struct kvm_cpuid2_ioc), mode))
+		vcpu = kvmp->vcpus[lapic_ioc->kvm_cpu_index];
+
+		if (vcpu->arch.apic == NULL) {
+			kmem_free(lapic_ioc, sz);
+			rval = EINVAL;
+			break;
+		}
+
+		rval = kvm_vcpu_ioctl_get_lapic(vcpu, &lapic_ioc->s);
+
+		if (rval == 0 && copyout(lapic_ioc, argp, sz) != 0)
 			rval = EFAULT;
-		kmem_free(cpuid2_data, sizeof(struct kvm_cpuid2));
-		kmem_free(cpuid2_ioc, sizeof(struct kvm_cpuid2_ioc));
+
+		kmem_free(lapic_ioc, sz);
+		break;
+	}
+
+	case KVM_SET_LAPIC: {
+		struct kvm_lapic_ioc *lapic_ioc;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_lapic_ioc);
+
+		lapic_ioc = kmem_zalloc(sz, KM_SLEEP);
+
+		if (copyin(argp, lapic_ioc, sz) != 0) {
+			kmem_free(lapic_ioc, sz);
+			rval = EFAULT;
+			break;
+		}
+
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    lapic_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(lapic_ioc, sz);
+			rval = EINVAL;
+			break;
+		}
+
+		vcpu = kvmp->vcpus[lapic_ioc->kvm_cpu_index];
+
+		if (vcpu->arch.apic == NULL) {
+			kmem_free(lapic_ioc, sz);
+			rval = EINVAL;
+			break;
+		}
+
+		rval = kvm_vcpu_ioctl_set_lapic(vcpu, &lapic_ioc->s);
+		kmem_free(lapic_ioc, sz);
 		break;
 	}
 
@@ -15052,106 +15179,32 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_vcpu_events_ioc *events_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
+		size_t sz = sizeof (struct kvm_vcpu_events_ioc);
 
-		events_ioc =
-		    kmem_zalloc(sizeof (struct kvm_vcpu_events_ioc), KM_SLEEP);
+		events_ioc = kmem_zalloc(sz, KM_SLEEP);
 
-		if (ddi_copyin((const char *)arg, events_ioc, sizeof (struct kvm_vcpu_events_ioc), mode)) {
+		if (copyin(argp, events_ioc, sz) != 0) {
+			kmem_free(events_ioc, sz);
 			rval = EFAULT;
-			kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || events_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    events_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(events_ioc, sz);
 			rval = EINVAL;
-			kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[events_ioc->kvm_cpu_index];
-		
+
 		kvm_vcpu_ioctl_x86_get_vcpu_events(vcpu, &events_ioc->events);
 
-		if (ddi_copyout(events_ioc, (caddr_t)arg, sizeof(struct kvm_vcpu_events_ioc), mode))
+		if (copyout(events_ioc, argp, sz) != 0)
 			rval = EFAULT;
-		rval = 0;
-		*rval_p = 0;
-		kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
-		break;
-	}
-	case KVM_GET_LAPIC: {
-		struct kvm_lapic_ioc *lapic_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
 
-		lapic_ioc =
-		    kmem_zalloc(sizeof (struct kvm_lapic_ioc), KM_SLEEP);
-
-		if (ddi_copyin((const char *)arg, lapic_ioc, sizeof (struct kvm_lapic_ioc), mode)) {
-			rval = EFAULT;
-			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-			break;
-		}
-
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || lapic_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			rval = EINVAL;
-			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-			break;
-		}
-
-		vcpu = kvmp->vcpus[lapic_ioc->kvm_cpu_index];
-		
-		if (!vcpu->arch.apic) {
-			rval = EINVAL;
-			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-			break;
-		}
-
-		rval = kvm_vcpu_ioctl_get_lapic(vcpu, &lapic_ioc->s);
-		if (rval) {
-			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-			break;
-		}
-		if (ddi_copyout(lapic_ioc, (caddr_t)arg, sizeof(struct kvm_lapic_ioc), mode)) 
-			rval = EFAULT;
-		rval = 0;
-		kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-		break;
-	}
-	case KVM_SET_LAPIC: {
-		struct kvm_lapic_ioc *lapic_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-
-		lapic_ioc = kmem_zalloc(sizeof(struct kvm_lapic_ioc), KM_SLEEP);
-		if (ddi_copyin((const char *)arg, lapic_ioc, sizeof (struct kvm_lapic_ioc), mode)) {
-			rval = EFAULT;
-			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-			break;
-		}
-
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || lapic_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			rval = EINVAL;
-			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-			break;
-		}
-
-		vcpu = kvmp->vcpus[lapic_ioc->kvm_cpu_index];
-		
-		if (!vcpu->arch.apic) {
-			rval = EINVAL;
-			kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-			break;
-		}
-
-		rval = kvm_vcpu_ioctl_set_lapic(vcpu, &lapic_ioc->s);
-		kmem_free(lapic_ioc, sizeof(struct kvm_lapic_ioc));
-		if (rval)
-			break;
-		rval = 0;
+		kmem_free(events_ioc, sz);
+		*rv = 0;
 		break;
 	}
 
@@ -15159,90 +15212,83 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		struct kvm_vcpu_events_ioc *events_ioc;
 		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
-		
-		events_ioc =
-		    kmem_zalloc(sizeof (struct kvm_vcpu_events_ioc), KM_SLEEP);
-		if (ddi_copyin((const char *)arg, events_ioc, sizeof (struct kvm_vcpu_events_ioc), mode)) {
+		size_t sz = sizeof (struct kvm_vcpu_events_ioc);
+
+		events_ioc = kmem_zalloc(sz, KM_SLEEP);
+
+		if (copyin(argp, events_ioc, sz) != 0) {
+			kmem_free(events_ioc, sz);
 			rval = EFAULT;
-			kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || events_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    events_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
+			kmem_free(events_ioc, sz);
 			rval = EINVAL;
-			kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
 			break;
 		}
 
 		vcpu = kvmp->vcpus[events_ioc->kvm_cpu_index];
 
-		rval = kvm_vcpu_ioctl_x86_set_vcpu_events(vcpu, &events_ioc->events);
-		kmem_free(events_ioc, sizeof(struct kvm_vcpu_events_ioc));
+		rval = kvm_vcpu_ioctl_x86_set_vcpu_events(vcpu,
+		    &events_ioc->events);
+
+		kmem_free(events_ioc, sz);
 		break;
 	}
-	case KVM_GET_VCPU_MMAP_SIZE:
-		if (arg != NULL) {
-			rval = EINVAL;
-			break;
-		}
-		*rval_p = ptob(KVM_VCPU_MMAP_LENGTH);
-		break;
-	case KVM_SET_TSS_ADDR:
-	{
+
+	case KVM_SET_TSS_ADDR: {
 		struct kvm_tss kvm_tss;
 		struct kvm *kvmp;
-		if (ddi_copyin((const void *)arg, &kvm_tss,
-			       sizeof(kvm_tss), mode) != 0) {
+
+		if (copyin(argp, &kvm_tss, sizeof (kvm_tss)) != 0) {
 			rval = EFAULT;
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
 			break;
 		}
+
 		rval = kvm_vm_ioctl_set_tss_addr(kvmp, (caddr_t)kvm_tss.addr);
 		break;
 	}
+
 	case KVM_INTERRUPT: {
 		struct kvm_interrupt_ioc irq_ioc;
 		struct kvm *kvmp;
-		struct kvm_vcpu*vcpu;
+		struct kvm_vcpu *vcpu;
 
-		if (ddi_copyin((caddr_t)arg, &irq_ioc, sizeof (struct kvm_interrupt_ioc), mode)) {
+		if (copyin(argp, &irq_ioc, sizeof (irq_ioc)) != 0) {
 			rval = EFAULT;
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (!kvmp || irq_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
+		if ((kvmp = ksp->kds_kvmp) == NULL ||
+		    irq_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			break;
 		}
 
 		vcpu = kvmp->vcpus[irq_ioc.kvm_cpu_index];
-
 		rval = kvm_vcpu_ioctl_interrupt(vcpu, &irq_ioc.intr);
 		break;
 	}
 
 #ifdef CONFIG_KVM_APIC_ARCHITECTURE
-	case KVM_SET_BOOT_CPU_ID:
-	{
+	case KVM_SET_BOOT_CPU_ID: {
 		struct kvm_set_boot_cpu_id_ioc boot_cpu_id_ioc;
 		struct kvm *kvmp;
 
-		rval = 0;
-		if (ddi_copyin((const void *)arg, &boot_cpu_id_ioc,
-			       sizeof(boot_cpu_id_ioc), mode) != 0) {
+		if (copyin(argp, &boot_cpu_id_ioc,
+		    sizeof (boot_cpu_id_ioc)) != 0) {
 			rval = EFAULT;
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
 			break;
 		}
@@ -15255,11 +15301,11 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 #else
 		{
 			XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 			kvmp->bsp_vcpu_id = boot_cpu_id_ioc.id;
 		}
 
-		*rval_p = kvmp->bsp_vcpu_id;
+		*rv = kvmp->bsp_vcpu_id;
 		mutex_exit(&kvmp->lock);
 		break;
 	}
@@ -15267,54 +15313,52 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	case KVM_REGISTER_COALESCED_MMIO: {
 		struct kvm *kvmp;
-		struct kvm_coalesced_mmio_zone_ioc *zone_ioc =
-		    kmem_zalloc(sizeof (struct kvm_coalesced_mmio_zone_ioc),
-		    KM_SLEEP);
+		struct kvm_coalesced_mmio_zone_ioc *zone_ioc;
+		size_t sz = sizeof (struct kvm_coalesced_mmio_zone_ioc);
 
-		rval = EFAULT;
-		if (ddi_copyin((caddr_t)arg, zone_ioc, sizeof (struct kvm_coalesced_mmio_zone_ioc), mode)) {
-			kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
+		zone_ioc = kmem_zalloc(sz, KM_SLEEP);
+
+		if (copyin(argp, zone_ioc, sz) != 0) {
+			kmem_free(zone_ioc, sz);
+			rval = EFAULT;
 			break;
 		}
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
-			kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
+			kmem_free(zone_ioc, sz);
 			break;
 		}
 
-		rval = ENXIO;
-		rval = kvm_vm_ioctl_register_coalesced_mmio(kvmp, &zone_ioc->zone);
-		kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
-		if (rval)
-			break;
-		rval = 0;
+		rval = kvm_vm_ioctl_register_coalesced_mmio(kvmp,
+		    &zone_ioc->zone);
+
+		kmem_free(zone_ioc, sz);
 		break;
 	}
+
 	case KVM_UNREGISTER_COALESCED_MMIO: {
 		struct kvm_coalesced_mmio_zone_ioc *zone_ioc;
 		struct kvm *kvmp;
+		size_t sz = sizeof (struct kvm_coalesced_mmio_zone_ioc);
 
-		zone_ioc = kmem_zalloc(sizeof(struct kvm_coalesced_mmio_zone_ioc), KM_SLEEP);
-		rval = EFAULT;
-		if (ddi_copyin((caddr_t)arg, zone_ioc, sizeof (struct kvm_coalesced_mmio_zone_ioc), mode)) {
-			kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
+		zone_ioc = kmem_zalloc(sz, KM_SLEEP);
+
+		if (copyin(argp, zone_ioc, sz) != 0) {
+			kmem_free(zone_ioc, sz);
 			break;
 		}
 
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			kmem_free(zone_ioc, sz);
 			rval = EINVAL;
-			kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
 			break;
 		}
 
-		rval = ENXIO;
-		rval = kvm_vm_ioctl_unregister_coalesced_mmio(kvmp, &zone_ioc->zone);
-		kmem_free(zone_ioc, sizeof(struct kvm_coalesced_mmio_zone_ioc));
-		if (rval)
-			break;
-		rval = 0;
+		rval = kvm_vm_ioctl_unregister_coalesced_mmio(kvmp,
+		    &zone_ioc->zone);
+
+		kmem_free(zone_ioc, sz);
 		break;
 	}
 #endif
@@ -15330,43 +15374,47 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		 * (kvm_kirq_routing) is approximately 0xc038 currently.
 		 */
 		route = kmem_zalloc(sizeof (kvm_kirq_routing_t), KM_SLEEP);
-		rval = EFAULT;
 
 		/*
 		 * copyin the number of routes, then copyin the routes
 		 * themselves.
 		 */
-		if (ddi_copyin((const char *)arg, &nroutes,
-			       sizeof(nroutes), mode) || nroutes <= 0) {
+		if (copyin(argp, &nroutes, sizeof (nroutes)) != 0) {
 			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			rval = EFAULT;
 			break;
 		}
 
-		if (ddi_copyin((const char *)arg, route,
-			       sizeof(struct kvm_irq_routing) +
-			       (nroutes-1)*sizeof (struct kvm_irq_routing_entry), mode)) {
+		if (nroutes <= 0) {
 			kmem_free(route, sizeof (kvm_kirq_routing_t));
-			break;
-		}
-
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
 			rval = EINVAL;
-			kmem_free(route, sizeof (kvm_kirq_routing_t));
 			break;
 		}
 
-		rval = EINVAL;
-		
+		if (copyin(argp, route,
+		    sizeof (struct kvm_irq_routing) + (nroutes - 1) *
+		    sizeof (struct kvm_irq_routing_entry)) != 0) {
+			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			rval = EFAULT;
+			break;
+		}
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			rval = EINVAL;
+			break;
+		}
+
 		if (route->nr >= KVM_MAX_IRQ_ROUTES || route->flags) {
 			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			rval = EINVAL;
 			break;
 		}
 
 		rval = kvm_set_irq_routing(kvmp, route->entries,
-		   route->nr, route->flags);
-		*rval_p = 0;
+		    route->nr, route->flags);
 		kmem_free(route, sizeof (kvm_kirq_routing_t));
+		*rv = 0;
 		break;
 	}
 #endif /* KVM_CAP_IRQ_ROUTING */
@@ -15374,63 +15422,46 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 	case KVM_IRQ_LINE: {
 		struct kvm_irq_level_ioc *irq_event_ioc;
 		struct kvm *kvmp;
+		size_t sz = sizeof (struct kvm_irq_level_ioc);
+		int32_t status;
 
-		irq_event_ioc = kmem_zalloc(sizeof(struct kvm_irq_level_ioc), KM_SLEEP);
-		rval = EFAULT;
-		if (ddi_copyin((caddr_t)arg, irq_event_ioc, sizeof (struct kvm_irq_level_ioc), mode)) {
-			kmem_free(irq_event_ioc, sizeof (struct kvm_irq_level_ioc));
-			break;
-		}
+		irq_event_ioc = kmem_zalloc(sz, KM_SLEEP);
 
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
-			rval = EINVAL;
-			kmem_free(irq_event_ioc, sizeof(struct kvm_irq_level_ioc));
-			break;
-		}
-		
-		if (irqchip_in_kernel(kvmp)) {
-			int32_t status;
-			status = kvm_set_irq(kvmp, KVM_USERSPACE_IRQ_SOURCE_ID,
-					irq_event_ioc->event.irq, irq_event_ioc->event.level);
-			if (cmd == KVM_IRQ_LINE_STATUS) {
-				irq_event_ioc->event.status = status;
-				if (ddi_copyout(irq_event_ioc, (caddr_t)arg, sizeof (struct kvm_irq_level_ioc), mode)) {
-					kmem_free(irq_event_ioc, sizeof(struct kvm_irq_level_ioc));
-					rval = EFAULT;
-					break;
-				}
-			}
-			rval = 0;
-			kmem_free(irq_event_ioc, sizeof(struct kvm_irq_level_ioc));
-		}
-		break;
-	}
-
-	case KVM_GET_IRQCHIP: {
-		struct kvm *kvmp;
-		struct kvm_irqchip chip;
-		/* 0: PIC master, 1: PIC slave, 2: IOAPIC */
-
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
-			rval = EINVAL;
-			break;
-		}
-
-		rval = ENXIO;
-		if (!irqchip_in_kernel(kvmp))
-			break;
-
-		rval = kvm_vm_ioctl_get_irqchip(kvmp, &chip);
-		if (rval) {
-			break;
-		}
-		if (ddi_copyout(&chip, (caddr_t)arg, sizeof (struct kvm_irqchip), mode))
+		if (copyin(argp, irq_event_ioc, sz) != 0) {
+			kmem_free(irq_event_ioc, sz);
 			rval = EFAULT;
-		rval = 0;
+			break;
+		}
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			kmem_free(irq_event_ioc, sz);
+			rval = EINVAL;
+			break;
+		}
+
+		if (!irqchip_in_kernel(kvmp)) {
+			kmem_free(irq_event_ioc, sz);
+			rval = ENXIO;
+			break;
+		}
+
+		status = kvm_set_irq(kvmp, KVM_USERSPACE_IRQ_SOURCE_ID,
+		    irq_event_ioc->event.irq, irq_event_ioc->event.level);
+
+		if (cmd == KVM_IRQ_LINE_STATUS) {
+			irq_event_ioc->event.status = status;
+
+			if (copyout(irq_event_ioc, argp, sz) != 0) {
+				kmem_free(irq_event_ioc, sz);
+				rval = EFAULT;
+				break;
+			}
+		}
+
+		kmem_free(irq_event_ioc, sz);
 		break;
 	}
+
 	case KVM_SET_VAPIC_ADDR: {
 		struct kvm_vapic_ioc kvm_vapic_ioc;
 		struct kvm *kvmp = ksp->kds_kvmp;
@@ -15441,48 +15472,76 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 			break;
 		}
 
-		rval = EINVAL;
-		if (!irqchip_in_kernel(kvmp))
+		if (!irqchip_in_kernel(kvmp)) {
+			rval = EINVAL;
 			break;
-		rval = EFAULT;
-		if (ddi_copyin((caddr_t)arg, &kvm_vapic_ioc, sizeof (struct kvm_vapic_ioc), mode))
-			break;
+		}
 
-		if (!kvmp || kvm_vapic_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
+		if (copyin(argp, &kvm_vapic_ioc,
+		    sizeof (struct kvm_vapic_ioc)) != 0) {
+			rval = EFAULT;
+			break;
+		}
+
+		if (kvm_vapic_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
 			rval = EINVAL;
 			break;
 		}
 
 		vcpu = kvmp->vcpus[kvm_vapic_ioc.kvm_cpu_index];
 
-		rval = 0;
 		kvm_lapic_set_vapic_addr(vcpu, kvm_vapic_ioc.va.vapic_addr);
+		break;
+	}
+
+	case KVM_GET_IRQCHIP: {
+		struct kvm *kvmp;
+		struct kvm_irqchip chip;
+		size_t sz = sizeof (struct kvm_irqchip);
+		/* 0: PIC master, 1: PIC slave, 2: IOAPIC */
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		if (!irqchip_in_kernel(kvmp)) {
+			rval = ENXIO;
+			break;
+		}
+
+		rval = kvm_vm_ioctl_get_irqchip(kvmp, &chip);
+
+		if (rval == 0 && copyout(&chip, argp, sz) != 0) {
+			rval = EFAULT;
+			break;
+		}
+
 		break;
 	}
 
 	case KVM_SET_IRQCHIP: {
 		struct kvm *kvmp;
 		struct kvm_irqchip chip;
+		size_t sz = sizeof (struct kvm_irqchip);
 		/* 0: PIC master, 1: PIC slave, 2: IOAPIC */
 
-		rval = EFAULT;
-		if (ddi_copyin((caddr_t)arg, &chip, sizeof (struct kvm_irqchip), mode))
-			break;
-
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
 			break;
 		}
 
-		rval = ENXIO;
-		if (!irqchip_in_kernel(kvmp)) {
+		if (copyin(argp, &chip, sizeof (struct kvm_irqchip)) != 0) {
+			rval = EFAULT;
 			break;
 		}
-		rval = kvm_vm_ioctl_set_irqchip(kvmp, &chip);
-		if (rval)
+
+		if (!irqchip_in_kernel(kvmp)) {
+			rval = ENXIO;
 			break;
-		rval = 0;
+		}
+
+		rval = kvm_vm_ioctl_set_irqchip(kvmp, &chip);
 		break;
 	}
 	default:
@@ -15493,10 +15552,12 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int mode, cred_t *cred_p, int *rval_
 		rval = EINVAL;  /* x64, others may do other things... */
 	}
 
-	if (*rval_p == -1)
+	if (*rv == -1)
 		return (EINVAL);
 	return (rval);
 }
+
+/* BEGIN CSTYLED */
 
 /*
  * mmap(2), segmap(9E), and devmap(9E)
