@@ -13927,6 +13927,104 @@ kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 	mutex_exit(&kvm->irq_lock);
 }
 
+static struct kvm_pit *speaker_to_pit(struct kvm_io_device *dev)
+{
+	struct kvm_pit *pit = (struct kvm_pit *)(((caddr_t)dev)
+						 - offsetof(struct kvm_pit,
+							    speaker_dev));
+	return pit;
+}
+
+static int pit_get_gate(struct kvm *kvm, int channel)
+{
+	ASSERT(mutex_owned(&kvm->arch.vpit->pit_state.lock));
+
+	return kvm->arch.vpit->pit_state.channels[channel].gate;
+}
+
+static int speaker_ioport_read(struct kvm_io_device *this,
+			       gpa_t addr, int len, void *data)
+{
+	struct kvm_pit *pit = speaker_to_pit(this);
+	struct kvm_kpit_state *pit_state = &pit->pit_state;
+	struct kvm *kvm = pit->kvm;
+	unsigned int refresh_clock;
+	int ret;
+	if (addr != KVM_SPEAKER_BASE_ADDRESS)
+		return -EOPNOTSUPP;
+
+	/* Refresh clock toggles at about 15us. We approximate as 2^14ns. */
+#ifdef XXX
+	refresh_clock = ((unsigned int)ktime_to_ns(ktime_get()) >> 14) & 1;
+#else
+	refresh_clock = ((unsigned int)gethrtime() >> 14) &1;
+	XXX_KVM_PROBE;
+#endif /* XXX */
+
+	mutex_enter(&pit_state->lock);
+	ret = ((pit_state->speaker_data_on << 1) | pit_get_gate(kvm, 2) |
+		(pit_get_out(kvm, 2) << 5) | (refresh_clock << 4));
+	if (len > sizeof(ret))
+		len = sizeof(ret);
+	memcpy(data, (char *)&ret, len);
+	mutex_exit(&pit_state->lock);
+	return 0;
+}
+
+static void pit_set_gate(struct kvm *kvm, int channel, uint32_t val)
+{
+	struct kvm_kpit_channel_state *c =
+		&kvm->arch.vpit->pit_state.channels[channel];
+
+	ASSERT(mutex_owned(&kvm->arch.vpit->pit_state.lock));
+
+	switch (c->mode) {
+	default:
+	case 0:
+	case 4:
+		/* XXX: just disable/enable counting */
+		break;
+	case 1:
+	case 2:
+	case 3:
+	case 5:
+		/* Restart counting on rising edge. */
+#ifdef XXX
+		if (c->gate < val)
+			c->count_load_time = ktime_get();
+#else
+		if (c->gate < val)
+			c->count_load_time = gethrtime();
+		XXX_KVM_PROBE;
+#endif /* XXX */
+		break;
+	}
+
+	c->gate = val;
+}
+
+static int speaker_ioport_write(struct kvm_io_device *this,
+				gpa_t addr, int len, const void *data)
+{
+	struct kvm_pit *pit = speaker_to_pit(this);
+	struct kvm_kpit_state *pit_state = &pit->pit_state;
+	struct kvm *kvm = pit->kvm;
+	uint32_t val = *(uint32_t *) data;
+	if (addr != KVM_SPEAKER_BASE_ADDRESS)
+		return -EOPNOTSUPP;
+
+	mutex_enter(&pit_state->lock);
+	pit_state->speaker_data_on = (val >> 1) & 1;
+	pit_set_gate(kvm, 2, val & 1);
+	mutex_exit(&pit_state->lock);
+	return 0;
+}
+
+static const struct kvm_io_device_ops speaker_dev_ops = {
+	.read     = speaker_ioport_read,
+	.write    = speaker_ioport_write,
+};
+
 /* Caller must hold slots_lock */
 struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 {
@@ -13981,7 +14079,6 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 	if (ret < 0)
 		goto fail;
 
-#ifdef XXX
 	if (flags & KVM_PIT_SPEAKER_DUMMY) {
 		kvm_iodevice_init(&pit->speaker_dev, &speaker_dev_ops);
 		ret = kvm_io_bus_register_dev(kvm, KVM_PIO_BUS,
@@ -13989,9 +14086,6 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 		if (ret < 0)
 			goto fail_unregister;
 	}
-#else
-	XXX_KVM_PROBE;
-#endif /*XXX*/
 	return pit;
 
 fail_unregister:
