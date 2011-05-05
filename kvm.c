@@ -12197,6 +12197,9 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 			++vcpu->stat.signal_exits;
 #endif /*XXX*/
 		}
+
+		if (CPU->cpu_runrun || CPU->cpu_kprunrun)
+			preempt();
 	}
 #ifdef XXX
 	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
@@ -14324,6 +14327,18 @@ out:
 /* END CSTYLED */
 
 static int
+kvm_vcpu_ioctl_set_sigmask(struct kvm_vcpu *vcpu, sigset_t *sigset)
+{
+	if (sigset) {
+		vcpu->sigset_active = 1;
+		vcpu->sigset = *sigset;
+	} else
+		vcpu->sigset_active = 0;
+
+	return (0);
+}
+
+static int
 kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 {
 	int rval = DDI_SUCCESS;
@@ -14866,6 +14881,23 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		struct kvm_signal_mask *sigmask_arg = argp;
 		struct kvm_signal_mask kvm_sigmask;
 		sigset_t sigset;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+
+		/*
+		 * XXX: we currently assume only one VCPU.
+		 */
+		if ((kvmp = ksp->kds_kvmp) == NULL || kvmp->online_vcpus != 1) {
+			rval = EINVAL;
+			break;
+		}
+
+		vcpu = kvmp->vcpus[0];
+
+		if (argp == NULL) {
+			rval = kvm_vcpu_ioctl_set_sigmask(vcpu, NULL);
+			break;
+		}
 
 		if (copyin(argp, &kvm_sigmask, sizeof (kvm_sigmask)) != 0) {
 			rval = EFAULT;
@@ -14883,12 +14915,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 			break;
 		}
 
-#ifdef XXX
 		rval = kvm_vcpu_ioctl_set_sigmask(vcpu, &sigset);
-#else
-		XXX_KVM_PROBE;
-		rval = EINVAL;
-#endif
 		break;
 	}
 
@@ -15554,7 +15581,8 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 
 	if (*rv == -1)
 		return (EINVAL);
-	return (rval);
+
+	return (rval < 0 ? -rval : rval);
 }
 
 /* BEGIN CSTYLED */
