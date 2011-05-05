@@ -349,7 +349,7 @@ typedef struct kvm_timer {
 	hrtime_t start;
 #endif /*XXX*/
 	int64_t period; 				/* unit: ns */
-	uint32_t pending;			/* accumulated triggered timers */
+	int pending;			/* accumulated triggered timers */
 	int reinject;
 	struct kvm_timer_ops *t_ops;
 	struct kvm *kvm;
