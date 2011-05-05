@@ -109,7 +109,7 @@ kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu)
 #else
 		XXX_KVM_SYNC_PROBE;
 		mutex_enter(&ps->inject_lock);
-		if (&ps->pit_timer.pending && ps->irq_ack) {
+		if (ps->pit_timer.pending && ps->irq_ack) {
 			ps->irq_ack = 0;
 			inject = 1;
 		}
