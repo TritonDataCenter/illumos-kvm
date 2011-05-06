@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <sys/vm.h>
 #include <sys/proc.h>
+#include <vm/seg_kpm.h>
 
 #include "vmx.h"
 #include "msr-index.h"
@@ -2826,7 +2827,6 @@ alloc_page(size_t size, int flag)
 		return ((page_t *)NULL);
 
 	pp = page_numtopp_nolock(hat_getpfnum(kas.a_hat, page_addr));
-	pp->p_virtual = page_addr;
 	return (pp);
 }
 
@@ -3158,6 +3158,12 @@ static int
 kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 {
 	minor_t instance;
+
+	if (kpm_enable == 0) {
+		cmn_err(CE_WARN, "kvm: kpm_enable must be true\n");
+		return (DDI_FAILURE);
+	}
+
 
 	if (cmd != DDI_ATTACH)
 		return (DDI_FAILURE);
@@ -11301,7 +11307,7 @@ extern void apic_set_tpr(struct kvm_lapic *apic, uint32_t tpr);
 
 caddr_t page_address(page_t *page)
 {
-	return (page->p_virtual);
+	return (hat_kpm_mapin_pfn(page->p_pagenum));
 }
 
 

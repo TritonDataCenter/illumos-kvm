@@ -367,7 +367,6 @@ typedef struct kvm_lapic {
 	uint32_t divide_count;
 	struct kvm_vcpu *vcpu;
 	int irr_pending;
-	page_t *regs_page;
 	void *regs;
 	gpa_t vapic_addr;
 	page_t *vapic_page;

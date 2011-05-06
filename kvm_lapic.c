@@ -117,8 +117,8 @@ kvm_free_lapic(struct kvm_vcpu *vcpu)
 		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
 	mutex_exit(&cpu_lock);
 
-	if (apic->regs_page)
-		kmem_free(page_address(apic->regs_page), PAGESIZE);
+	if (apic->regs)
+		kmem_free(apic->regs, PAGESIZE);
 
 	kmem_free(vcpu->arch.apic, sizeof (struct kvm_lapic));
 }

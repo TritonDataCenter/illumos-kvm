@@ -1543,13 +1543,7 @@ kvm_create_lapic(struct kvm_vcpu *vcpu)
 
 	vcpu->arch.apic = apic;
 
-	apic->regs_page = alloc_page(PAGESIZE, KM_SLEEP);
-	if (apic->regs_page == NULL) {
-		cmn_err(CE_WARN, "malloc apic regs error for vcpu %x\n",
-		    vcpu->vcpu_id);
-		goto nomem_free_apic;
-	}
-	apic->regs = page_address(apic->regs_page);
+	apic->regs = kmem_zalloc(PAGESIZE, KM_SLEEP);
 	memset(apic->regs, 0, PAGESIZE);
 	apic->vcpu = vcpu;
 
@@ -2504,6 +2498,7 @@ vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	uint64_t msr;
 	int ret, idx;
+	page_t *ptp;
 
 	vcpu->arch.regs_avail = ~((1 << VCPU_REGS_RIP) | (1 << VCPU_REGS_RSP));
 #ifdef XXX
@@ -2600,8 +2595,9 @@ vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	if (cpu_has_vmx_tpr_shadow()) {
 		vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, 0);
 		if (vm_need_tpr_shadow(vmx->vcpu.kvm)) {
-			vmcs_write64(VIRTUAL_APIC_PAGE_ADDR,
-			    page_to_phys(vmx->vcpu.arch.apic->regs_page));
+			ptp = page_numtopp_nolock(hat_getpfnum(kas.a_hat,
+			    vmx->vcpu.arch.apic->regs));
+			vmcs_write64(VIRTUAL_APIC_PAGE_ADDR, page_to_phys(ptp));
 		}
 
 		vmcs_write32(TPR_THRESHOLD, 0);
