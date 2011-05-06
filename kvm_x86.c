@@ -641,7 +641,7 @@ apic_x2apic_mode(struct kvm_lapic *apic)
 static uint32_t
 apic_get_tmcct(struct kvm_lapic *apic)
 {
-	hrtime_t now, remaining;
+	hrtime_t now, remaining, elapsed;
 	uint32_t tmcct;
 
 	VERIFY(apic != NULL);
@@ -651,8 +651,9 @@ apic_get_tmcct(struct kvm_lapic *apic)
 		return (0);
 
 	now = gethrtime();
-	remaining = now - apic->lapic_timer.start -
+	elapsed = now - apic->lapic_timer.start -
 	    apic->lapic_timer.period * apic->lapic_timer.intervals;
+	remaining = apic->lapic_timer.period - elapsed;
 
 	if (remaining < 0)
 		remaining = 0;
