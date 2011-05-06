@@ -13424,7 +13424,7 @@ static void kvm_pit_ack_irq(struct kvm_irq_ack_notifier *kian)
 				     offsetof(struct kvm_kpit_state,
 					      irq_ack_notifier));
 	mutex_enter(&ps->inject_lock);
-	if (ps->pit_timer.pending-- < 0)
+	if (--ps->pit_timer.pending < 0)
 		ps->pit_timer.pending++;
 	ps->irq_ack = 1;
 	mutex_exit(&ps->inject_lock);
