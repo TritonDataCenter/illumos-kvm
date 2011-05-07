@@ -11305,7 +11305,15 @@ void kvm_mmu_unload(struct kvm_vcpu *vcpu)
 
 extern void apic_set_tpr(struct kvm_lapic *apic, uint32_t tpr);
 
-caddr_t page_address(page_t *page)
+/*
+ * Often times we have pages that correspond to addresses that are in a users
+ * virtual address space. Rather than trying to constantly map them in and out
+ * of our address space we instead go through and use the kpm segment to
+ * facilitate this for us. This always returns an address that is always in the
+ * kernel's virtual address space.
+ */
+caddr_t
+page_address(page_t *page)
 {
 	return (hat_kpm_mapin_pfn(page->p_pagenum));
 }
