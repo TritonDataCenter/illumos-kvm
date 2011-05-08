@@ -9009,11 +9009,7 @@ handle_exception(struct kvm_vcpu *vcpu)
 		/* EPT won't cause page fault directly */
 		if (enable_ept)
 			cmn_err(CE_PANIC, "page fault with ept enabled\n");
-#ifdef NOTNOW
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
-#else
-		cr2 = vmcs_read32(EXIT_QUALIFICATION);
-#endif
 #ifdef XXX_KVM_TRACE
 		trace_kvm_page_fault(cr2, error_code);
 #endif
@@ -9243,11 +9239,7 @@ handle_io(struct kvm_vcpu *vcpu)
 #ifdef XXX_KVM_STAT
 	++vcpu->stat.io_exits;
 #endif
-#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
-#else
-	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
-#endif
 	string = (exit_qualification & 16) != 0;
 
 	if (string) {
@@ -9695,11 +9687,7 @@ handle_cr(struct kvm_vcpu *vcpu)
 	int cr;
 	int reg;
 
-#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
-#else
-	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
-#endif
 	cr = exit_qualification & 15;
 	reg = (exit_qualification >> 8) & 15;
 	DTRACE_PROBE3(kvm__cr, int, cr, int, reg, int,
@@ -9848,11 +9836,7 @@ static int handle_dr(struct kvm_vcpu *vcpu)
 		}
 	}
 
-#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
-#else
-	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
-#endif
 	dr = exit_qualification & DEBUG_REG_ACCESS_NUM;
 	reg = DEBUG_REG_ACCESS_REG(exit_qualification);
 	if (exit_qualification & TYPE_MOV_FROM_DR) {
@@ -10221,11 +10205,7 @@ kvm_mmu_invlpg(struct kvm_vcpu *vcpu, gva_t gva)
 static int
 handle_invlpg(struct kvm_vcpu *vcpu)
 {
-#ifdef NOTNOW
 	unsigned long exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
-#else
-	unsigned long exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
-#endif
 
 	kvm_mmu_invlpg(vcpu, exit_qualification);
 	skip_emulated_instruction(vcpu);
@@ -10247,11 +10227,7 @@ handle_apic_access(struct kvm_vcpu *vcpu)
 	enum emulation_result er;
 	unsigned long offset;
 
-#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
-#else
-	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
-#endif
 	offset = exit_qualification & 0xffful;
 
 	er = emulate_instruction(vcpu, 0, 0, 0);
@@ -10871,11 +10847,7 @@ handle_task_switch(struct kvm_vcpu *vcpu)
 
 	idt_v = (vmx->idt_vectoring_info & VECTORING_INFO_VALID_MASK);
 	type = (vmx->idt_vectoring_info & VECTORING_INFO_TYPE_MASK);
-#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
-#else
-	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
-#endif
 
 	reason = (uint32_t)exit_qualification >> 30;
 	if (reason == TASK_SWITCH_GATE && idt_v) {
@@ -10926,11 +10898,7 @@ handle_ept_violation(struct kvm_vcpu *vcpu)
 	gpa_t gpa;
 	int gla_validity;
 
-#ifdef NOTNOW
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
-#else
-	exit_qualification = vmcs_read32(EXIT_QUALIFICATION);
-#endif
 
 	if (exit_qualification & (1 << 6)) {
 		cmn_err(CE_PANIC, "EPT: GPA exceeds GAW!\n");
@@ -13441,15 +13409,11 @@ int kvm_set_irq_routing(struct kvm *kvm,
 	r = 0;
 
 out:
-#ifdef NOTNOW
-#ifdef XXX
-	kmem_free(new, sizeof(*new) + (nr_rt_entries * sizeof(list_t))
-		  + (nr * sizeof(struct kvm_kernel_irq_routing_entry)));
-#else
-	XXX_KVM_PROBE;
-	kmem_free(new, sizeof(*new));
-#endif /*XXX*/
-#endif /*NOTNOW*/
+	if (new) {
+		if (new->rt_entries)
+			kmem_free(new->rt_entries, sizeof(struct kvm_kernel_irq_routing_entry)*nr);
+		kmem_free(new, sizeof(*new));
+	}
 	return r;
 }
 

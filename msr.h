@@ -71,11 +71,6 @@ extern void native_write_msr(unsigned int msr,
 
 extern unsigned long long native_read_tsc(void);
 
-#ifdef NOTNOW
-extern int native_rdmsr_safe_regs(uint32_t regs[8]);
-extern int native_wrmsr_safe_regs(uint32_t regs[8]);
-#endif /*NOTNOW*/
-
 extern unsigned long long __native_read_tsc(void);
 extern unsigned long long native_read_pmc(int counter);
 

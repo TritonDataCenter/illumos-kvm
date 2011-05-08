@@ -1656,8 +1656,10 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
 	vcpu->cpu = -1;
 	vcpu->kvm = kvm;
 	vcpu->vcpu_id = id;
-#ifdef NOTNOW
+#ifdef XXX
 	init_waitqueue_head(&vcpu->wq);
+#else
+	XXX_KVM_PROBE;
 #endif
 	vcpu->run = ddi_umem_alloc(PAGESIZE * 2, DDI_UMEM_SLEEP, &vcpu->cookie);
 
@@ -1844,13 +1846,9 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 	allocate_vpid(vmx);
 	err = kvm_vcpu_init(&vmx->vcpu, kvm, id);
 	if (err) {
-#ifdef NOTNOW
-		goto free_vcpu;
-#else
 		kmem_cache_free(kvm_vcpu_cache, vmx);
 		return (NULL);
 	}
-#endif
 
 	vmx->guest_msrs = kmem_zalloc(PAGESIZE, KM_SLEEP);
 	if (!vmx->guest_msrs) {
@@ -4733,20 +4731,6 @@ kvm_vm_ioctl(struct kvm *kvmp, unsigned int ioctl, unsigned long arg, int mode)
 		return (EIO);
 
 	switch (ioctl) {
-#ifdef NOTNOW
-	case KVM_GET_DIRTY_LOG: {
-		struct kvm_dirty_log log;
-
-		r = -EFAULT;
-		if (copy_from_user(&log, argp, sizeof (log)))
-			goto out;
-		r = kvm_vm_ioctl_get_dirty_log(kvmp, &log);
-		if (r)
-			goto out;
-		break;
-	}
-#endif
-
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	case KVM_REGISTER_COALESCED_MMIO: {
 		struct kvm_coalesced_mmio_zone zone;
