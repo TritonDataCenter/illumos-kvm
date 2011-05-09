@@ -28,6 +28,7 @@
 
 #endif
 
+#include <sys/avl.h>
 #include <sys/ksynch.h>
 #include <sys/list.h>
 #include <sys/bitmap.h>
@@ -197,6 +198,7 @@ union kvm_mmu_page_role {
 };
 
 typedef struct kvm_mmu_page {
+	avl_node_t kmp_avlnode;
 	struct list_node link;
 	struct list_node hash_link;
 
@@ -211,6 +213,7 @@ typedef struct kvm_mmu_page {
 	union kvm_mmu_page_role role;
 
 	uint64_t *spt;
+	uintptr_t kmp_avlspt;
 	/* hold the gfn of each spte inside spt */
 	gfn_t *gfns;
 	/*

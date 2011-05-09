@@ -7,6 +7,7 @@
 #include <sys/ddi.h>
 #include <sys/sunddi.h>
 #include <sys/sdt.h>
+#include <sys/avl.h>
 #undef _ASM  /* cyclic.h expects this not defined */
 #include <sys/cyclic.h>
 #define _ASM
@@ -1215,6 +1216,8 @@ typedef struct kvm {
 #endif
 	int kvmid;  /* unique identifier for this kvm */
 	int kvm_clones;
+	kmutex_t kvm_avllock;
+	avl_tree_t kvm_avlmp;		/* avl tree for mmu to page_t mapping */
 } kvm_t;
 #endif /*_KERNEL*/
 
@@ -1968,7 +1971,6 @@ typedef struct kvm_pit {
 #define RW_STATE_WORD1 4
 
 #define page_to_pfn(page) (page->p_pagenum)
-#define set_page_private(page, v)	((page)->p_private = (v))
 
 #ifdef XXX
 #define __ex(x) __kvm_handle_fault_on_reboot(x)

@@ -27,6 +27,7 @@
 #include <sys/vm.h>
 #include <sys/proc.h>
 #include <vm/seg_kpm.h>
+#include <sys/avl.h>
 
 #include "vmx.h"
 #include "msr-index.h"
@@ -218,7 +219,7 @@ extern void update_divide_count(struct kvm_lapic *);
 extern void cli(void);
 extern void sti(void);
 static void kvm_destroy_vm(struct kvm *);
-
+static int kvm_avlmmucmp(const void *, const void *);
 
 int get_ept_level(void);
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
@@ -1618,12 +1619,12 @@ kvm_mmu_alloc_page(struct kvm_vcpu *vcpu, uint64_t *parent_pte)
 	    sizeof (*sp));
 	sp->spt = mmu_memory_cache_alloc(&vcpu->arch.mmu_page_cache, PAGESIZE);
 	sp->gfns = mmu_memory_cache_alloc(&vcpu->arch.mmu_page_cache, PAGESIZE);
-#ifndef XXX
-	set_page_private(virt_to_page((caddr_t)sp->spt), (void *)sp);
-#else
-	XXX_KVM_PROBE;
-	sp->hpa = (hat_getpfnum(kas.a_hat, (caddr_t)sp->spt)<< PAGESHIFT);
-#endif
+	sp->kmp_avlspt = (uintptr_t)virt_to_page((caddr_t)sp->spt);
+
+	mutex_enter(&vcpu->kvm->kvm_avllock);
+	avl_add(&vcpu->kvm->kvm_avlmp, sp);
+	mutex_exit(&vcpu->kvm->kvm_avllock);
+
 	list_insert_head(&vcpu->kvm->arch.active_mmu_pages, sp);
 #ifdef XXX
 	/* XXX don't see this used anywhere */
@@ -1643,15 +1644,21 @@ typedef int (*mmu_parent_walk_fn) (struct kvm_vcpu *, struct kvm_mmu_page *);
 extern uint64_t kvm_va2pa(caddr_t va);
 
 struct kvm_mmu_page *
-page_private(page_t *page)
+page_private(kvm_t *kvmp, page_t *page)
 {
-	return ((struct kvm_mmu_page *)page->p_private);
+	kvm_mmu_page_t mp, *res;
+	mp.kmp_avlspt = (uintptr_t)page;
+	mutex_enter(&kvmp->kvm_avllock);
+	res = avl_find(&kvmp->kvm_avlmp, &mp, NULL);
+	mutex_exit(&kvmp->kvm_avllock);
+	ASSERT(res != NULL);
+	return (res);
 }
 
 inline struct kvm_mmu_page *
-page_header(hpa_t shadow_page)
+page_header(kvm_t *kvmp, hpa_t shadow_page)
 {
-	return (page_private(pfn_to_page(shadow_page >> PAGESHIFT)));
+	return (page_private(kvmp, pfn_to_page(shadow_page >> PAGESHIFT)));
 }
 
 static void
@@ -1664,7 +1671,8 @@ mmu_parent_walk(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 	int i;
 
 	if (!sp->multimapped && sp->parent_pte) {
-		parent_sp = page_header(kvm_va2pa((caddr_t)sp->parent_pte));
+		parent_sp = page_header(vcpu->kvm,
+		    kvm_va2pa((caddr_t)sp->parent_pte));
 
 		fn(vcpu, parent_sp);
 		mmu_parent_walk(vcpu, parent_sp, fn);
@@ -1677,7 +1685,7 @@ mmu_parent_walk(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 			if (!pte_chain->parent_ptes[i])
 				break;
 
-			parent_sp = page_header(kvm_va2pa(
+			parent_sp = page_header(vcpu->kvm, kvm_va2pa(
 			    (caddr_t)pte_chain->parent_ptes[i]));
 			fn(vcpu, parent_sp);
 			mmu_parent_walk(vcpu, parent_sp, fn);
@@ -1689,7 +1697,7 @@ static void
 kvm_mmu_update_unsync_bitmap(uint64_t *spte, struct kvm *kvm)
 {
 	unsigned int index;
-	struct kvm_mmu_page *sp = page_header(kvm_va2pa((caddr_t)spte));
+	struct kvm_mmu_page *sp = page_header(kvm, kvm_va2pa((caddr_t)spte));
 
 	index = spte - sp->spt;
 	if (!__test_and_set_bit(index, sp->unsync_child_bitmap))
@@ -1848,6 +1856,9 @@ kvm_mmu_free_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 	XXX_KVM_PROBE;
 #endif
 
+	mutex_enter(&kvm->kvm_avllock);
+	avl_remove(&kvm->kvm_avlmp, sp);
+	mutex_exit(&kvm->kvm_avllock);
 	list_remove(&kvm->arch.active_mmu_pages, sp);
 	if (sp)
 		kmem_cache_free(mmu_page_header_cache, sp);
@@ -1892,7 +1903,7 @@ __mmu_unsync_walk(struct kvm_mmu_page *sp, struct kvm_mmu_pages *pvec,
 
 		if (is_shadow_present_pte(ent) && !is_large_pte(ent)) {
 			struct kvm_mmu_page *child;
-			child = page_header(ent & PT64_BASE_ADDR_MASK);
+			child = page_header(kvm, ent & PT64_BASE_ADDR_MASK);
 
 			if (child->unsync_children) {
 				if (mmu_pages_add(pvec, child, i))
@@ -2111,8 +2122,8 @@ kvm_mmu_page_unlink_children(struct kvm *kvm, struct kvm_mmu_page *sp)
 		if (is_shadow_present_pte(ent)) {
 			if (!is_last_spte(ent, sp->role.level)) {
 				ent &= PT64_BASE_ADDR_MASK;
-				mmu_page_remove_parent_pte(page_header(ent),
-				    &pt[i]);
+				mmu_page_remove_parent_pte(page_header(kvm,
+				    ent), &pt[i]);
 			} else {
 				rmap_remove(kvm, &pt[i]);
 			}
@@ -2577,7 +2588,7 @@ mmu_sync_roots(struct kvm_vcpu *vcpu)
 
 	if (vcpu->arch.mmu.shadow_root_level == PT64_ROOT_LEVEL) {
 		hpa_t root = vcpu->arch.mmu.root_hpa;
-		sp = page_header(root);
+		sp = page_header(vcpu->kvm, root);
 		mmu_sync_children(vcpu, sp);
 		return;
 	}
@@ -2587,7 +2598,7 @@ mmu_sync_roots(struct kvm_vcpu *vcpu)
 
 		if (root && VALID_PAGE(root)) {
 			root &= PT64_BASE_ADDR_MASK;
-			sp = page_header(root);
+			sp = page_header(vcpu->kvm, root);
 			mmu_sync_children(vcpu, sp);
 		}
 	}
@@ -3747,6 +3758,9 @@ kvm_create_vm(void)
 	mutex_init(&kvmp->lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->irq_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->slots_lock, NULL, MUTEX_DRIVER, NULL);
+	mutex_init(&kvmp->kvm_avllock, NULL, MUTEX_DRIVER, NULL);
+	avl_create(&kvmp->kvm_avlmp, kvm_avlmmucmp, sizeof (kvm_mmu_page_t),
+	    offsetof(kvm_mmu_page_t, kmp_avlnode));
 	kvmp->kvmid = kvmid++;
 	mutex_enter(&kvm_lock);
 	kvmp->users_count = 1;
@@ -3763,6 +3777,7 @@ static void
 kvm_destroy_vm(struct kvm *kvmp)
 {
 	int ii;
+	void *cookie;
 
 	if (kvmp == NULL)
 		return;
@@ -3774,6 +3789,13 @@ kvm_destroy_vm(struct kvm *kvmp)
 #endif
 
 	list_remove(&vm_list, kvmp);
+	/*
+	 * XXX: The fact that we're cleaning these up here means that we aren't
+	 * properly cleaning them up somewhere else.
+	 */
+	while (avl_destroy_nodes(&kvmp->kvm_avlmp, &cookie) != NULL);
+	avl_destroy(&kvmp->kvm_avlmp);
+	mutex_destroy(&kvmp->kvm_avllock);
 	mutex_destroy(&kvmp->slots_lock);
 	mutex_destroy(&kvmp->irq_lock);
 	mutex_destroy(&kvmp->lock);
@@ -8312,7 +8334,8 @@ mmu_pte_write_zap_pte(struct kvm_vcpu *vcpu,
 		if (is_last_spte(pte, sp->role.level)) {
 			rmap_remove(vcpu->kvm, spte);
 		} else {
-			child = page_header(pte & PT64_BASE_ADDR_MASK);
+			child = page_header(vcpu->kvm,
+			    pte & PT64_BASE_ADDR_MASK);
 			mmu_page_remove_parent_pte(child, spte);
 		}
 	}
@@ -15892,5 +15915,18 @@ kvm_vcpu_uninit(struct kvm_vcpu *vcpu)
 {
 	kvm_arch_vcpu_uninit(vcpu);
 	ddi_umem_free(vcpu->cookie);
+}
+
+static int
+kvm_avlmmucmp(const void *arg1, const void *arg2)
+{
+	const kvm_mmu_page_t *mp1 = arg1;
+	const kvm_mmu_page_t *mp2 = arg2;
+	if (mp1->kmp_avlspt > mp2->kmp_avlspt)
+		return (1);
+	if (mp1->kmp_avlspt < mp2->kmp_avlspt)
+		return (-1);
+	ASSERT(mp1->kmp_avlspt == mp2->kmp_avlspt);
+	return (0);
 }
 /* END CSTYLED */
