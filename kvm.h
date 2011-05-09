@@ -1220,6 +1220,7 @@ typedef struct kvm {
 	long mmu_notifier_count;
 #endif
 	int kvmid;  /* unique identifier for this kvm */
+	int kvm_clones;
 } kvm_t;
 #endif /*_KERNEL*/
 
@@ -1556,6 +1557,8 @@ typedef struct kvm_set_boot_cpu_id_ioc {
 #define KVM_GET_API_VERSION       _IO(KVMIO,   0x00)
 #define KVM_CREATE_VM             _IO(KVMIO,   0x01) /* returns a VM fd */
 #define KVM_DESTROY_VM		  _IO(KVMIO,   0x0a)
+#define KVM_CLONE                 _IO(KVMIO,   0x20)
+
 #define KVM_GET_MSR_INDEX_LIST    _IOWR(KVMIO, 0x02, struct kvm_msr_list)
 
 #define KVM_S390_ENABLE_SIE       _IO(KVMIO,   0x06)

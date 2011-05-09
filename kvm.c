@@ -50,7 +50,8 @@
  * The entire state of the kvm device.
  */
 typedef struct {
-	struct kvm	*kds_kvmp;
+	struct kvm *kds_kvmp;			/* pointer to underlying VM */
+	struct kvm_vcpu *kds_vcpu;		/* pointer to VCPU */
 } kvm_devstate_t;
 
 /*
@@ -71,7 +72,6 @@ static list_t vm_list;
 kmutex_t kvm_lock;
 kmem_cache_t *kvm_cache;
 struct vmx_capability  vmx_capability;
-
 
 /*
  * Driver forward declarations
@@ -3289,12 +3289,10 @@ kvm_getinfo(dev_info_t *dip, ddi_info_cmd_t infocmd, void *arg, void **result)
 	return (error);
 }
 
-
 /*ARGSUSED*/
 static int
 kvm_open(dev_t *devp, int flag, int otype, cred_t *credp)
 {
-
 	minor_t minor;
 	kvm_devstate_t *ksp;
 
@@ -3337,13 +3335,23 @@ kvm_close(dev_t dev, int flag, int otyp, cred_t *cred)
 {
 	kvm_devstate_t *ksp;
 	minor_t minor = getminor(dev);
+	kvm_t *kvmp;
 
 	VERIFY(getminor(dev) != kvm_base_minor);
 	ksp = ddi_get_soft_state(kvm_state, minor);
-	/*
-	 * XXX We need to clean up the vcpus / kvm structs we allocated.
-	 */
-	kvm_destroy_vm(ksp->kds_kvmp);
+
+	if ((kvmp = ksp->kds_kvmp) != NULL) {
+		mutex_enter(&kvm_lock);
+
+		if (kvmp->kvm_clones > 0) {
+			kvmp->kvm_clones--;
+			mutex_exit(&kvm_lock);
+		} else {
+			mutex_exit(&kvm_lock);
+			kvm_destroy_vm(kvmp);
+		}
+	}
+
 	ddi_soft_state_free(kvm_state, minor);
 	vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
 
@@ -14479,6 +14487,48 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		rval = kvm_dev_ioctl_create_vm(ksp, arg, rv);
 		break;
 
+	case KVM_CLONE: {
+		dev_t parent = arg;
+		kvm_devstate_t *clone;
+		struct kvm *kvmp;
+
+		/*
+		 * We are not allowed to clone another open if we have created
+		 * a virtual machine or virtual CPU with this open.
+		 */
+		if (ksp->kds_kvmp != NULL || ksp->kds_vcpu != NULL) {
+			rval = EBUSY;
+			break;
+		}
+
+		if (getmajor(parent) != getmajor(dev)) {
+			rval = ENODEV;
+			break;
+		}
+
+		minor = getminor(parent);
+
+		mutex_enter(&kvm_lock);
+
+		if ((clone = ddi_get_soft_state(kvm_state, minor)) == NULL) {
+			mutex_exit(&kvm_lock);
+			rval = EINVAL;
+			break;
+		}
+
+		if ((kvmp = clone->kds_kvmp) == NULL) {
+			mutex_exit(&kvm_lock);
+			rval = ESRCH;
+			break;
+		}
+
+		kvmp->kvm_clones++;
+		ksp->kds_kvmp = kvmp;
+
+		mutex_exit(&kvm_lock);
+		break;
+	}
+
 	case KVM_CHECK_EXTENSION:
 		rval = kvm_dev_ioctl_check_extension_generic(arg, rv);
 		break;
@@ -14808,8 +14858,26 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 
 	case KVM_CREATE_VCPU: {
 		uint32_t id = (uintptr_t)arg;
+		struct kvm *kvmp;
+		struct kvm_vcpu *vcpu;
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		if (ksp->kds_vcpu != NULL) {
+			rval = EEXIST;
+			break;
+		}
 
 		rval = kvm_vm_ioctl_create_vcpu(ksp->kds_kvmp, id, rv);
+
+		if (rval == 0) {
+			ksp->kds_vcpu = kvmp->vcpus[id];
+			ASSERT(ksp->kds_vcpu != NULL);
+		}
+
 		break;
 	}
 
@@ -14979,21 +15047,15 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 	}
 
 	case KVM_SET_SIGNAL_MASK: {
-		struct kvm_signal_mask *sigmask_arg = argp;
+		struct kvm_signal_mask *sigmask = argp;
 		struct kvm_signal_mask kvm_sigmask;
 		sigset_t sigset;
-		struct kvm *kvmp;
 		struct kvm_vcpu *vcpu;
 
-		/*
-		 * XXX: we currently assume only one VCPU.
-		 */
-		if ((kvmp = ksp->kds_kvmp) == NULL || kvmp->online_vcpus != 1) {
+		if ((vcpu = ksp->kds_vcpu) == NULL) {
 			rval = EINVAL;
 			break;
 		}
-
-		vcpu = kvmp->vcpus[0];
 
 		if (argp == NULL) {
 			rval = kvm_vcpu_ioctl_set_sigmask(vcpu, NULL);
@@ -15010,8 +15072,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 			break;
 		}
 
-		if (copyin(sigmask_arg->sigset,
-		    &sigset, sizeof (sigset)) != 0) {
+		if (copyin(sigmask->sigset, &sigset, sizeof (sigset)) != 0) {
 			rval = EINVAL;
 			break;
 		}
