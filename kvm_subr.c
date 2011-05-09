@@ -25,6 +25,8 @@
 #include "kvm_x86host.h"
 #include "kvm.h"
 
+extern int lwp_sigmask(int, uint_t, uint_t, uint_t, uint_t);
+
 unsigned long
 kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot)
 {
@@ -70,6 +72,23 @@ void
 kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code)
 {
 	kvm_queue_exception_e(vcpu, GP_VECTOR, error_code);
+}
+
+void
+kvm_sigprocmask(int how, sigset_t *setp, sigset_t *osetp)
+{
+	k_sigset_t kset;
+
+	ASSERT(how == SIG_SETMASK);
+	ASSERT(setp != NULL);
+
+	sigutok(setp, &kset);
+
+	if (osetp != NULL)
+                sigktou(&curthread->t_hold, osetp);
+
+       (void) lwp_sigmask(SIG_SETMASK,
+	    kset.__sigbits[0], kset.__sigbits[1], kset.__sigbits[2], 0);
 }
 
 unsigned long long
@@ -166,4 +185,3 @@ unsigned long kvm_read_tr_base(void)
 	__asm__("str %0" : "=g"(tr));
 	return segment_base(tr);
 }
-

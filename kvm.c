@@ -12327,15 +12327,16 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 	return r;
 }
 
-int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
+int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 {
 	int r;
 	sigset_t sigsaved;
+	struct kvm_run *kvm_run = vcpu->run;
 
 	vcpu_load(vcpu);
 
 	if (vcpu->sigset_active)
-		sigprocmask(SIG_SETMASK, &vcpu->sigset, &sigsaved);
+		kvm_sigprocmask(SIG_SETMASK, &vcpu->sigset, &sigsaved);
 
 	if (vcpu->arch.mp_state == KVM_MP_STATE_UNINITIALIZED) {
 		kvm_vcpu_block(vcpu);
@@ -12396,7 +12397,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 out:
 	if (vcpu->sigset_active)
-		sigprocmask(SIG_SETMASK, &sigsaved, NULL);
+		kvm_sigprocmask(SIG_SETMASK, &sigsaved, NULL);
 
 	vcpu_put(vcpu);
 	return r;
@@ -14411,10 +14412,11 @@ void kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, gpa_t vapic_addr)
 	vcpu->arch.apic->vapic_addr = vapic_addr;
 }
 
-static int kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu,
-					uint64_t mcg_cap)
+static int
+kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu, uint64_t *mcg_capp)
 {
 	int rval;
+	uint64_t mcg_cap = *mcg_capp;
 	unsigned bank_num = mcg_cap & 0xff, bank;
 
 	rval = -EINVAL;
@@ -14468,6 +14470,55 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 #endif
 		struct kvm_pit_config pit_config;
 	} u;
+
+	struct {
+		int cmd;
+		void *func;
+		size_t size;
+		boolean_t copyout;
+	} *ioctl, ioctltab[] = {
+		{ KVM_RUN, kvm_arch_vcpu_ioctl_run },
+		{ KVM_X86_SETUP_MCE, kvm_vcpu_ioctl_x86_setup_mce,
+		    sizeof (uint64_t) },
+		{ 0, NULL }
+	};
+
+	for (ioctl = &ioctltab[0]; ioctl->func != NULL; ioctl++) {
+		caddr_t buf = NULL;
+		kvm_vcpu_t *vcpu;
+		int (*func)(kvm_vcpu_t *, void *);
+
+		if (ioctl->cmd != cmd)
+			continue;
+
+		if ((vcpu = ksp->kds_vcpu) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		if (ioctl->size != 0) {
+			buf = kmem_alloc(ioctl->size, KM_SLEEP);
+
+			if (copyin(argp, buf, ioctl->size) != 0) {
+				kmem_free(buf, ioctl->size);
+				return (EFAULT);
+			}
+		}
+
+		func = (int(*)(kvm_vcpu_t *, void *))ioctl->func;
+		rval = func(vcpu, buf);
+
+		if (rval == 0 && ioctl->size != 0 && ioctl->copyout) {
+			if (copyout(buf, argp, ioctl->size) != 0) {
+				kmem_free(buf, ioctl->size);
+				return (EFAULT);
+			}
+		}
+
+		kmem_free(buf, ioctl->size);
+
+		return (rval < 0 ? -rval : rval);
+	}
 
 	switch (cmd) {
 	case KVM_GET_API_VERSION:
@@ -14610,25 +14661,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		mutex_exit(&kvmp->lock);
 		break;
 	}
-	case KVM_RUN: {
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		int cpu = (int)arg;
-
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
-			rval = EINVAL;
-			break;
-		}
-		if (!kvmp || cpu >= kvmp->online_vcpus) {
-			rval = EINVAL;
-			break;
-		}
-		vcpu = kvmp->vcpus[cpu];
-
-		rval = kvm_arch_vcpu_ioctl_run(vcpu, vcpu->run);
-		break;
-	}
 
 	case KVM_X86_GET_MCE_CAP_SUPPORTED: {
 		uint64_t mce_cap = KVM_MCE_CAP_SUPPORTED;
@@ -14636,31 +14668,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		if (copyout(&mce_cap, argp, sizeof (mce_cap)))
 			rval = EFAULT;
 
-		break;
-	}
-
-	case KVM_X86_SETUP_MCE: {
-		struct mcg_cap_ioc mcg_cap_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-
-		if (copyin(argp, &mcg_cap_ioc, sizeof (mcg_cap_ioc))) {
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL) {
-			rval = EINVAL;
-			break;
-		}
-
-		if (mcg_cap_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[mcg_cap_ioc.kvm_cpu_index];
-		rval = kvm_vcpu_ioctl_x86_setup_mce(vcpu, mcg_cap_ioc.mcg_cap);
 		break;
 	}
 

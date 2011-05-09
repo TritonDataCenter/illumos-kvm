@@ -116,12 +116,6 @@
 #define KVM_MAX_MCE_BANKS 32
 #define KVM_MCE_CAP_SUPPORTED MCG_CTL_P
 
-/* for ioctl KVM_X86_SETUP_MCE */
-typedef struct mcg_cap_ioc {
-	int kvm_cpu_index;
-	uint64_t mcg_cap;
-} mcg_cap_ioc_t;
-
 #define KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
 	(X86_CR0_WP | X86_CR0_NE | X86_CR0_NW | X86_CR0_CD)
 #define KVM_GUEST_CR0_MASK						\
@@ -1532,7 +1526,7 @@ typedef struct kvm_set_boot_cpu_id_ioc {
 #define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state_ioc)
 #define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state_ioc)
 /* MCE for x86 */
-#define KVM_X86_SETUP_MCE         _IOW(KVMIO,  0x9c, struct mcg_cap_ioc)
+#define KVM_X86_SETUP_MCE         _IOW(KVMIO,  0x9c, uint64_t)
 #define KVM_X86_GET_MCE_CAP_SUPPORTED _IOR(KVMIO,  0x9d, uint64_t)
 #define KVM_X86_SET_MCE           _IOW(KVMIO,  0x9e, struct kvm_x86_mce)
 
@@ -2150,7 +2144,7 @@ int kvm_arch_vcpu_ioctl_set_mpstate(struct kvm_vcpu *vcpu,
 				    struct kvm_mp_state *mp_state);
 int kvm_arch_vcpu_ioctl_set_guest_debug(struct kvm_vcpu *vcpu,
 					struct kvm_guest_debug *dbg);
-int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run);
+int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu);
 
 int kvm_arch_init(void *opaque);
 void kvm_arch_exit(void);
@@ -2184,6 +2178,8 @@ void kvm_arch_sync_events(struct kvm *kvm);
 
 int kvm_cpu_has_pending_timer(struct kvm_vcpu *vcpu);
 void kvm_vcpu_kick(struct kvm_vcpu *vcpu);
+
+void kvm_sigprocmask(int how, sigset_t *, sigset_t *);
 
 void kvm_register_irq_mask_notifier(struct kvm *kvm, int irq,
 				    struct kvm_irq_mask_notifier *kimn);
