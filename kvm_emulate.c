@@ -69,6 +69,7 @@ extern void kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
 extern void kvm_set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3);
 extern void kvm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
 extern void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8);
+extern void kvm_lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
 extern gpa_t kvm_mmu_gva_to_gpa_write(struct kvm_vcpu *vcpu, gva_t gva,
     uint32_t *error);
 extern int kvm_get_msr(struct kvm_vcpu *vcpu, uint32_t msr_index,
@@ -1938,11 +1939,7 @@ realmode_lidt(struct kvm_vcpu *vcpu, uint16_t limit, unsigned long base)
 void
 realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw, unsigned long *rflags)
 {
-#ifdef XXX
 	kvm_lmsw(vcpu, msw);
-#else
-	XXX_KVM_PROBE;
-#endif
 	*rflags = kvm_get_rflags(vcpu);
 }
 
