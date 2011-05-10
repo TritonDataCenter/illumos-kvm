@@ -3061,8 +3061,7 @@ rmap_remove(struct kvm *kvm, uint64_t *spte)
 		panic("rmap_remove: %p %lx 0->BUG\n", spte, *spte);
 	} else if (!(*rmapp & 1)) {
 		if ((uint64_t *)*rmapp != spte) {
-			panic( "rmap_remove:  %p %lx 1->BUG\n",
-			    spte, *spte);
+			panic("rmap_remove:  %p %lx 1->BUG\n", spte, *spte);
 		}
 		*rmapp = 0;
 	} else {
