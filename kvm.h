@@ -647,19 +647,9 @@ typedef struct kvm_regs {
 	uint64_t rip, rflags;
 } kvm_regs_t;
 
-typedef struct kvm_regs_ioc {
-	struct kvm_regs kvm_regs;
-	int kvm_cpu_index;
-} kvm_regs_ioc_t;
-
 typedef struct kvm_mp_state {
 	uint32_t mp_state;
 } kvm_mp_state_t;
-
-typedef struct kvm_mp_state_ioc {
-	struct kvm_mp_state mp_state;
-	int kvm_cpu_index;
-} kvm_mp_state_ioc_t;
 
 /* for KVM_GET_LAPIC and KVM_SET_LAPIC */
 #define KVM_APIC_REG_SIZE 0x400
@@ -701,11 +691,6 @@ typedef struct kvm_sregs {
 	uint64_t apic_base;
 	unsigned long interrupt_bitmap[(KVM_NR_INTERRUPTS + (64-1)) / 64]; /*XXX 64 = bits in unsigned long*/
 } kvm_sregs_t;
-
-typedef struct kvm_sregs_ioc {
-	struct kvm_sregs sregs;
-	int kvm_cpu_index;
-} kvm_sregs_ioc_t;
 
 /* When set in flags, include corresponding fields on KVM_SET_VCPU_EVENTS */
 #define KVM_VCPUEVENT_VALID_NMI_PENDING	0x00000001
@@ -983,11 +968,6 @@ typedef struct kvm_msrs {
 	struct kvm_msr_entry entries[100];
 } kvm_msrs_t;
 
-typedef struct kvm_msrs_ioc {
-	struct kvm_msrs kvm_msrs;
-	int kvm_cpu_index;
-} kvm_msrs_ioc_t;
-	
 /* for KVM_GET_MSR_INDEX_LIST */
 typedef struct kvm_msr_list {
 	uint32_t nmsrs; /* number of msrs in entries */
@@ -1513,21 +1493,21 @@ typedef struct kvm_set_boot_cpu_id_ioc {
  * ioctls for vcpu fds
  */
 #define KVM_RUN                   _IO(KVMIO,   0x80)
-#define KVM_GET_REGS              _IOR(KVMIO,  0x81, struct kvm_regs_ioc)
-#define KVM_SET_REGS              _IOW(KVMIO,  0x82, struct kvm_regs_ioc)
-#define KVM_GET_SREGS             _IOR(KVMIO,  0x83, struct kvm_sregs_ioc)
-#define KVM_SET_SREGS             _IOW(KVMIO,  0x84, struct kvm_sregs_ioc)
+#define KVM_GET_REGS              _IOR(KVMIO,  0x81, struct kvm_regs)
+#define KVM_SET_REGS              _IOW(KVMIO,  0x82, struct kvm_regs)
+#define KVM_GET_SREGS             _IOR(KVMIO,  0x83, struct kvm_sregs)
+#define KVM_SET_SREGS             _IOW(KVMIO,  0x84, struct kvm_sregs)
 #define KVM_INTERRUPT             _IOW(KVMIO,  0x86, struct kvm_interrupt_ioc)
 #define KVM_SET_CPUID             _IOW(KVMIO,  0x8a, struct kvm_cpuid_ioc)
 #define KVM_SET_SIGNAL_MASK       _IOW(KVMIO,  0x8b, struct kvm_signal_mask)
 #define KVM_GET_FPU               _IOR(KVMIO,  0x8c, struct kvm_fpu_ioc)
 #define KVM_SET_FPU               _IOW(KVMIO,  0x8d, struct kvm_fpu_ioc)
-#define KVM_GET_MSRS              _IOWR(KVMIO, 0x88, struct kvm_msrs_ioc)
-#define KVM_SET_MSRS              _IOW(KVMIO,  0x89, struct kvm_msrs_ioc)
+#define KVM_GET_MSRS              _IOWR(KVMIO, 0x88, struct kvm_msrs)
+#define KVM_SET_MSRS              _IOW(KVMIO,  0x89, struct kvm_msrs)
 #define KVM_GET_LAPIC             _IOR(KVMIO,  0x8e, struct kvm_lapic_ioc)
 #define KVM_SET_LAPIC             _IOW(KVMIO,  0x8f, struct kvm_lapic_ioc)
-#define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state_ioc)
-#define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state_ioc)
+#define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state)
+#define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state)
 /* MCE for x86 */
 #define KVM_X86_SETUP_MCE         _IOW(KVMIO,  0x9c, uint64_t)
 #define KVM_X86_GET_MCE_CAP_SUPPORTED _IOR(KVMIO,  0x9d, uint64_t)
