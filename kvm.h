@@ -657,12 +657,6 @@ typedef struct kvm_lapic_state {
 	char regs[KVM_APIC_REG_SIZE];
 } kvm_lapic_state_t;
 
-typedef struct kvm_lapic_ioc {
-	int kvm_cpu_index;
-	struct kvm_lapic_state s;
-} kvm_lapic_ioc_t;
-
-
 typedef struct kvm_dtable {
 	uint64_t base;
 	unsigned short limit;
@@ -949,11 +943,6 @@ typedef struct kvm_fpu {
 	uint32_t pad2;
 } kvm_fpu_t;
 
-typedef struct kvm_fpu_ioc {
-	struct kvm_fpu fpu;
-	int kvm_cpu_index;
-} kvm_fpu_ioc_t;
-
 typedef struct kvm_msr_entry {
 	uint32_t index;
 	uint32_t reserved;
@@ -1058,7 +1047,6 @@ typedef struct kvm_cpuid2 {
 	uint32_t padding;
 	struct kvm_cpuid_entry2 entries[100];
 } kvm_cpuid2_t;
-
 
 #define X86_SHADOW_INT_MOV_SS  1
 #define X86_SHADOW_INT_STI     2
@@ -1453,15 +1441,6 @@ static void native_load_tr_desc(void)
 
 #define KVMIO 0xAE
 
-/* for KVM_SET_CPUID2/KVM_GET_CPUID2 */
-typedef struct kvm_cpuid2_ioc {
-	struct kvm_cpuid2 cpuid_data;
-	int kvm_id;
-	int cpu_index;
-} kvm_cpuid2_ioc_t;
-
-/* for KVM_RUN */
-
 /* x86 MCE */
 typedef struct kvm_x86_mce {
 	uint64_t status;
@@ -1500,12 +1479,12 @@ typedef struct kvm_set_boot_cpu_id_ioc {
 #define KVM_INTERRUPT             _IOW(KVMIO,  0x86, struct kvm_interrupt_ioc)
 #define KVM_SET_CPUID             _IOW(KVMIO,  0x8a, struct kvm_cpuid_ioc)
 #define KVM_SET_SIGNAL_MASK       _IOW(KVMIO,  0x8b, struct kvm_signal_mask)
-#define KVM_GET_FPU               _IOR(KVMIO,  0x8c, struct kvm_fpu_ioc)
-#define KVM_SET_FPU               _IOW(KVMIO,  0x8d, struct kvm_fpu_ioc)
+#define KVM_GET_FPU               _IOR(KVMIO,  0x8c, struct kvm_fpu)
+#define KVM_SET_FPU               _IOW(KVMIO,  0x8d, struct kvm_fpu)
 #define KVM_GET_MSRS              _IOWR(KVMIO, 0x88, struct kvm_msrs)
 #define KVM_SET_MSRS              _IOW(KVMIO,  0x89, struct kvm_msrs)
-#define KVM_GET_LAPIC             _IOR(KVMIO,  0x8e, struct kvm_lapic_ioc)
-#define KVM_SET_LAPIC             _IOW(KVMIO,  0x8f, struct kvm_lapic_ioc)
+#define KVM_GET_LAPIC             _IOR(KVMIO,  0x8e, struct kvm_lapic_state)
+#define KVM_SET_LAPIC             _IOW(KVMIO,  0x8f, struct kvm_lapic_state)
 #define KVM_GET_MP_STATE          _IOR(KVMIO,  0x98, struct kvm_mp_state)
 #define KVM_SET_MP_STATE          _IOW(KVMIO,  0x99, struct kvm_mp_state)
 /* MCE for x86 */
@@ -1718,8 +1697,8 @@ typedef struct kvm_tpr_acl_ioc {
 	int cpu_index;
 } kvm_tpr_acl_ioc_t;
 
-#define KVM_SET_CPUID2            _IOW(KVMIO,  0x90, struct kvm_cpuid2_ioc)
-#define KVM_GET_CPUID2            _IOWR(KVMIO, 0x91, struct kvm_cpuid2_ioc)
+#define KVM_SET_CPUID2            _IOW(KVMIO,  0x90, struct kvm_cpuid2)
+#define KVM_GET_CPUID2            _IOWR(KVMIO, 0x91, struct kvm_cpuid2)
 /* Available with KVM_CAP_VAPIC */
 #define KVM_TPR_ACCESS_REPORTING  _IOWR(KVMIO, 0x92, struct kvm_tpr_acl_ioc)
 /* Available with KVM_CAP_VAPIC */

@@ -5344,41 +5344,38 @@ kvm_apic_set_version(struct kvm_vcpu *vcpu)
 
 
 static int
-kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid,
-    struct kvm_cpuid_entry2 *entries)
+kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid)
 {
-	int r;
-
-	r = E2BIG;
 	if (cpuid->nent > KVM_MAX_CPUID_ENTRIES)
-		goto out;
-	bcopy(entries, vcpu->arch.cpuid_entries,
+		return (E2BIG);
+
+	bcopy(cpuid->entries, vcpu->arch.cpuid_entries,
 	    cpuid->nent * sizeof (struct kvm_cpuid_entry2));
+
 	vcpu_load(vcpu);
 	vcpu->arch.cpuid_nent = cpuid->nent;
 	kvm_apic_set_version(vcpu);
 	kvm_x86_ops->cpuid_update(vcpu);
 	vcpu_put(vcpu);
-	return (0);
 
-out:
-	return (r);
+	return (0);
 }
 
 static int
-kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid,
-    struct kvm_cpuid_entry2 *entries)
+kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid)
 {
 	int r;
+	struct kvm_cpuid_entry2 *entries = cpuid->entries;
 
-	r = E2BIG;
+	cpuid->nent = vcpu->arch.cpuid_nent;
+
 	if (cpuid->nent < vcpu->arch.cpuid_nent)
-		goto out;
+		return (E2BIG);
+
+	bcopy(&vcpu->arch.cpuid_entries, cpuid->entries,
+	    vcpu->arch.cpuid_nent * sizeof (struct kvm_cpuid_entry2));
 
 	return (0);
-out:
-	cpuid->nent = vcpu->arch.cpuid_nent;
-	return (r);
 }
 
 static void
@@ -5853,7 +5850,7 @@ kvm_read_guest_page(struct kvm *kvm, gfn_t gfn, void *data, int offset, int len)
 		return (-EFAULT);
 
 	if (addr >= kernelbase) {
-		bcopy((caddr_t)(addr+offset), data, len);
+		bcopy((caddr_t)(addr + offset), data, len);
 	} else {
 		r = copyin((caddr_t)(addr + offset), data, len);
 	}
@@ -6389,7 +6386,7 @@ kvm_write_guest_page(struct kvm *kvm,
 
 	/* XXX - addr could be user or kernel */
 	if (addr >= kernelbase) {
-		bcopy(data, (caddr_t)(addr+offset), len);
+		bcopy(data, (caddr_t)(addr + offset), len);
 	} else {
 		r = copyout(data, (caddr_t)(addr + offset), len);
 	}
@@ -14262,8 +14259,8 @@ kvm_apic_post_state_restore(struct kvm_vcpu *vcpu)
 	apic->irr_pending = 1;
 }
 
-static int kvm_vcpu_ioctl_get_lapic(struct kvm_vcpu *vcpu,
-				    struct kvm_lapic_state *s)
+static int
+kvm_vcpu_ioctl_get_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s)
 {
 	vcpu_load(vcpu);
 	bcopy(vcpu->arch.apic->regs, s->regs, sizeof *s);
@@ -14272,8 +14269,8 @@ static int kvm_vcpu_ioctl_get_lapic(struct kvm_vcpu *vcpu,
 	return (0);
 }
 
-static int kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu,
-				    struct kvm_lapic_state *s)
+static int
+kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s)
 {
 	vcpu_load(vcpu);
 	bcopy(s->regs, vcpu->arch.apic->regs, sizeof *s);
@@ -14551,6 +14548,18 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		    sizeof (struct kvm_sregs), B_TRUE },
 		{ KVM_SET_SREGS, kvm_arch_vcpu_ioctl_set_sregs,
 		    sizeof (struct kvm_sregs) },
+		{ KVM_GET_FPU, kvm_arch_vcpu_ioctl_get_fpu,
+		    sizeof (struct kvm_fpu), B_TRUE },
+		{ KVM_SET_FPU, kvm_arch_vcpu_ioctl_set_fpu,
+		    sizeof (struct kvm_fpu) },
+		{ KVM_GET_CPUID2, kvm_vcpu_ioctl_get_cpuid2,
+		    sizeof (struct kvm_cpuid2), B_TRUE },
+		{ KVM_SET_CPUID2, kvm_vcpu_ioctl_set_cpuid2,
+		    sizeof (struct kvm_cpuid2) },
+		{ KVM_GET_LAPIC, kvm_vcpu_ioctl_get_lapic,
+		    sizeof (struct kvm_lapic_state), B_TRUE },
+		{ KVM_SET_LAPIC, kvm_vcpu_ioctl_set_lapic,
+		    sizeof (struct kvm_lapic_state) },
 		{ 0, NULL }
 	};
 
@@ -14918,222 +14927,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		rval = kvm_vcpu_ioctl_set_sigmask(vcpu, &sigset);
-		break;
-	}
-
-	case KVM_GET_FPU: {
-		struct kvm_fpu_ioc *kvm_fpu_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		size_t sz = sizeof (struct kvm_fpu_ioc);
-
-		kvm_fpu_ioc = kmem_zalloc(sz, KM_SLEEP);
-
-		if (copyin(argp, kvm_fpu_ioc, sz) != 0) {
-			kmem_free(kvm_fpu_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    kvm_fpu_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			kmem_free(kvm_fpu_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[kvm_fpu_ioc->kvm_cpu_index];
-
-		rval = kvm_arch_vcpu_ioctl_get_fpu(vcpu, &kvm_fpu_ioc->fpu);
-
-		if (rval == 0 && copyout(kvm_fpu_ioc, argp, sz) != 0)
-			rval = EFAULT;
-
-		kmem_free(kvm_fpu_ioc, sz);
-		*rv = 0;
-		break;
-	}
-
-	case KVM_SET_FPU: {
-		struct kvm_fpu_ioc *kvm_fpu_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		size_t sz = sizeof (struct kvm_fpu_ioc);
-
-		kvm_fpu_ioc = kmem_zalloc(sz, KM_SLEEP);
-
-		if (copyin(argp, kvm_fpu_ioc, sz) != 0) {
-			kmem_free(kvm_fpu_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    kvm_fpu_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			kmem_free(kvm_fpu_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[kvm_fpu_ioc->kvm_cpu_index];
-
-		rval = kvm_arch_vcpu_ioctl_set_fpu(vcpu, &kvm_fpu_ioc->fpu);
-		kmem_free(kvm_fpu_ioc, sz);
-		*rv = 0;
-		break;
-	}
-
-	case KVM_SET_CPUID2: {
-		struct kvm_cpuid2_ioc *cpuid2_ioc;
-		struct kvm_cpuid2 *cpuid2_data;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		size_t sz = sizeof (struct kvm_cpuid2_ioc);
-
-		cpuid2_ioc = kmem_alloc(sz, KM_SLEEP);
-
-		if (copyin(argp, cpuid2_ioc, sz) != 0) {
-			kmem_free(cpuid2_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    cpuid2_ioc->cpu_index >= kvmp->online_vcpus) {
-			kmem_free(cpuid2_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[cpuid2_ioc->cpu_index];
-
-		cpuid2_data = kmem_alloc(sizeof (struct kvm_cpuid2), KM_SLEEP);
-		bcopy(&cpuid2_ioc->cpuid_data, cpuid2_data,
-		    sizeof (struct kvm_cpuid2));
-
-		rval = kvm_vcpu_ioctl_set_cpuid2(vcpu, cpuid2_data,
-		    cpuid2_data->entries);
-
-		kmem_free(cpuid2_data, sizeof (struct kvm_cpuid2));
-		kmem_free(cpuid2_ioc, sz);
-
-		break;
-	}
-
-	case KVM_GET_CPUID2: {
-		struct kvm_cpuid2_ioc *cpuid2_ioc;
-		struct kvm_cpuid2 *cpuid2_data;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		size_t sz = sizeof (struct kvm_cpuid2_ioc);
-
-		cpuid2_ioc = kmem_alloc(sz, KM_SLEEP);
-
-		if (copyin(argp, cpuid2_ioc, sz) != 0) {
-			kmem_free(cpuid2_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    cpuid2_ioc->cpu_index >= kvmp->online_vcpus) {
-			kmem_free(cpuid2_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[cpuid2_ioc->cpu_index];
-
-		cpuid2_data = kmem_alloc(sizeof (struct kvm_cpuid2), KM_SLEEP);
-		bcopy(&cpuid2_ioc->cpuid_data, cpuid2_data,
-		    sizeof (struct kvm_cpuid2));
-
-		rval = kvm_vcpu_ioctl_get_cpuid2(vcpu, cpuid2_data,
-		    cpuid2_data->entries);
-
-		if (rval) {
-			kmem_free(cpuid2_ioc, sz);
-			kmem_free(cpuid2_data, sizeof (struct kvm_cpuid2));
-			break;
-		}
-
-		if (copyout(cpuid2_ioc, argp, sz) != 0)
-			rval = EFAULT;
-
-		kmem_free(cpuid2_data, sizeof (struct kvm_cpuid2));
-		kmem_free(cpuid2_ioc, sz);
-		break;
-	}
-
-	case KVM_GET_LAPIC: {
-		struct kvm_lapic_ioc *lapic_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		size_t sz = sizeof (struct kvm_lapic_ioc);
-
-		lapic_ioc = kmem_zalloc(sz, KM_SLEEP);
-
-		if (copyin(argp, lapic_ioc, sz) != 0) {
-			kmem_free(lapic_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    lapic_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			kmem_free(lapic_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[lapic_ioc->kvm_cpu_index];
-
-		if (vcpu->arch.apic == NULL) {
-			kmem_free(lapic_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		rval = kvm_vcpu_ioctl_get_lapic(vcpu, &lapic_ioc->s);
-
-		if (rval == 0 && copyout(lapic_ioc, argp, sz) != 0)
-			rval = EFAULT;
-
-		kmem_free(lapic_ioc, sz);
-		break;
-	}
-
-	case KVM_SET_LAPIC: {
-		struct kvm_lapic_ioc *lapic_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		size_t sz = sizeof (struct kvm_lapic_ioc);
-
-		lapic_ioc = kmem_zalloc(sz, KM_SLEEP);
-
-		if (copyin(argp, lapic_ioc, sz) != 0) {
-			kmem_free(lapic_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    lapic_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			kmem_free(lapic_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[lapic_ioc->kvm_cpu_index];
-
-		if (vcpu->arch.apic == NULL) {
-			kmem_free(lapic_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		rval = kvm_vcpu_ioctl_set_lapic(vcpu, &lapic_ioc->s);
-		kmem_free(lapic_ioc, sz);
 		break;
 	}
 
