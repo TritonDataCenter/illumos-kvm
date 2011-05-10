@@ -3058,10 +3058,10 @@ rmap_remove(struct kvm *kvm, uint64_t *spte)
 		kvm_set_pfn_dirty(pfn);
 	rmapp = gfn_to_rmap(kvm, sp->gfns[spte - sp->spt], sp->role.level);
 	if (!*rmapp) {
-		cmn_err(CE_WARN, "rmap_remove: %p %lx 0->BUG\n", spte, *spte);
+		panic("rmap_remove: %p %lx 0->BUG\n", spte, *spte);
 	} else if (!(*rmapp & 1)) {
 		if ((uint64_t *)*rmapp != spte) {
-			cmn_err(CE_WARN, "rmap_remove:  %p %lx 1->BUG\n",
+			panic( "rmap_remove:  %p %lx 1->BUG\n",
 			    spte, *spte);
 		}
 		*rmapp = 0;
@@ -3080,6 +3080,7 @@ rmap_remove(struct kvm *kvm, uint64_t *spte)
 			prev_desc = desc;
 			desc = desc->more;
 		}
+		panic("rmap_remove: %p %lx many->many\n", spte, *spte);
 	}
 }
 

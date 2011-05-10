@@ -1994,6 +1994,7 @@ mmu_page_remove_parent_pte(struct kvm_mmu_page *sp, uint64_t *parent_pte)
 	int i;
 
 	if (!sp->multimapped) {
+		/* ASSERT(sp->parent_pte != parent_pte); */
 		sp->parent_pte = NULL;
 		return;
 	}
@@ -2023,6 +2024,7 @@ mmu_page_remove_parent_pte(struct kvm_mmu_page *sp, uint64_t *parent_pte)
 			return;
 		}
 	}
+	panic("We shouldn't make it here\n");
 }
 
 void
@@ -8876,7 +8878,7 @@ kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gva_t cr2, uint32_t error_code)
 		vcpu->run->internal.ndata = 0;
 		return (0);
 	default:
-		cmn_err(CE_PANIC, "kvm_mmu_page_fault: unknown return "
+		panic("kvm_mmu_page_fault: unknown return "
 		    "from emulate_instruction: %x\n", er);
 	}
 
