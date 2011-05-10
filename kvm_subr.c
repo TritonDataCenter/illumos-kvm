@@ -30,9 +30,7 @@ extern int lwp_sigmask(int, uint_t, uint_t, uint_t, uint_t);
 unsigned long
 kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot)
 {
-	/* XXX */
-	/* 	return ALIGN(memslot->npages, BITS_PER_LONG) / 8; */
-	return ((BT_BITOUL(memslot->npages)) / 8);
+	return (BT_SIZEOFMAP(memslot->npages));
 }
 
 struct kvm_vcpu *
