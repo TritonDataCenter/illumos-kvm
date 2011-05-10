@@ -9,37 +9,37 @@
 #define KVM_RUN                   \
 	(unsigned)_IO(KVMIO,   0x80)
 #define KVM_GET_REGS              \
-	(unsigned)_IOR(KVMIO,  0x81, struct kvm_regs_ioc)
+	(unsigned)_IOR(KVMIO,  0x81, struct kvm_regs)
 #define KVM_SET_REGS              \
-	(unsigned)_IOW(KVMIO,  0x82, struct kvm_regs_ioc)
+	(unsigned)_IOW(KVMIO,  0x82, struct kvm_regs)
 #define KVM_GET_SREGS             \
-	(unsigned)_IOR(KVMIO,  0x83, struct kvm_sregs_ioc)
+	(unsigned)_IOR(KVMIO,  0x83, struct kvm_sregs)
 #define KVM_SET_SREGS             \
-	(unsigned)_IOW(KVMIO,  0x84, struct kvm_sregs_ioc)
+	(unsigned)_IOW(KVMIO,  0x84, struct kvm_sregs)
 #define KVM_INTERRUPT             \
-	(unsigned)_IOW(KVMIO,  0x86, struct kvm_interrupt_ioc)
+	(unsigned)_IOW(KVMIO,  0x86, struct kvm_interrupt)
 #define KVM_SET_CPUID             \
-	(unsigned)_IOW(KVMIO,  0x8a, struct kvm_cpuid_ioc)
+	(unsigned)_IOW(KVMIO,  0x8a, struct kvm_cpuid)
 #define KVM_SET_SIGNAL_MASK       \
 	(unsigned)_IOW(KVMIO,  0x8b, struct kvm_signal_mask)
 #define KVM_GET_FPU               \
-	(unsigned)_IOR(KVMIO,  0x8c, struct kvm_fpu_ioc)
+	(unsigned)_IOR(KVMIO,  0x8c, struct kvm_fpu)
 #define KVM_SET_FPU               \
-	(unsigned)_IOW(KVMIO,  0x8d, struct kvm_fpu_ioc)
+	(unsigned)_IOW(KVMIO,  0x8d, struct kvm_fpu)
 #define KVM_GET_MSRS              \
-	(unsigned)_IOWR(KVMIO, 0x88, struct kvm_msrs_ioc)
+	(unsigned)_IOWR(KVMIO, 0x88, struct kvm_msrs)
 #define KVM_SET_MSRS              \
-	(unsigned)_IOW(KVMIO,  0x89, struct kvm_msrs_ioc)
+	(unsigned)_IOW(KVMIO,  0x89, struct kvm_msrs)
 #define KVM_GET_LAPIC             \
-	(unsigned)_IOR(KVMIO,  0x8e, struct kvm_lapic_ioc)
+	(unsigned)_IOR(KVMIO,  0x8e, struct kvm_lapic)
 #define KVM_SET_LAPIC             \
-	(unsigned)_IOW(KVMIO,  0x8f, struct kvm_lapic_ioc)
+	(unsigned)_IOW(KVMIO,  0x8f, struct kvm_lapic)
 #define KVM_GET_MP_STATE          \
-	(unsigned)_IOR(KVMIO,  0x98, struct kvm_mp_state_ioc)
+	(unsigned)_IOR(KVMIO,  0x98, struct kvm_mp_state)
 #define KVM_SET_MP_STATE          \
-	(unsigned)_IOW(KVMIO,  0x99, struct kvm_mp_state_ioc)
+	(unsigned)_IOW(KVMIO,  0x99, struct kvm_mp_state)
 #define KVM_X86_SETUP_MCE         \
-	(unsigned)_IOW(KVMIO,  0x9c, struct mcg_cap_ioc)
+	(unsigned)_IOW(KVMIO,  0x9c, struct mcg_cap)
 #define KVM_X86_GET_MCE_CAP_SUPPORTED \
 	(unsigned)_IOR(KVMIO,  0x9d, uint64_t)
 #define KVM_X86_SET_MCE           \
@@ -53,9 +53,9 @@
 #define KVM_GET_CLOCK             \
 	(unsigned)_IOR(KVMIO,  0x7c, struct kvm_clock_data)
 #define KVM_GET_VCPU_EVENTS       \
-	(unsigned)_IOR(KVMIO,  0x9f, struct kvm_vcpu_events_ioc)
+	(unsigned)_IOR(KVMIO,  0x9f, struct kvm_vcpu_events)
 #define KVM_SET_VCPU_EVENTS       \
-	(unsigned)_IOW(KVMIO,  0xa0, struct kvm_vcpu_events_ioc)
+	(unsigned)_IOW(KVMIO,  0xa0, struct kvm_vcpu_events)
 #define KVM_GET_PIT2              \
 	(unsigned)_IOR(KVMIO,  0x9f, struct kvm_pit_state2)
 #define KVM_SET_PIT2              \
@@ -109,11 +109,11 @@
 #define KVM_CHECK_EXTENSION       \
 	(unsigned)_IO(KVMIO,   0x03)
 #define KVM_SET_CPUID2            \
-	(unsigned)_IOW(KVMIO,  0x90, struct kvm_cpuid2_ioc)
+	(unsigned)_IOW(KVMIO,  0x90, struct kvm_cpuid2)
 #define KVM_GET_CPUID2            \
-	(unsigned)_IOWR(KVMIO, 0x91, struct kvm_cpuid2_ioc)
+	(unsigned)_IOWR(KVMIO, 0x91, struct kvm_cpuid2)
 #define KVM_TPR_ACCESS_REPORTING  \
-	(unsigned)_IOWR(KVMIO, 0x92, struct kvm_tpr_acl_ioc)
+	(unsigned)_IOWR(KVMIO, 0x92, struct kvm_tpr_acl)
 #define KVM_SET_VAPIC_ADDR        \
 	(unsigned)_IOW(KVMIO,  0x93, struct kvm_vapic_addr)
 

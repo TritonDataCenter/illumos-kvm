@@ -716,11 +716,6 @@ typedef struct kvm_vcpu_events {
 	uint32_t reserved[10];
 } kvm_vcpu_events_t;
 
-typedef struct kvm_vcpu_events_ioc {
-	struct kvm_vcpu_events events;
-	int kvm_cpu_index;
-} kvm_vcpu_events_ioc_t;
-
 #define KVM_CAP_IRQ_ROUTING 25
 
 #ifdef KVM_CAP_IRQ_ROUTING
@@ -976,15 +971,8 @@ typedef struct kvm_cpuid_entry {
 typedef struct kvm_cpuid {
 	uint32_t nent;
 	uint32_t padding;
-	struct kvm_cpuid_entry entries[1];
+	struct kvm_cpuid_entry entries[100];
 } kvm_cpuid_t;
-
-typedef struct kvm_cpuid_ioc {
-	uint32_t nent;
-	uint32_t padding;
-	struct kvm_cpuid_entry entries[100];  /* XXX is 100 enough? */
-	int kvm_cpu_index;
-} kvm_cpuid_ioc_t;
 
 /* for KVM_GET_PIT and KVM_SET_PIT */
 typedef struct kvm_pit_channel_state {
@@ -1476,8 +1464,8 @@ typedef struct kvm_set_boot_cpu_id_ioc {
 #define KVM_SET_REGS              _IOW(KVMIO,  0x82, struct kvm_regs)
 #define KVM_GET_SREGS             _IOR(KVMIO,  0x83, struct kvm_sregs)
 #define KVM_SET_SREGS             _IOW(KVMIO,  0x84, struct kvm_sregs)
-#define KVM_INTERRUPT             _IOW(KVMIO,  0x86, struct kvm_interrupt_ioc)
-#define KVM_SET_CPUID             _IOW(KVMIO,  0x8a, struct kvm_cpuid_ioc)
+#define KVM_INTERRUPT             _IOW(KVMIO,  0x86, struct kvm_interrupt)
+#define KVM_SET_CPUID             _IOW(KVMIO,  0x8a, struct kvm_cpuid)
 #define KVM_SET_SIGNAL_MASK       _IOW(KVMIO,  0x8b, struct kvm_signal_mask)
 #define KVM_GET_FPU               _IOR(KVMIO,  0x8c, struct kvm_fpu)
 #define KVM_SET_FPU               _IOW(KVMIO,  0x8d, struct kvm_fpu)
@@ -1499,8 +1487,8 @@ typedef struct kvm_set_boot_cpu_id_ioc {
 #define KVM_GET_CLOCK             _IOR(KVMIO,  0x7c, struct kvm_clock_data)
 
 /* Available with KVM_CAP_VCPU_EVENTS */
-#define KVM_GET_VCPU_EVENTS       _IOR(KVMIO,  0x9f, struct kvm_vcpu_events_ioc)
-#define KVM_SET_VCPU_EVENTS       _IOW(KVMIO,  0xa0, struct kvm_vcpu_events_ioc)
+#define KVM_GET_VCPU_EVENTS       _IOR(KVMIO,  0x9f, struct kvm_vcpu_events)
+#define KVM_SET_VCPU_EVENTS       _IOW(KVMIO,  0xa0, struct kvm_vcpu_events)
 /* Available with KVM_CAP_PIT_STATE2 */
 #define KVM_GET_PIT2              _IOR(KVMIO,  0x9f, struct kvm_pit_state2)
 #define KVM_SET_PIT2              _IOW(KVMIO,  0xa0, struct kvm_pit_state2)
@@ -1633,11 +1621,6 @@ typedef struct kvm_interrupt {
 	uint32_t irq;
 } kvm_interrupt_t;
 
-typedef struct kvm_interrupt_ioc {
-	struct kvm_interrupt intr;
-	int kvm_cpu_index;
-} kvm_interrupt_ioc_t;
-
 /* for KVM_GET_DIRTY_LOG */
 typedef struct kvm_dirty_log {
 	uint32_t slot;
@@ -1669,15 +1652,7 @@ typedef struct kvm_vapic_addr {
 	uint64_t vapic_addr;
 } kvm_vapic_addr_t;
 
-typedef struct kvm_vapic_ioc {
-	int kvm_cpu_index;
-	struct kvm_vapic_addr va;
-} kvm_vapic_ioc_t;
-
-
-
 /* for KVM_SET_MP_STATE */
-
 #define KVM_MP_STATE_RUNNABLE          0
 #define KVM_MP_STATE_UNINITIALIZED     1
 #define KVM_MP_STATE_INIT_RECEIVED     2

@@ -14424,12 +14424,15 @@ static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
 	return (0);
 }
 
-void kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, gpa_t vapic_addr)
+static int
+kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, struct kvm_vapic_addr *addr)
 {
 	if (!irqchip_in_kernel(vcpu->kvm))
-		return;
+		return (EINVAL);
 
-	vcpu->arch.apic->vapic_addr = vapic_addr;
+	vcpu->arch.apic->vapic_addr = addr->vapic_addr;
+
+	return (0);
 }
 
 static int
@@ -14560,6 +14563,14 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		    sizeof (struct kvm_lapic_state), B_TRUE },
 		{ KVM_SET_LAPIC, kvm_vcpu_ioctl_set_lapic,
 		    sizeof (struct kvm_lapic_state) },
+		{ KVM_GET_VCPU_EVENTS, kvm_vcpu_ioctl_x86_get_vcpu_events,
+		    sizeof (struct kvm_vcpu_events), B_TRUE },
+		{ KVM_SET_VCPU_EVENTS, kvm_vcpu_ioctl_x86_set_vcpu_events,
+		    sizeof (struct kvm_vcpu_events) },
+		{ KVM_INTERRUPT, kvm_vcpu_ioctl_interrupt,
+		    sizeof (struct kvm_interrupt) },
+		{ KVM_SET_VAPIC_ADDR, kvm_lapic_set_vapic_addr,
+		    sizeof (struct kvm_vapic_addr) },
 		{ 0, NULL }
 	};
 
@@ -14930,69 +14941,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		break;
 	}
 
-	case KVM_GET_VCPU_EVENTS: {
-		struct kvm_vcpu_events_ioc *events_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		size_t sz = sizeof (struct kvm_vcpu_events_ioc);
-
-		events_ioc = kmem_zalloc(sz, KM_SLEEP);
-
-		if (copyin(argp, events_ioc, sz) != 0) {
-			kmem_free(events_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    events_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			kmem_free(events_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[events_ioc->kvm_cpu_index];
-
-		kvm_vcpu_ioctl_x86_get_vcpu_events(vcpu, &events_ioc->events);
-
-		if (copyout(events_ioc, argp, sz) != 0)
-			rval = EFAULT;
-
-		kmem_free(events_ioc, sz);
-		*rv = 0;
-		break;
-	}
-
-	case KVM_SET_VCPU_EVENTS: {
-		struct kvm_vcpu_events_ioc *events_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-		size_t sz = sizeof (struct kvm_vcpu_events_ioc);
-
-		events_ioc = kmem_zalloc(sz, KM_SLEEP);
-
-		if (copyin(argp, events_ioc, sz) != 0) {
-			kmem_free(events_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    events_ioc->kvm_cpu_index >= kvmp->online_vcpus) {
-			kmem_free(events_ioc, sz);
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[events_ioc->kvm_cpu_index];
-
-		rval = kvm_vcpu_ioctl_x86_set_vcpu_events(vcpu,
-		    &events_ioc->events);
-
-		kmem_free(events_ioc, sz);
-		break;
-	}
-
 	case KVM_SET_TSS_ADDR: {
 		struct kvm_tss kvm_tss;
 		struct kvm *kvmp;
@@ -15008,27 +14956,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		rval = kvm_vm_ioctl_set_tss_addr(kvmp, (caddr_t)kvm_tss.addr);
-		break;
-	}
-
-	case KVM_INTERRUPT: {
-		struct kvm_interrupt_ioc irq_ioc;
-		struct kvm *kvmp;
-		struct kvm_vcpu *vcpu;
-
-		if (copyin(argp, &irq_ioc, sizeof (irq_ioc)) != 0) {
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL ||
-		    irq_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[irq_ioc.kvm_cpu_index];
-		rval = kvm_vcpu_ioctl_interrupt(vcpu, &irq_ioc.intr);
 		break;
 	}
 
@@ -15214,38 +15141,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		kmem_free(irq_event_ioc, sz);
-		break;
-	}
-
-	case KVM_SET_VAPIC_ADDR: {
-		struct kvm_vapic_ioc kvm_vapic_ioc;
-		struct kvm *kvmp = ksp->kds_kvmp;
-		struct kvm_vcpu *vcpu;
-
-		if (kvmp == NULL) {
-			rval = EINVAL;
-			break;
-		}
-
-		if (!irqchip_in_kernel(kvmp)) {
-			rval = EINVAL;
-			break;
-		}
-
-		if (copyin(argp, &kvm_vapic_ioc,
-		    sizeof (struct kvm_vapic_ioc)) != 0) {
-			rval = EFAULT;
-			break;
-		}
-
-		if (kvm_vapic_ioc.kvm_cpu_index >= kvmp->online_vcpus) {
-			rval = EINVAL;
-			break;
-		}
-
-		vcpu = kvmp->vcpus[kvm_vapic_ioc.kvm_cpu_index];
-
-		kvm_lapic_set_vapic_addr(vcpu, kvm_vapic_ioc.va.vapic_addr);
 		break;
 	}
 
