@@ -3793,6 +3793,7 @@ kvm_destroy_vm(struct kvm *kvmp)
 	 * XXX: The fact that we're cleaning these up here means that we aren't
 	 * properly cleaning them up somewhere else.
 	 */
+	cookie = NULL;
 	while (avl_destroy_nodes(&kvmp->kvm_avlmp, &cookie) != NULL);
 	avl_destroy(&kvmp->kvm_avlmp);
 	mutex_destroy(&kvmp->kvm_avllock);
@@ -14776,6 +14777,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			kmem_free(kvm_id_map_addr_ioc, sz);
 			rval = EINVAL;
 			break;
 		}
@@ -14783,6 +14785,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		rval = kvm_vm_ioctl_set_identity_map_addr(kvmp,
 		    kvm_id_map_addr_ioc->ident_addr);
 
+		kmem_free(kvm_id_map_addr_ioc, sz);
 		*rv = 0;
 		break;
 	}
