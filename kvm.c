@@ -12296,7 +12296,6 @@ dm_request_for_irq_injection(struct kvm_vcpu *vcpu)
 	    kvm_arch_interrupt_allowed(vcpu));
 }
 
-/* BEGIN CSTYLED */
 static int
 __vcpu_run(struct kvm_vcpu *vcpu)
 {
@@ -12305,11 +12304,11 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 
 	if (vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED) {
 		cmn_err(CE_NOTE, "vcpu %d received sipi with vector # %x\n",
-			 vcpu->vcpu_id, vcpu->arch.sipi_vector);
+		    vcpu->vcpu_id, vcpu->arch.sipi_vector);
 		kvm_lapic_reset(vcpu);
 		r = kvm_arch_vcpu_reset(vcpu);
 		if (r)
-			return r;
+			return (r);
 		vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 	}
 
@@ -12317,7 +12316,7 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 	vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 	vapic_enter(vcpu);
 
 	r = 1;
@@ -12329,19 +12328,19 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
 #else
 			XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 			kvm_vcpu_block(vcpu);
 #ifdef XXX
 			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
 #else
 			XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
-			if (test_and_clear_bit(KVM_REQ_UNHALT, &vcpu->requests))
-			{
-				switch(vcpu->arch.mp_state) {
+#endif
+			if (test_and_clear_bit(KVM_REQ_UNHALT,
+			    &vcpu->requests)) {
+				switch (vcpu->arch.mp_state) {
 				case KVM_MP_STATE_HALTED:
 					vcpu->arch.mp_state =
-						KVM_MP_STATE_RUNNABLE;
+					    KVM_MP_STATE_RUNNABLE;
 				case KVM_MP_STATE_RUNNABLE:
 					break;
 				case KVM_MP_STATE_SIPI_RECEIVED:
@@ -12352,12 +12351,8 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 			}
 		}
 
-		if (r <= 0) {
-#ifdef DEBUG
-			cmn_err(CE_NOTE, "__vcpu_run: r = %d\n", r);
-#endif /*DEBUG*/
+		if (r <= 0)
 			break;
-		}
 
 		clear_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
 		if (kvm_cpu_has_pending_timer(vcpu))
@@ -12368,7 +12363,7 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
 #ifdef XXX_KVM_STAT
 			++vcpu->stat.request_irq_exits;
-#endif /*XXX*/
+#endif
 		}
 
 		if (issig(JUSTLOOKING)) {
@@ -12376,7 +12371,7 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
 #ifdef XXX_KVM_STAT
 			++vcpu->stat.signal_exits;
-#endif /*XXX*/
+#endif
 		}
 
 		if (CPU->cpu_runrun || CPU->cpu_kprunrun)
@@ -12386,16 +12381,15 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 	post_kvm_run_save(vcpu);
 	vapic_exit(vcpu);
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "__vcpu_run: returning %d\n", r);
-#endif /*DEBUG*/
-	return r;
+
+	return (r);
 }
 
-int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
+int
+kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 {
 	int r;
 	sigset_t sigsaved;
@@ -12417,19 +12411,18 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 	if (!irqchip_in_kernel(vcpu->kvm))
 		kvm_set_cr8(vcpu, kvm_run->cr8);
 
-
 	if (vcpu->arch.pio.cur_count) {
 #ifdef XXX
 		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
 #else
 		XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 		r = complete_pio(vcpu);
 #ifdef XXX
 		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
 #else
 		XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 		if (r)
 			goto out;
 	}
@@ -12441,14 +12434,14 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
 #else
 		XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 		r = emulate_instruction(vcpu, vcpu->arch.mmio_fault_cr2, 0,
 					EMULTYPE_NO_DECODE);
 #ifdef XXX
 		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
 #else
 		XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 		if (r == EMULATE_DO_MMIO) {
 			/*
 			 * Read-modify-write.  Back to userspace.
@@ -12457,9 +12450,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 			goto out;
 		}
 	}
+
 	if (kvm_run->exit_reason == KVM_EXIT_HYPERCALL)
-		kvm_register_write(vcpu, VCPU_REGS_RAX,
-				     kvm_run->hypercall.ret);
+		kvm_register_write(vcpu, VCPU_REGS_RAX, kvm_run->hypercall.ret);
 
 	r = __vcpu_run(vcpu);
 
@@ -12468,11 +12461,12 @@ out:
 		kvm_sigprocmask(SIG_SETMASK, &sigsaved, NULL);
 
 	vcpu_put(vcpu);
-	return r;
+	return (r);
 }
 
-int kvm_arch_vcpu_ioctl_get_mpstate(struct kvm_vcpu *vcpu,
-				    struct kvm_mp_state *mp_state)
+int
+kvm_arch_vcpu_ioctl_get_mpstate(struct kvm_vcpu *vcpu,
+    struct kvm_mp_state *mp_state)
 {
 	vcpu_load(vcpu);
 	mp_state->mp_state = vcpu->arch.mp_state;
@@ -12480,8 +12474,9 @@ int kvm_arch_vcpu_ioctl_get_mpstate(struct kvm_vcpu *vcpu,
 	return (0);
 }
 
-int kvm_arch_vcpu_ioctl_set_mpstate(struct kvm_vcpu *vcpu,
-				    struct kvm_mp_state *mp_state)
+int
+kvm_arch_vcpu_ioctl_set_mpstate(struct kvm_vcpu *vcpu,
+    struct kvm_mp_state *mp_state)
 {
 	vcpu_load(vcpu);
 	vcpu->arch.mp_state = mp_state->mp_state;
@@ -12489,8 +12484,9 @@ int kvm_arch_vcpu_ioctl_set_mpstate(struct kvm_vcpu *vcpu,
 	return (0);
 }
 
-static void kvm_vcpu_ioctl_x86_get_vcpu_events(struct kvm_vcpu *vcpu,
-					       struct kvm_vcpu_events *events)
+static int
+kvm_vcpu_ioctl_x86_get_vcpu_events(struct kvm_vcpu *vcpu,
+    struct kvm_vcpu_events *events)
 {
 	vcpu_load(vcpu);
 
@@ -12509,18 +12505,21 @@ static void kvm_vcpu_ioctl_x86_get_vcpu_events(struct kvm_vcpu *vcpu,
 
 	events->sipi_vector = vcpu->arch.sipi_vector;
 
-	events->flags = (KVM_VCPUEVENT_VALID_NMI_PENDING
-			 | KVM_VCPUEVENT_VALID_SIPI_VECTOR);
+	events->flags = (KVM_VCPUEVENT_VALID_NMI_PENDING |
+	    KVM_VCPUEVENT_VALID_SIPI_VECTOR);
 
 	vcpu_put(vcpu);
+
+	return (0);
 }
 
-static int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
-					      struct kvm_vcpu_events *events)
+static int
+kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
+    struct kvm_vcpu_events *events)
 {
-	if (events->flags & ~(KVM_VCPUEVENT_VALID_NMI_PENDING
-			      | KVM_VCPUEVENT_VALID_SIPI_VECTOR))
-		return -EINVAL;
+	if (events->flags & ~(KVM_VCPUEVENT_VALID_NMI_PENDING |
+	    KVM_VCPUEVENT_VALID_SIPI_VECTOR))
+		return (-EINVAL);
 
 	vcpu_load(vcpu);
 
@@ -12532,12 +12531,15 @@ static int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
 	vcpu->arch.interrupt.pending = events->interrupt.injected;
 	vcpu->arch.interrupt.nr = events->interrupt.nr;
 	vcpu->arch.interrupt.soft = events->interrupt.soft;
+
 	if (vcpu->arch.interrupt.pending && irqchip_in_kernel(vcpu->kvm))
 		kvm_pic_clear_isr_ack(vcpu->kvm);
 
 	vcpu->arch.nmi_injected = events->nmi.injected;
+
 	if (events->flags & KVM_VCPUEVENT_VALID_NMI_PENDING)
 		vcpu->arch.nmi_pending = events->nmi.pending;
+
 	kvm_x86_ops->set_nmi_mask(vcpu, events->nmi.masked);
 
 	if (events->flags & KVM_VCPUEVENT_VALID_SIPI_VECTOR)
@@ -12550,7 +12552,8 @@ static int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
 
 extern void kvm_vcpu_kick(struct kvm_vcpu *vcpu);
 
-static int picdev_in_range(gpa_t addr)
+static int
+picdev_in_range(gpa_t addr)
 {
 	switch (addr) {
 	case 0x20:
@@ -12565,16 +12568,18 @@ static int picdev_in_range(gpa_t addr)
 	}
 }
 
-static inline struct kvm_pic *to_pic(struct kvm_io_device *dev)
+static inline struct kvm_pic *
+to_pic(struct kvm_io_device *dev)
 {
 #ifdef XXX_KVM_DOESNTCOMPILE
-	return container_of(dev, struct kvm_pic, dev);
+	return (container_of(dev, struct kvm_pic, dev));
 #else
-	return (struct kvm_pic *) ((caddr_t)dev-offsetof(struct kvm_pic, dev));
-#endif /*XXX*/
+	return ((struct kvm_pic *)((caddr_t)dev-offsetof(struct kvm_pic, dev)));
+#endif
 }
 
-void kvm_pic_reset(struct kvm_kpic_state *s)
+void
+kvm_pic_reset(struct kvm_kpic_state *s)
 {
 	int irq;
 	struct kvm *kvm = s->pics_state->irq_request_opaque;
@@ -12605,8 +12610,8 @@ void kvm_pic_reset(struct kvm_kpic_state *s)
 	}
 }
 
-
-static void pic_ioport_write(void *opaque, uint32_t addr, uint32_t val)
+static void
+pic_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 {
 	struct kvm_kpic_state *s = opaque;
 	int priority, cmd, irq;
@@ -12614,18 +12619,25 @@ static void pic_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	addr &= 1;
 	if (addr == 0) {
 		if (val & 0x10) {
+			struct kvm_pic *pic;
+
 			kvm_pic_reset(s);	/* init */
+
 			/*
 			 * deassert a pending interrupt
 			 */
-			s->pics_state->irq_request(s->pics_state->
-						   irq_request_opaque, 0);
+			pic = s->pics_state;
+			pic->irq_request(pic->irq_request_opaque, 0);
 			s->init_state = 1;
 			s->init4 = val & 1;
+
 			if (val & 0x02)
 				cmn_err(CE_WARN, "single mode not supported");
-			if (val & 0x08)
-				cmn_err(CE_WARN, "level sensitive irq not supported");
+
+			if (val & 0x08) {
+				cmn_err(CE_WARN, "level sensitive irq "
+				    "not supported");
+			}
 		} else if (val & 0x08) {
 			if (val & 0x04)
 				s->poll = 1;
@@ -12670,7 +12682,7 @@ static void pic_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 				break;	/* no operation */
 			}
 		}
-	} else
+	} else {
 		switch (s->init_state) {
 		case 0:		/* normal mode */
 			s->imr = val;
@@ -12692,9 +12704,11 @@ static void pic_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 			s->init_state = 0;
 			break;
 		}
+	}
 }
 
-static uint32_t pic_poll_read(struct kvm_kpic_state *s, uint32_t addr1)
+static uint32_t
+pic_poll_read(struct kvm_kpic_state *s, uint32_t addr1)
 {
 	int ret;
 
@@ -12713,10 +12727,11 @@ static uint32_t pic_poll_read(struct kvm_kpic_state *s, uint32_t addr1)
 		pic_update_irq(s->pics_state);
 	}
 
-	return ret;
+	return (ret);
 }
 
-static uint32_t pic_ioport_read(void *opaque, uint32_t addr1)
+static uint32_t
+pic_ioport_read(void *opaque, uint32_t addr1)
 {
 	struct kvm_kpic_state *s = opaque;
 	unsigned int addr;
@@ -12727,41 +12742,47 @@ static uint32_t pic_ioport_read(void *opaque, uint32_t addr1)
 	if (s->poll) {
 		ret = pic_poll_read(s, addr1);
 		s->poll = 0;
-	} else
-		if (addr == 0)
-			if (s->read_reg_select)
+	} else {
+		if (addr == 0) {
+			if (s->read_reg_select) {
 				ret = s->isr;
-			else
+			} else {
 				ret = s->irr;
-		else
+			}
+		} else {
 			ret = s->imr;
-	return ret;
+		}
+	}
+
+	return (ret);
 }
 
-static void elcr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
+static void
+elcr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 {
 	struct kvm_kpic_state *s = opaque;
 	s->elcr = val & s->elcr_mask;
 }
 
-static uint32_t elcr_ioport_read(void *opaque, uint32_t addr1)
+static uint32_t
+elcr_ioport_read(void *opaque, uint32_t addr1)
 {
 	struct kvm_kpic_state *s = opaque;
-	return s->elcr;
+	return (s->elcr);
 }
 
-
-static int picdev_write(struct kvm_io_device *this,
-			 gpa_t addr, int len, const void *val)
+static int
+picdev_write(struct kvm_io_device *this, gpa_t addr, int len, const void *val)
 {
 	struct kvm_pic *s = to_pic(this);
 	unsigned char data = *(unsigned char *)val;
-	if (!picdev_in_range(addr))
-		return -EOPNOTSUPP;
 
-	if (len != 1) {
+	if (!picdev_in_range(addr))
+		return (-EOPNOTSUPP);
+
+	if (len != 1)
 		return (0);
-	}
+
 	mutex_enter(&s->lock);
 	switch (addr) {
 	case 0x20:
@@ -12776,20 +12797,22 @@ static int picdev_write(struct kvm_io_device *this,
 		break;
 	}
 	mutex_exit(&s->lock);
+
 	return (0);
 }
 
-static int picdev_read(struct kvm_io_device *this,
-		       gpa_t addr, int len, void *val)
+static int
+picdev_read(struct kvm_io_device *this, gpa_t addr, int len, void *val)
 {
 	struct kvm_pic *s = to_pic(this);
 	unsigned char data = 0;
-	if (!picdev_in_range(addr))
-		return -EOPNOTSUPP;
 
-	if (len != 1) {
+	if (!picdev_in_range(addr))
+		return (-EOPNOTSUPP);
+
+	if (len != 1)
 		return (0);
-	}
+
 	mutex_enter(&s->lock);
 	switch (addr) {
 	case 0x20:
@@ -12805,13 +12828,15 @@ static int picdev_read(struct kvm_io_device *this,
 	}
 	*(unsigned char *)val = data;
 	mutex_exit(&s->lock);
+
 	return (0);
 }
 
 /*
  * callback when PIC0 irq status changed
  */
-static void pic_irq_request(void *opaque, int level)
+static void
+pic_irq_request(void *opaque, int level)
 {
 	struct kvm *kvm = opaque;
 	struct kvm_vcpu *vcpu = kvm->bsp_vcpu;
@@ -12826,16 +12851,17 @@ static void pic_irq_request(void *opaque, int level)
 }
 
 static const struct kvm_io_device_ops picdev_ops = {
-	.read     = picdev_read,
-	.write    = picdev_write,
+	.read	= picdev_read,
+	.write	= picdev_write,
 };
 
-struct kvm_pic *kvm_create_pic(struct kvm *kvm)
+struct kvm_pic *
+kvm_create_pic(struct kvm *kvm)
 {
 	struct kvm_pic *s;
 	int ret;
 
-	s = kmem_zalloc(sizeof(struct kvm_pic), KM_SLEEP);
+	s = kmem_zalloc(sizeof (struct kvm_pic), KM_SLEEP);
 	mutex_init(&s->lock, NULL, MUTEX_DRIVER, 0);
 	s->kvm = kvm;
 	s->pics[0].elcr_mask = 0xf8;
@@ -12852,35 +12878,37 @@ struct kvm_pic *kvm_create_pic(struct kvm *kvm)
 	mutex_enter(&kvm->slots_lock);
 	ret = kvm_io_bus_register_dev(kvm, KVM_PIO_BUS, &s->dev);
 	mutex_exit(&kvm->slots_lock);
+
 	if (ret < 0) {
-		kmem_free(s, sizeof(struct kvm_pic));
-		return NULL;
+		kmem_free(s, sizeof (struct kvm_pic));
+		return (NULL);
 	}
 
-	return s;
+	return (s);
 }
 
-void kvm_destroy_pic(struct kvm *kvm)
+void
+kvm_destroy_pic(struct kvm *kvm)
 {
 	struct kvm_pic *vpic = kvm->arch.vpic;
 
 	if (vpic) {
 		kvm_io_bus_unregister_dev(kvm, KVM_PIO_BUS, &vpic->dev);
 		kvm->arch.vpic = NULL;
-		kmem_free(vpic, sizeof(struct kvm_pic));
+		kmem_free(vpic, sizeof (struct kvm_pic));
 	}
 }
 
-static unsigned long ioapic_read_indirect(struct kvm_ioapic *ioapic,
-					  unsigned long addr,
-					  unsigned long length)
+static unsigned long
+ioapic_read_indirect(struct kvm_ioapic *ioapic,
+    unsigned long addr, unsigned long length)
 {
 	unsigned long result = 0;
 
 	switch (ioapic->ioregsel) {
 	case IOAPIC_REG_VERSION:
-		result = ((((IOAPIC_NUM_PINS - 1) & 0xff) << 16)
-			  | (IOAPIC_VERSION_ID & 0xff));
+		result = ((((IOAPIC_NUM_PINS - 1) & 0xff) << 16) |
+		    (IOAPIC_VERSION_ID & 0xff));
 		break;
 
 	case IOAPIC_REG_APIC_ID:
@@ -12888,25 +12916,25 @@ static unsigned long ioapic_read_indirect(struct kvm_ioapic *ioapic,
 		result = ((ioapic->id & 0xf) << 24);
 		break;
 
-	default:
-		{
-			uint32_t redir_index = (ioapic->ioregsel - 0x10) >> 1;
-			uint64_t redir_content;
+	default: {
+		uint32_t redir_index = (ioapic->ioregsel - 0x10) >> 1;
+		uint64_t redir_content;
 
-			ASSERT(redir_index < IOAPIC_NUM_PINS);
+		ASSERT(redir_index < IOAPIC_NUM_PINS);
 
-			redir_content = ioapic->redirtbl[redir_index].bits;
-			result = (ioapic->ioregsel & 0x1) ?
-			    (redir_content >> 32) & 0xffffffff :
-			    redir_content & 0xffffffff;
-			break;
-		}
+		redir_content = ioapic->redirtbl[redir_index].bits;
+		result = (ioapic->ioregsel & 0x1) ?
+		    (redir_content >> 32) & 0xffffffff :
+		    redir_content & 0xffffffff;
+		break;
+	}
 	}
 
-	return result;
+	return (result);
 }
 
-static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
+static int
+ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 {
 	union kvm_ioapic_redirect_entry *entry = &ioapic->redirtbl[irq];
 	struct kvm_lapic_irq irqe;
@@ -12923,17 +12951,20 @@ static int ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 	/* Always delivery PIT interrupt to vcpu 0 */
 	if (irq == 0) {
 		irqe.dest_mode = 0; /* Physical mode. */
-		/* need to read apic_id from apic regiest since
-		 * it can be rewritten */
+		/*
+		 * need to read apic_id from apic regiest since
+		 * it can be rewritten
+		 */
 		irqe.dest_id = ioapic->kvm->bsp_vcpu->vcpu_id;
 	}
 #endif
-	return kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe);
+	return (kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe));
 }
 
 extern int kvm_apic_set_irq(struct kvm_vcpu *vcpu, struct kvm_lapic_irq *irq);
 
-static int ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
+static int
+ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
 {
 	union kvm_ioapic_redirect_entry *pent;
 	int injected = -1;
@@ -12946,10 +12977,11 @@ static int ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
 			pent->fields.remote_irr = 1;
 	}
 
-	return injected;
+	return (injected);
 }
 
-static void update_handled_vectors(struct kvm_ioapic *ioapic)
+static void
+update_handled_vectors(struct kvm_ioapic *ioapic)
 {
 #ifdef XXX_KVM_DECLARATION
 	BITMAP_VECTORS(handled_vectors, 256);
@@ -12958,19 +12990,20 @@ static void update_handled_vectors(struct kvm_ioapic *ioapic)
 #endif
 	int i;
 
-	memset(handled_vectors, 0, sizeof(handled_vectors));
+	memset(handled_vectors, 0, sizeof (handled_vectors));
 	for (i = 0; i < IOAPIC_NUM_PINS; ++i)
 		__set_bit(ioapic->redirtbl[i].fields.vector, handled_vectors);
 	memcpy(ioapic->handled_vectors, handled_vectors,
-	       sizeof(handled_vectors));
+	    sizeof (handled_vectors));
 #ifdef XXX
 	smp_wmb();
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 }
 
-void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, int mask)
+void
+kvm_fire_mask_notifiers(struct kvm *kvm, int irq, int mask)
 {
 	struct kvm_irq_mask_notifier *kimn;
 
@@ -12980,19 +13013,21 @@ void kvm_fire_mask_notifiers(struct kvm *kvm, int irq, int mask)
 	XXX_KVM_SYNC_PROBE;
 #endif
 
-	for (kimn = list_head(&kvm->mask_notifier_list); kimn;
-	     kimn = list_next(&kvm->mask_notifier_list, kimn))
+	for (kimn = list_head(&kvm->mask_notifier_list); kimn != NULL;
+	    kimn = list_next(&kvm->mask_notifier_list, kimn)) {
 		if (kimn->irq == irq)
 			kimn->func(kimn, mask);
+	}
+
 #ifdef XXX
 	rcu_read_unlock();
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 }
 
-
-static void ioapic_write_indirect(struct kvm_ioapic *ioapic, uint32_t val)
+static void
+ioapic_write_indirect(struct kvm_ioapic *ioapic, uint32_t val)
 {
 	unsigned index;
 	int mask_before, mask_after;
@@ -13015,6 +13050,7 @@ static void ioapic_write_indirect(struct kvm_ioapic *ioapic, uint32_t val)
 
 		if (index >= IOAPIC_NUM_PINS)
 			return;
+
 		e = &ioapic->redirtbl[index];
 		mask_before = e->fields.mask;
 		if (ioapic->ioregsel & 1) {
@@ -13025,18 +13061,22 @@ static void ioapic_write_indirect(struct kvm_ioapic *ioapic, uint32_t val)
 			e->bits |= (uint32_t) val;
 			e->fields.remote_irr = 0;
 		}
+
 		update_handled_vectors(ioapic);
 		mask_after = e->fields.mask;
+
 		if (mask_before != mask_after)
 			kvm_fire_mask_notifiers(ioapic->kvm, index, mask_after);
-		if (e->fields.trig_mode == IOAPIC_LEVEL_TRIG
-		    && ioapic->irr & (1 << index))
+
+		if (e->fields.trig_mode == IOAPIC_LEVEL_TRIG &&
+		    ioapic->irr & (1 << index))
 			ioapic_service(ioapic, index);
 		break;
 	}
 }
 
-int kvm_ioapic_set_irq(struct kvm_ioapic *ioapic, int irq, int level)
+int
+kvm_ioapic_set_irq(struct kvm_ioapic *ioapic, int irq, int level)
 {
 	uint32_t old_irr = ioapic->irr;
 	uint32_t mask = 1 << irq;
@@ -13060,15 +13100,15 @@ int kvm_ioapic_set_irq(struct kvm_ioapic *ioapic, int irq, int level)
 		}
 #ifdef XXX_KVM_TRACE
 		trace_kvm_ioapic_set_irq(entry.bits, irq, ret == 0);
-#endif /*XXX*/
+#endif
 	}
 	mutex_exit(&ioapic->lock);
 
-	return ret;
+	return (ret);
 }
 
-static void __kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector,
-				     int trigger_mode)
+static void
+__kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector, int trigger_mode)
 {
 	int i;
 
@@ -13100,7 +13140,8 @@ static void __kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector,
 	}
 }
 
-void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode)
+void
+kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode)
 {
 	struct kvm_ioapic *ioapic = kvm->arch.vioapic;
 
@@ -13108,9 +13149,11 @@ void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode)
 	smp_rmb();
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
+
 	if (!test_bit(vector, ioapic->handled_vectors))
 		return;
+
 	mutex_enter(&ioapic->lock);
 	__kvm_ioapic_update_eoi(ioapic, vector, trigger_mode);
 	mutex_exit(&ioapic->lock);
@@ -13120,26 +13163,28 @@ static inline struct kvm_ioapic *
 to_ioapic(struct kvm_io_device *dev)
 {
 #ifdef XXX_KVM_DOESNTCOMPILE
-	return container_of(dev, struct kvm_ioapic, dev);
+	return (container_of(dev, struct kvm_ioapic, dev));
 #else
 	return (struct kvm_ioapic *)(((caddr_t)dev) -
 	    offsetof(struct kvm_ioapic, dev));
-#endif /*XXX*/
+#endif
 }
 
-static inline int ioapic_in_range(struct kvm_ioapic *ioapic, gpa_t addr)
+static inline int
+ioapic_in_range(struct kvm_ioapic *ioapic, gpa_t addr)
 {
 	return ((addr >= ioapic->base_address &&
-		 (addr < ioapic->base_address + IOAPIC_MEM_LENGTH)));
+	    (addr < ioapic->base_address + IOAPIC_MEM_LENGTH)));
 }
 
-static int ioapic_mmio_read(struct kvm_io_device *this, gpa_t addr, int len,
-			    void *val)
+static int
+ioapic_mmio_read(struct kvm_io_device *this, gpa_t addr, int len, void *val)
 {
 	struct kvm_ioapic *ioapic = to_ioapic(this);
 	uint32_t result;
+
 	if (!ioapic_in_range(ioapic, addr))
-		return -EOPNOTSUPP;
+		return (-EOPNOTSUPP);
 
 	ASSERT(!(addr & 0xf));	/* check alignment */
 
@@ -13158,6 +13203,7 @@ static int ioapic_mmio_read(struct kvm_io_device *this, gpa_t addr, int len,
 		result = 0;
 		break;
 	}
+
 	mutex_exit(&ioapic->lock);
 
 	switch (len) {
@@ -13172,16 +13218,19 @@ static int ioapic_mmio_read(struct kvm_io_device *this, gpa_t addr, int len,
 	default:
 		cmn_err(CE_WARN, "ioapic: wrong length %d\n", len);
 	}
+
 	return (0);
 }
 
-static int ioapic_mmio_write(struct kvm_io_device *this, gpa_t addr, int len,
-			     const void *val)
+static int
+ioapic_mmio_write(struct kvm_io_device *this, gpa_t addr, int len,
+    const void *val)
 {
 	struct kvm_ioapic *ioapic = to_ioapic(this);
 	uint32_t data;
+
 	if (!ioapic_in_range(ioapic, addr))
-		return -EOPNOTSUPP;
+		return (-EOPNOTSUPP);
 
 	ASSERT(!(addr & 0xf));	/* check alignment */
 
@@ -13214,12 +13263,14 @@ static int ioapic_mmio_write(struct kvm_io_device *this, gpa_t addr, int len,
 	return (0);
 }
 
-void kvm_ioapic_reset(struct kvm_ioapic *ioapic)
+void
+kvm_ioapic_reset(struct kvm_ioapic *ioapic)
 {
 	int i;
 
 	for (i = 0; i < IOAPIC_NUM_PINS; i++)
 		ioapic->redirtbl[i].fields.mask = 1;
+
 	ioapic->base_address = IOAPIC_DEFAULT_BASE_ADDRESS;
 	ioapic->ioregsel = 0;
 	ioapic->irr = 0;
@@ -13228,16 +13279,17 @@ void kvm_ioapic_reset(struct kvm_ioapic *ioapic)
 }
 
 static const struct kvm_io_device_ops ioapic_mmio_ops = {
-	.read     = ioapic_mmio_read,
-	.write    = ioapic_mmio_write,
+	.read	= ioapic_mmio_read,
+	.write	= ioapic_mmio_write,
 };
 
-int kvm_ioapic_init(struct kvm *kvm)
+int
+kvm_ioapic_init(struct kvm *kvm)
 {
 	struct kvm_ioapic *ioapic;
 	int ret;
 
-	ioapic = kmem_zalloc(sizeof(struct kvm_ioapic), KM_SLEEP);
+	ioapic = kmem_zalloc(sizeof (struct kvm_ioapic), KM_SLEEP);
 	mutex_init(&ioapic->lock, NULL, MUTEX_DRIVER, 0);
 	kvm->arch.vioapic = ioapic;
 	kvm_ioapic_reset(ioapic);
@@ -13246,45 +13298,50 @@ int kvm_ioapic_init(struct kvm *kvm)
 	mutex_enter(&kvm->slots_lock);
 	ret = kvm_io_bus_register_dev(kvm, KVM_MMIO_BUS, &ioapic->dev);
 	mutex_exit(&kvm->slots_lock);
+
 	if (ret < 0) {
 		kvm->arch.vioapic = NULL;
-		kmem_free(ioapic, sizeof(struct kvm_ioapic));
+		kmem_free(ioapic, sizeof (struct kvm_ioapic));
 	}
 
-	return ret;
+	return (ret);
 }
 
-void kvm_ioapic_destroy(struct kvm *kvm)
+void
+kvm_ioapic_destroy(struct kvm *kvm)
 {
 	struct kvm_ioapic *ioapic = kvm->arch.vioapic;
 
 	if (ioapic) {
 		kvm_io_bus_unregister_dev(kvm, KVM_MMIO_BUS, &ioapic->dev);
 		kvm->arch.vioapic = NULL;
-		kmem_free(ioapic, sizeof(struct kvm_ioapic));
+		kmem_free(ioapic, sizeof (struct kvm_ioapic));
 	}
 }
 
-static inline int kvm_irq_line_state(unsigned long *irq_state,
-				     int irq_source_id, int level)
+static inline int
+kvm_irq_line_state(unsigned long *irq_state, int irq_source_id, int level)
 {
 	/* Logical OR for level trig interrupt */
-	if (level)
+	if (level) {
 		set_bit(irq_source_id, irq_state);
-	else
+	} else {
 		clear_bit(irq_source_id, irq_state);
+	}
 
-	return !!(*irq_state);
+	return (!!(*irq_state));
 }
 
-void kvm_pic_update_irq(struct kvm_pic *s)
+void
+kvm_pic_update_irq(struct kvm_pic *s)
 {
 	mutex_enter(&s->lock);
 	pic_update_irq(s);
 	mutex_exit(&s->lock);
 }
 
-int kvm_pic_set_irq(void *opaque, int irq, int level)
+int
+kvm_pic_set_irq(void *opaque, int irq, int level)
 {
 	struct kvm_pic *s = opaque;
 	int ret = -1;
@@ -13295,54 +13352,57 @@ int kvm_pic_set_irq(void *opaque, int irq, int level)
 		pic_update_irq(s);
 #ifdef XXX_KVM_TRACE
 		trace_kvm_pic_set_irq(irq >> 3, irq & 7, s->pics[irq >> 3].elcr,
-				      s->pics[irq >> 3].imr, ret == 0);
-#endif /*XXX*/
+		    s->pics[irq >> 3].imr, ret == 0);
+#endif
 	}
 	mutex_exit(&s->lock);
 
-	return ret;
+	return (ret);
 }
 
 
-static int kvm_set_pic_irq(struct kvm_kernel_irq_routing_entry *e,
-			   struct kvm *kvm, int irq_source_id, int level)
+static int
+kvm_set_pic_irq(struct kvm_kernel_irq_routing_entry *e,
+    struct kvm *kvm, int irq_source_id, int level)
 {
 #ifdef CONFIG_X86
 	struct kvm_pic *pic = pic_irqchip(kvm);
 	level = kvm_irq_line_state(&pic->irq_states[e->irqchip.pin],
-				   irq_source_id, level);
-	return kvm_pic_set_irq(pic, e->irqchip.pin, level);
+	    irq_source_id, level);
+	return (kvm_pic_set_irq(pic, e->irqchip.pin, level));
 #else
-	return -1;
+	return (-1);
 #endif
 }
 
-static int kvm_set_ioapic_irq(struct kvm_kernel_irq_routing_entry *e,
-			      struct kvm *kvm, int irq_source_id, int level)
+static int
+kvm_set_ioapic_irq(struct kvm_kernel_irq_routing_entry *e,
+    struct kvm *kvm, int irq_source_id, int level)
 {
 	struct kvm_ioapic *ioapic = kvm->arch.vioapic;
 	level = kvm_irq_line_state(&ioapic->irq_states[e->irqchip.pin],
-				   irq_source_id, level);
+	    irq_source_id, level);
 
-	return kvm_ioapic_set_irq(ioapic, e->irqchip.pin, level);
+	return (kvm_ioapic_set_irq(ioapic, e->irqchip.pin, level));
 }
 
-static int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
-		       struct kvm *kvm, int irq_source_id, int level)
+static int
+kvm_set_msi(struct kvm_kernel_irq_routing_entry *e, struct kvm *kvm,
+    int irq_source_id, int level)
 {
 	struct kvm_lapic_irq irq;
 
 	if (!level)
-		return -1;
+		return (-1);
 
 #ifdef XXX_KVM_TRACE
 	trace_kvm_msi_set_irq(e->msi.address_lo, e->msi.data);
-#endif /*XXX*/
+#endif
 
-	irq.dest_id = (e->msi.address_lo &
-			MSI_ADDR_DEST_ID_MASK) >> MSI_ADDR_DEST_ID_SHIFT;
-	irq.vector = (e->msi.data &
-			MSI_DATA_VECTOR_MASK) >> MSI_DATA_VECTOR_SHIFT;
+	irq.dest_id = (e->msi.address_lo & MSI_ADDR_DEST_ID_MASK) >>
+	    MSI_ADDR_DEST_ID_SHIFT;
+	irq.vector = (e->msi.data & MSI_DATA_VECTOR_MASK) >>
+	    MSI_DATA_VECTOR_SHIFT;
 	irq.dest_mode = (1 << MSI_ADDR_DEST_MODE_SHIFT) & e->msi.address_lo;
 	irq.trig_mode = (1 << MSI_DATA_TRIGGER_SHIFT) & e->msi.data;
 	irq.delivery_mode = e->msi.data & 0x700;
@@ -13350,12 +13410,13 @@ static int kvm_set_msi(struct kvm_kernel_irq_routing_entry *e,
 	irq.shorthand = 0;
 
 	/* TODO Deal with RH bit of MSI message address */
-	return kvm_irq_delivery_to_apic(kvm, NULL, &irq);
+	return (kvm_irq_delivery_to_apic(kvm, NULL, &irq));
 }
 
-static int setup_routing_entry(struct kvm_irq_routing_table *rt,
-			       struct kvm_kernel_irq_routing_entry *e,
-			       const struct kvm_irq_routing_entry *ue)
+static int
+setup_routing_entry(struct kvm_irq_routing_table *rt,
+    struct kvm_kernel_irq_routing_entry *e,
+    const struct kvm_irq_routing_entry *ue)
 {
 	int r = -EINVAL;
 	int delta;
@@ -13366,10 +13427,11 @@ static int setup_routing_entry(struct kvm_irq_routing_table *rt,
 	 * Do not allow GSI to be mapped to the same irqchip more than once.
 	 * Allow only one to one mapping between GSI and MSI.
 	 */
-	for (ei = list_head(&rt->map[ue->gsi]); ei; ei = list_next(&rt->map[ue->gsi], ei)) {
+	for (ei = list_head(&rt->map[ue->gsi]); ei != NULL;
+	    ei = list_next(&rt->map[ue->gsi], ei)) {
 		if (ei->type == KVM_IRQ_ROUTING_MSI ||
 		    ue->u.irqchip.irqchip == ei->irqchip.irqchip)
-			return r;
+			return (r);
 	}
 
 	e->gsi = ue->gsi;
@@ -13413,44 +13475,43 @@ static int setup_routing_entry(struct kvm_irq_routing_table *rt,
 	list_insert_head(&rt->map[e->gsi], e);
 	r = 0;
 out:
-	return r;
+	return (r);
 }
 
-
-int kvm_set_irq_routing(struct kvm *kvm,
-			const struct kvm_irq_routing_entry *ue,
-			unsigned nr,
-			unsigned flags)
+int
+kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
+    unsigned nr, unsigned flags)
 {
 	struct kvm_irq_routing_table *new, *old;
 	uint32_t i, j, nr_rt_entries = 0;
+	size_t sz = sizeof (struct kvm_kernel_irq_routing_entry);
 	int r;
 
 	for (i = 0; i < nr; ++i) {
 		if (ue[i].gsi >= KVM_MAX_IRQ_ROUTES)
-			return -EINVAL;
+			return (-EINVAL);
 		nr_rt_entries = max(nr_rt_entries, ue[i].gsi);
 	}
 
 	nr_rt_entries += 1;
 
 #ifdef XXX
-	new = kmem_zalloc(sizeof(*new) + (nr_rt_entries * sizeof(list_t))
-		      + (nr * sizeof(struct kvm_kernel_irq_routing_entry)),
-		      KM_SLEEP);
+	new = kmem_zalloc(sizeof (*new) + (nr_rt_entries * sizeof (list_t)) +
+	    (nr * sz), KM_SLEEP);
 
 	new->rt_entries = (void *)&new->map[nr_rt_entries];
 #else
 	XXX_KVM_PROBE;
-	new = kmem_zalloc(sizeof(*new), KM_SLEEP);
+	new = kmem_zalloc(sizeof (*new), KM_SLEEP);
 
 	for (i = 0; i < KVM_MAX_IRQ_ROUTES; i++) {
-		list_create(&new->map[i], sizeof(struct kvm_kernel_irq_routing_entry),
-			    offsetof(struct kvm_kernel_irq_routing_entry, link));
+		list_create(&new->map[i], sz,
+		    offsetof(struct kvm_kernel_irq_routing_entry, link));
 	}
-	new->rt_entries = kmem_zalloc(sizeof(struct kvm_kernel_irq_routing_entry)*nr, KM_SLEEP);
 
-#endif /*XXX*/
+	new->rt_entries = kmem_zalloc(sz * nr, KM_SLEEP);
+
+#endif
 
 	new->nr_rt_entries = nr_rt_entries;
 	for (i = 0; i < 3; i++)
@@ -13461,7 +13522,10 @@ int kvm_set_irq_routing(struct kvm *kvm,
 		r = -EINVAL;
 		if (ue->flags)
 			goto out;
-		r = setup_routing_entry(new, (struct kvm_kernel_irq_routing_entry *)((caddr_t) new->rt_entries+(i*sizeof(struct kvm_kernel_irq_routing_entry))), ue);
+		r = setup_routing_entry(new,
+		    (struct kvm_kernel_irq_routing_entry *)
+		    ((caddr_t)new->rt_entries + (i * sz)), ue);
+
 		if (r)
 			goto out;
 		++ue;
@@ -13474,39 +13538,50 @@ int kvm_set_irq_routing(struct kvm *kvm,
 #else
 	XXX_KVM_SYNC_PROBE;
 	kvm->irq_routing = new;
-#endif /*XXX*/
+#endif
 	mutex_exit(&kvm->irq_lock);
 #ifdef XXX
 	synchronize_rcu();
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 
 	new = old;
 	r = 0;
 
 out:
 	if (new) {
-		if (new->rt_entries)
-			kmem_free(new->rt_entries, sizeof(struct kvm_kernel_irq_routing_entry)*nr);
-		kmem_free(new, sizeof(*new));
+		if (new->rt_entries != NULL)
+			kmem_free(new->rt_entries, sz * nr);
+
+		kmem_free(new, sizeof (*new));
 	}
-	return r;
+	return (r);
 }
 
-#define	IOAPIC_ROUTING_ENTRY(irq) \
-	{ .gsi = irq, .type = KVM_IRQ_ROUTING_IRQCHIP,	\
-	  .u.irqchip.irqchip = KVM_IRQCHIP_IOAPIC, .u.irqchip.pin = (irq) }
+#define	IOAPIC_ROUTING_ENTRY(irq)				\
+	{							\
+		.gsi = irq,					\
+		.type = KVM_IRQ_ROUTING_IRQCHIP,		\
+		.u.irqchip.irqchip = KVM_IRQCHIP_IOAPIC,	\
+		.u.irqchip.pin = (irq)				\
+	}
+
 #define	ROUTING_ENTRY1(irq) IOAPIC_ROUTING_ENTRY(irq)
 
 #ifdef CONFIG_X86
-#  define PIC_ROUTING_ENTRY(irq) \
-	{ .gsi = irq, .type = KVM_IRQ_ROUTING_IRQCHIP,	\
-	  .u.irqchip.irqchip = SELECT_PIC(irq), .u.irqchip.pin = (irq) % 8 }
-#  define ROUTING_ENTRY2(irq) \
+#define	PIC_ROUTING_ENTRY(irq)					\
+	{							\
+		.gsi = irq,					\
+		.type = KVM_IRQ_ROUTING_IRQCHIP,		\
+		.u.irqchip.irqchip = SELECT_PIC(irq),		\
+		.u.irqchip.pin = (irq) % 8			\
+	}
+
+#define	ROUTING_ENTRY2(irq) \
 	IOAPIC_ROUTING_ENTRY(irq), PIC_ROUTING_ENTRY(irq)
 #else
-#  define ROUTING_ENTRY2(irq) \
+#define	ROUTING_ENTRY2(irq) \
 	IOAPIC_ROUTING_ENTRY(irq)
 #endif
 
@@ -13539,20 +13614,22 @@ static const struct kvm_irq_routing_entry default_routing[] = {
 #endif
 };
 
-int kvm_setup_default_irq_routing(struct kvm *kvm)
+int
+kvm_setup_default_irq_routing(struct kvm *kvm)
 {
-	return kvm_set_irq_routing(kvm, default_routing,
-				   ARRAY_SIZE(default_routing), 0);
+	return (kvm_set_irq_routing(kvm, default_routing,
+	    ARRAY_SIZE(default_routing), 0));
 }
 
-static int kvm_vm_ioctl_set_identity_map_addr(struct kvm *kvm,
-					      uint64_t ident_addr)
+static int
+kvm_vm_ioctl_set_identity_map_addr(struct kvm *kvm, uint64_t ident_addr)
 {
 	kvm->arch.ept_identity_map_addr = ident_addr;
 	return (0);
 }
 
-int kvm_request_irq_source_id(struct kvm *kvm)
+int
+kvm_request_irq_source_id(struct kvm *kvm)
 {
 	unsigned long *bitmap = &kvm->arch.irq_sources_bitmap;
 	int irq_source_id;
@@ -13570,7 +13647,7 @@ int kvm_request_irq_source_id(struct kvm *kvm)
 unlock:
 	mutex_exit(&kvm->irq_lock);
 
-	return irq_source_id;
+	return (irq_source_id);
 }
 
 void
@@ -13599,8 +13676,7 @@ kvm_timer_fire(void *arg)
 static void kvm_pit_ack_irq(struct kvm_irq_ack_notifier *kian)
 {
 	struct kvm_kpit_state *ps = (struct kvm_kpit_state *)(((caddr_t)kian) -
-				     offsetof(struct kvm_kpit_state,
-					      irq_ack_notifier));
+	    offsetof(struct kvm_kpit_state, irq_ack_notifier));
 	mutex_enter(&ps->inject_lock);
 	if (--ps->pit_timer.pending < 0)
 		ps->pit_timer.pending++;
@@ -13636,16 +13712,17 @@ __kpit_elapsed(struct kvm *kvm)
 	return (elapsed);
 }
 
-static int64_t kpit_elapsed(struct kvm *kvm, struct kvm_kpit_channel_state *c,
-			int channel)
+static int64_t
+kpit_elapsed(struct kvm *kvm, struct kvm_kpit_channel_state *c, int channel)
 {
 	if (channel == 0)
-		return __kpit_elapsed(kvm);
+		return (__kpit_elapsed(kvm));
 
-	return gethrtime() - c->count_load_time;
+	return (gethrtime() - c->count_load_time);
 }
 
-static uint64_t muldiv64(uint64_t a, uint32_t b, uint32_t c)
+static uint64_t
+muldiv64(uint64_t a, uint32_t b, uint32_t c)
 {
 	union {
 		uint64_t ll;
@@ -13661,13 +13738,15 @@ static uint64_t muldiv64(uint64_t a, uint32_t b, uint32_t c)
 	rh += (rl >> 32);
 	res.l.high = rh/c;
 	res.l.low = ((mod_64(rh, c) << 32) + (rl & 0xffffffff))/ c;
-	return res.ll;
+
+	return (res.ll);
 }
 
-static int pit_get_count(struct kvm *kvm, int channel)
+static int
+pit_get_count(struct kvm *kvm, int channel)
 {
 	struct kvm_kpit_channel_state *c =
-		&kvm->arch.vpit->pit_state.channels[channel];
+	    &kvm->arch.vpit->pit_state.channels[channel];
 	int64_t d, t;
 	int counter;
 
@@ -13691,13 +13770,15 @@ static int pit_get_count(struct kvm *kvm, int channel)
 		counter = c->count - mod_64(d, c->count);
 		break;
 	}
-	return counter;
+
+	return (counter);
 }
 
-static int pit_get_out(struct kvm *kvm, int channel)
+static int
+pit_get_out(struct kvm *kvm, int channel)
 {
 	struct kvm_kpit_channel_state *c =
-		&kvm->arch.vpit->pit_state.channels[channel];
+	    &kvm->arch.vpit->pit_state.channels[channel];
 	int64_t d, t;
 	int out;
 
@@ -13726,13 +13807,14 @@ static int pit_get_out(struct kvm *kvm, int channel)
 		break;
 	}
 
-	return out;
+	return (out);
 }
 
-static void pit_latch_count(struct kvm *kvm, int channel)
+static void
+pit_latch_count(struct kvm *kvm, int channel)
 {
 	struct kvm_kpit_channel_state *c =
-		&kvm->arch.vpit->pit_state.channels[channel];
+	    &kvm->arch.vpit->pit_state.channels[channel];
 
 	ASSERT(mutex_owned(&kvm->arch.vpit->pit_state.lock));
 
@@ -13742,49 +13824,51 @@ static void pit_latch_count(struct kvm *kvm, int channel)
 	}
 }
 
-static void pit_latch_status(struct kvm *kvm, int channel)
+static void
+pit_latch_status(struct kvm *kvm, int channel)
 {
 	struct kvm_kpit_channel_state *c =
-		&kvm->arch.vpit->pit_state.channels[channel];
+	    &kvm->arch.vpit->pit_state.channels[channel];
 
 	ASSERT(mutex_owned(&kvm->arch.vpit->pit_state.lock));
 
 	if (!c->status_latched) {
 		/* TODO: Return NULL COUNT (bit 6). */
 		c->status = ((pit_get_out(kvm, channel) << 7) |
-				(c->rw_mode << 4) |
-				(c->mode << 1) |
-				c->bcd);
+		    (c->rw_mode << 4) | (c->mode << 1) | c->bcd);
 		c->status_latched = 1;
 	}
 }
 
-static struct kvm_pit *dev_to_pit(struct kvm_io_device *dev)
+static struct kvm_pit *
+dev_to_pit(struct kvm_io_device *dev)
 {
 #ifdef XXX_KVM_DOESNTCOMPILE
-	return container_of(dev, struct kvm_pit, dev);
+	return (container_of(dev, struct kvm_pit, dev));
 #else
-	return (struct kvm_pit *)(((caddr_t)dev) -
-	    offsetof(struct kvm_pit, dev));
-#endif /*XXX_KVM_DOESNTCOMPILE*/
+	return ((struct kvm_pit *)(((caddr_t)dev) -
+	    offsetof(struct kvm_pit, dev)));
+#endif
 }
 
-static int pit_in_range(gpa_t addr)
+static int
+pit_in_range(gpa_t addr)
 {
 	return ((addr >= KVM_PIT_BASE_ADDRESS) &&
-		(addr < KVM_PIT_BASE_ADDRESS + KVM_PIT_MEM_LENGTH));
+	    (addr < KVM_PIT_BASE_ADDRESS + KVM_PIT_MEM_LENGTH));
 }
 
-static int pit_ioport_read(struct kvm_io_device *this,
-			   gpa_t addr, int len, void *data)
+static int
+pit_ioport_read(struct kvm_io_device *this, gpa_t addr, int len, void *data)
 {
 	struct kvm_pit *pit = dev_to_pit(this);
 	struct kvm_kpit_state *pit_state = &pit->pit_state;
 	struct kvm *kvm = pit->kvm;
 	int ret, count;
 	struct kvm_kpit_channel_state *s;
+
 	if (!pit_in_range(addr))
-		return -EOPNOTSUPP;
+		return (-EOPNOTSUPP);
 
 	addr &= KVM_PIT_CHANNEL_MASK;
 	if (addr == 3)
@@ -13837,30 +13921,34 @@ static int pit_ioport_read(struct kvm_io_device *this,
 		}
 	}
 
-	if (len > sizeof(ret))
-		len = sizeof(ret);
+	if (len > sizeof (ret))
+		len = sizeof (ret);
+
 	memcpy(data, (char *)&ret, len);
 
 	mutex_exit(&pit_state->lock);
+
 	return (0);
 }
 
-static void destroy_pit_timer(struct kvm_timer *pt)
+static void
+destroy_pit_timer(struct kvm_timer *pt)
 {
 #ifdef XXX
 	pr_debug("pit: " "execute del timer!\n");
 	hrtimer_cancel_p(&pt->timer);
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 }
 
-static int kpit_is_periodic(struct kvm_timer *ktimer)
+static int
+kpit_is_periodic(struct kvm_timer *ktimer)
 {
-	struct kvm_kpit_state *ps = (struct kvm_kpit_state *)(((caddr_t)ktimer)
-							 - offsetof(struct kvm_kpit_state,
-								    pit_timer));
-	return ps->is_periodic;
+	struct kvm_kpit_state *ps = (struct kvm_kpit_state *)
+	    (((caddr_t)ktimer) - offsetof(struct kvm_kpit_state, pit_timer));
+
+	return (ps->is_periodic);
 }
 
 static struct kvm_timer_ops kpit_ops = {
@@ -13876,6 +13964,7 @@ create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
 	interval = muldiv64(val, NSEC_PER_SEC, KVM_PIT_FREQ);
 
 	mutex_enter(&cpu_lock);
+
 	/* TODO The new value only affected after the retriggered */
 	if (pt->active) {
 		cyclic_remove(pt->kvm_cyclic_id);
@@ -13891,7 +13980,7 @@ create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
 	pt->kvm = ps->pit->kvm;
 	pt->vcpu = pt->kvm->bsp_vcpu;
 
-	pt->pending = 0;  /*XXX need protection?*/
+	pt->pending = 0;  /* XXX need protection? */
 	ps->irq_ack = 1;
 	pt->start = gethrtime();
 
@@ -13902,21 +13991,19 @@ create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
 		pt->kvm_cyc_when.cyt_when = pt->start + pt->period;
 		pt->kvm_cyc_when.cyt_when = CY_INFINITY;
 	}
+
 	pt->kvm_cyclic_id = cyclic_add(&pt->kvm_cyc_handler, &pt->kvm_cyc_when);
 	pt->intervals = 0;
 	pt->active = 1;
 	mutex_exit(&cpu_lock);
 }
 
-static void pit_load_count(struct kvm *kvm, int channel, uint32_t val)
+static void
+pit_load_count(struct kvm *kvm, int channel, uint32_t val)
 {
 	struct kvm_kpit_state *ps = &kvm->arch.vpit->pit_state;
 
 	ASSERT(mutex_owned(&ps->lock));
-
-#ifdef KVM_DEBUG
-	cmn_err(CE_NOTE, "pit: load_count val is %d, channel is %d\n", val, channel);
-#endif
 
 	/*
 	 * The largest possible initial count is 0; this is equivalent
@@ -13932,30 +14019,31 @@ static void pit_load_count(struct kvm *kvm, int channel, uint32_t val)
 		return;
 	}
 
-	/* Two types of timer
-	 * mode 1 is one shot, mode 2 is period, otherwise del timer */
+	/*
+	 * Two types of timer
+	 * mode 1 is one shot, mode 2 is period, otherwise del timer
+	 */
 	switch (ps->channels[0].mode) {
 	case 0:
 	case 1:
-        /* FIXME: enhance mode 4 precision */
+		/* FIXME: enhance mode 4 precision */
 	case 4:
-		if (!(ps->flags & KVM_PIT_FLAGS_HPET_LEGACY)) {
+		if (!(ps->flags & KVM_PIT_FLAGS_HPET_LEGACY))
 			create_pit_timer(ps, val, 0);
-		}
 		break;
 	case 2:
 	case 3:
-		if (!(ps->flags & KVM_PIT_FLAGS_HPET_LEGACY)){
+		if (!(ps->flags & KVM_PIT_FLAGS_HPET_LEGACY))
 			create_pit_timer(ps, val, 1);
-		}
 		break;
 	default:
 		destroy_pit_timer(&ps->pit_timer);
 	}
 }
 
-static int pit_ioport_write(struct kvm_io_device *this,
-			    gpa_t addr, int len, const void *data)
+static int
+pit_ioport_write(struct kvm_io_device *this,
+    gpa_t addr, int len, const void *data)
 {
 	struct kvm_pit *pit = dev_to_pit(this);
 	struct kvm_kpit_state *pit_state = &pit->pit_state;
@@ -13963,19 +14051,14 @@ static int pit_ioport_write(struct kvm_io_device *this,
 	int channel, access;
 	struct kvm_kpit_channel_state *s;
 	uint32_t val = *(uint32_t *) data;
+
 	if (!pit_in_range(addr))
-		return -EOPNOTSUPP;
+		return (-EOPNOTSUPP);
 
 	val  &= 0xff;
 	addr &= KVM_PIT_CHANNEL_MASK;
 
 	mutex_enter(&pit_state->lock);
-
-#ifdef KVM_DEBUG
-	if (val != 0)
-		pr_debug("pit: " "write addr is 0x%x, len is %d, val is 0x%x\n",
-			 (unsigned int)addr, len, val);
-#endif
 
 	if (addr == 3) {
 		channel = val >> 6;
@@ -14033,11 +14116,12 @@ static int pit_ioport_write(struct kvm_io_device *this,
 }
 
 static const struct kvm_io_device_ops pit_dev_ops = {
-	.read     = pit_ioport_read,
-	.write    = pit_ioport_write,
+	.read	= pit_ioport_read,
+	.write	= pit_ioport_write,
 };
 
-void kvm_pit_reset(struct kvm_pit *pit)
+void
+kvm_pit_reset(struct kvm_pit *pit)
 {
 	int i;
 	struct kvm_kpit_channel_state *c;
@@ -14052,13 +14136,13 @@ void kvm_pit_reset(struct kvm_pit *pit)
 	}
 	mutex_exit(&pit->pit_state.lock);
 
-	pit->pit_state.pit_timer.pending =  0; /*XXX need protection?*/
+	pit->pit_state.pit_timer.pending =  0; /* XXX need protection? */
 	pit->pit_state.irq_ack = 1;
 }
 
-
-void kvm_register_irq_ack_notifier(struct kvm *kvm,
-				   struct kvm_irq_ack_notifier *kian)
+void
+kvm_register_irq_ack_notifier(struct kvm *kvm,
+    struct kvm_irq_ack_notifier *kian)
 {
 	mutex_enter(&kvm->irq_lock);
 	list_insert_head(&kvm->irq_ack_notifier_list, kian);
@@ -14067,31 +14151,33 @@ void kvm_register_irq_ack_notifier(struct kvm *kvm,
 
 void
 kvm_unregister_irq_ack_notifier(struct kvm *kvm,
-   struct kvm_irq_ack_notifier *kian)
+    struct kvm_irq_ack_notifier *kian)
 {
 	mutex_enter(&kvm->irq_lock);
 	list_remove(&kvm->irq_ack_notifier_list, kian);
 	mutex_exit(&kvm->irq_lock);
 }
 
-static void pit_mask_notifer(struct kvm_irq_mask_notifier *kimn, int mask)
+static void
+pit_mask_notifer(struct kvm_irq_mask_notifier *kimn, int mask)
 {
-	struct kvm_pit *pit = (struct kvm_pit *)(((caddr_t)kimn)
-					  - offsetof(struct kvm_pit,
-						     mask_notifier));
+	struct kvm_pit *pit = (struct kvm_pit *)(((caddr_t)kimn) -
+	    offsetof(struct kvm_pit, mask_notifier));
+
 	if (!mask) {
 #ifdef XXX
 		atomic_set(&pit->pit_state.pit_timer.pending, 0);
 #else
 		pit->pit_state.pit_timer.pending = 0;
 		XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 		pit->pit_state.irq_ack = 1;
 	}
 }
 
-void kvm_register_irq_mask_notifier(struct kvm *kvm, int irq,
-				    struct kvm_irq_mask_notifier *kimn)
+void
+kvm_register_irq_mask_notifier(struct kvm *kvm, int irq,
+    struct kvm_irq_mask_notifier *kimn)
 {
 	mutex_enter(&kvm->irq_lock);
 	kimn->irq = irq;
@@ -14108,54 +14194,60 @@ kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 	mutex_exit(&kvm->irq_lock);
 }
 
-static struct kvm_pit *speaker_to_pit(struct kvm_io_device *dev)
+static struct kvm_pit *
+speaker_to_pit(struct kvm_io_device *dev)
 {
-	struct kvm_pit *pit = (struct kvm_pit *)(((caddr_t)dev)
-						 - offsetof(struct kvm_pit,
-							    speaker_dev));
-	return pit;
+	struct kvm_pit *pit = (struct kvm_pit *)(((caddr_t)dev) -
+	    offsetof(struct kvm_pit, speaker_dev));
+
+	return (pit);
 }
 
-static int pit_get_gate(struct kvm *kvm, int channel)
+static int
+pit_get_gate(struct kvm *kvm, int channel)
 {
 	ASSERT(mutex_owned(&kvm->arch.vpit->pit_state.lock));
 
-	return kvm->arch.vpit->pit_state.channels[channel].gate;
+	return (kvm->arch.vpit->pit_state.channels[channel].gate);
 }
 
-static int speaker_ioport_read(struct kvm_io_device *this,
-			       gpa_t addr, int len, void *data)
+static int
+speaker_ioport_read(struct kvm_io_device *this, gpa_t addr, int len, void *data)
 {
 	struct kvm_pit *pit = speaker_to_pit(this);
 	struct kvm_kpit_state *pit_state = &pit->pit_state;
 	struct kvm *kvm = pit->kvm;
 	unsigned int refresh_clock;
 	int ret;
+
 	if (addr != KVM_SPEAKER_BASE_ADDRESS)
-		return -EOPNOTSUPP;
+		return (-EOPNOTSUPP);
 
 	/* Refresh clock toggles at about 15us. We approximate as 2^14ns. */
 #ifdef XXX
 	refresh_clock = ((unsigned int)ktime_to_ns(ktime_get()) >> 14) & 1;
 #else
-	refresh_clock = ((unsigned int)gethrtime() >> 14) &1;
+	refresh_clock = ((unsigned int)gethrtime() >> 14) & 1;
 	XXX_KVM_PROBE;
-#endif /* XXX */
+#endif
 
 	mutex_enter(&pit_state->lock);
 	ret = ((pit_state->speaker_data_on << 1) | pit_get_gate(kvm, 2) |
-		(pit_get_out(kvm, 2) << 5) | (refresh_clock << 4));
-	if (len > sizeof(ret))
-		len = sizeof(ret);
+	    (pit_get_out(kvm, 2) << 5) | (refresh_clock << 4));
+
+	if (len > sizeof (ret))
+		len = sizeof (ret);
+
 	memcpy(data, (char *)&ret, len);
 	mutex_exit(&pit_state->lock);
 	return (0);
 }
 
-static void pit_set_gate(struct kvm *kvm, int channel, uint32_t val)
+static void
+pit_set_gate(struct kvm *kvm, int channel, uint32_t val)
 {
 	struct kvm_kpit_channel_state *c =
-		&kvm->arch.vpit->pit_state.channels[channel];
+	    &kvm->arch.vpit->pit_state.channels[channel];
 
 	ASSERT(mutex_owned(&kvm->arch.vpit->pit_state.lock));
 
@@ -14177,48 +14269,53 @@ static void pit_set_gate(struct kvm *kvm, int channel, uint32_t val)
 		if (c->gate < val)
 			c->count_load_time = gethrtime();
 		XXX_KVM_PROBE;
-#endif /* XXX */
+#endif
 		break;
 	}
 
 	c->gate = val;
 }
 
-static int speaker_ioport_write(struct kvm_io_device *this,
-				gpa_t addr, int len, const void *data)
+static int
+speaker_ioport_write(struct kvm_io_device *this, gpa_t addr, int len,
+    const void *data)
 {
 	struct kvm_pit *pit = speaker_to_pit(this);
 	struct kvm_kpit_state *pit_state = &pit->pit_state;
 	struct kvm *kvm = pit->kvm;
 	uint32_t val = *(uint32_t *) data;
+
 	if (addr != KVM_SPEAKER_BASE_ADDRESS)
-		return -EOPNOTSUPP;
+		return (-EOPNOTSUPP);
 
 	mutex_enter(&pit_state->lock);
 	pit_state->speaker_data_on = (val >> 1) & 1;
 	pit_set_gate(kvm, 2, val & 1);
 	mutex_exit(&pit_state->lock);
+
 	return (0);
 }
 
 static const struct kvm_io_device_ops speaker_dev_ops = {
-	.read     = speaker_ioport_read,
-	.write    = speaker_ioport_write,
+	.read	= speaker_ioport_read,
+	.write	= speaker_ioport_write,
 };
 
 /* Caller must hold slots_lock */
-struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
+struct kvm_pit *
+kvm_create_pit(struct kvm *kvm, uint32_t flags)
 {
 	struct kvm_pit *pit;
 	struct kvm_kpit_state *pit_state;
 	int ret;
 
-	pit = kmem_zalloc(sizeof(struct kvm_pit), KM_SLEEP);
+	pit = kmem_zalloc(sizeof (struct kvm_pit), KM_SLEEP);
 
 	pit->irq_source_id = kvm_request_irq_source_id(kvm);
+
 	if (pit->irq_source_id < 0) {
-		kmem_free(pit, sizeof(struct kvm_pit));
-		return NULL;
+		kmem_free(pit, sizeof (struct kvm_pit));
+		return (NULL);
 	}
 
 	mutex_init(&pit->pit_state.lock, NULL, MUTEX_DRIVER, 0);
@@ -14228,7 +14325,7 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 #else
 	XXX_KVM_SYNC_PROBE;
 	mutex_init(&pit->pit_state.inject_lock, NULL, MUTEX_DRIVER, 0);
-#endif /*XXX*/
+#endif
 	kvm->arch.vpit = pit;
 	pit->kvm = kvm;
 
@@ -14236,10 +14333,11 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 	pit_state->pit = pit;
 #ifdef XXX
 	hrtimer_init(&pit_state->pit_timer.timer,
-		     CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	    CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
+
 	pit_state->irq_ack_notifier.gsi = 0;
 	pit_state->irq_ack_notifier.irq_acked = kvm_pit_ack_irq;
 
@@ -14262,29 +14360,31 @@ struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags)
 
 	if (flags & KVM_PIT_SPEAKER_DUMMY) {
 		kvm_iodevice_init(&pit->speaker_dev, &speaker_dev_ops);
-		ret = kvm_io_bus_register_dev(kvm, KVM_PIO_BUS,
-						&pit->speaker_dev);
+		ret = kvm_io_bus_register_dev(kvm,
+		    KVM_PIO_BUS, &pit->speaker_dev);
+
 		if (ret < 0)
 			goto fail_unregister;
 	}
-	return pit;
+
+	return (pit);
 
 fail_unregister:
 #ifdef XXX
 	kvm_io_bus_unregister_dev(kvm, KVM_PIO_BUS, &pit->dev);
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
+#endif
 fail:
 #ifdef XXX
 	kvm_unregister_irq_mask_notifier(kvm, 0, &pit->mask_notifier);
 	kvm_unregister_irq_ack_notifier(kvm, &pit_state->irq_ack_notifier);
 	kvm_free_irq_source_id(kvm, pit->irq_source_id);
-	kmem_free(pit, sizeof(struct kvm_pit));
+	kmem_free(pit, sizeof (struct kvm_pit));
 #else
 	XXX_KVM_PROBE;
-#endif /*XXX*/
-	return NULL;
+#endif
+	return (NULL);
 }
 
 void
@@ -14297,11 +14397,13 @@ kvm_apic_post_state_restore(struct kvm_vcpu *vcpu)
 	kvm_apic_set_version(vcpu);
 
 	apic_update_ppr(apic);
+
 	mutex_enter(&cpu_lock);
 	if (apic->lapic_timer.active)
 		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
 	apic->lapic_timer.active = 0;
 	mutex_exit(&cpu_lock);
+
 	update_divide_count(apic);
 	start_apic_timer(apic);
 	apic->irr_pending = 1;
@@ -14311,7 +14413,7 @@ static int
 kvm_vcpu_ioctl_get_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s)
 {
 	vcpu_load(vcpu);
-	bcopy(vcpu->arch.apic->regs, s->regs, sizeof *s);
+	bcopy(vcpu->arch.apic->regs, s->regs, sizeof (*s));
 	vcpu_put(vcpu);
 
 	return (0);
@@ -14321,7 +14423,7 @@ static int
 kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s)
 {
 	vcpu_load(vcpu);
-	bcopy(s->regs, vcpu->arch.apic->regs, sizeof *s);
+	bcopy(s->regs, vcpu->arch.apic->regs, sizeof (*s));
 	kvm_apic_post_state_restore(vcpu);
 	update_cr8_intercept(vcpu);
 	vcpu_put(vcpu);
@@ -14329,46 +14431,50 @@ kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s)
 	return (0);
 }
 
-int kvm_get_ioapic(struct kvm *kvm, struct kvm_ioapic_state *state)
+int
+kvm_get_ioapic(struct kvm *kvm, struct kvm_ioapic_state *state)
 {
 	struct kvm_ioapic *ioapic = ioapic_irqchip(kvm);
 	if (!ioapic)
-		return EINVAL;
+		return (EINVAL);
 
 	mutex_enter(&ioapic->lock);
-	memcpy(state, ioapic, sizeof(struct kvm_ioapic_state));
+	memcpy(state, ioapic, sizeof (struct kvm_ioapic_state));
 	mutex_exit(&ioapic->lock);
+
 	return (0);
 }
 
-int kvm_set_ioapic(struct kvm *kvm, struct kvm_ioapic_state *state)
+int
+kvm_set_ioapic(struct kvm *kvm, struct kvm_ioapic_state *state)
 {
 	struct kvm_ioapic *ioapic = ioapic_irqchip(kvm);
+
 	if (!ioapic)
-		return EINVAL;
+		return (EINVAL);
 
 	mutex_enter(&ioapic->lock);
-	memcpy(ioapic, state, sizeof(struct kvm_ioapic_state));
+	memcpy(ioapic, state, sizeof (struct kvm_ioapic_state));
 	update_handled_vectors(ioapic);
 	mutex_exit(&ioapic->lock);
+
 	return (0);
 }
 
-static int kvm_vm_ioctl_get_irqchip(struct kvm *kvm, struct kvm_irqchip *chip)
+static int
+kvm_vm_ioctl_get_irqchip(struct kvm *kvm, struct kvm_irqchip *chip)
 {
 	int r;
 
 	r = 0;
 	switch (chip->chip_id) {
 	case KVM_IRQCHIP_PIC_MASTER:
-		memcpy(&chip->chip.pic,
-			&pic_irqchip(kvm)->pics[0],
-			sizeof(struct kvm_pic_state));
+		memcpy(&chip->chip.pic, &pic_irqchip(kvm)->pics[0],
+		    sizeof (struct kvm_pic_state));
 		break;
 	case KVM_IRQCHIP_PIC_SLAVE:
-		memcpy(&chip->chip.pic,
-			&pic_irqchip(kvm)->pics[1],
-			sizeof(struct kvm_pic_state));
+		memcpy(&chip->chip.pic, &pic_irqchip(kvm)->pics[1],
+		    sizeof (struct kvm_pic_state));
 		break;
 	case KVM_IRQCHIP_IOAPIC:
 		r = kvm_get_ioapic(kvm, &chip->chip.ioapic);
@@ -14377,27 +14483,28 @@ static int kvm_vm_ioctl_get_irqchip(struct kvm *kvm, struct kvm_irqchip *chip)
 		r = EINVAL;
 		break;
 	}
-	return r;
+
+	return (r);
 }
 
-static int kvm_vm_ioctl_set_irqchip(struct kvm *kvm, struct kvm_irqchip *chip)
+static int
+kvm_vm_ioctl_set_irqchip(struct kvm *kvm, struct kvm_irqchip *chip)
 {
 	int r;
 
 	r = 0;
+
 	switch (chip->chip_id) {
 	case KVM_IRQCHIP_PIC_MASTER:
 		mutex_enter(&pic_irqchip(kvm)->lock);
-		memcpy(&pic_irqchip(kvm)->pics[0],
-			&chip->chip.pic,
-			sizeof(struct kvm_pic_state));
+		memcpy(&pic_irqchip(kvm)->pics[0], &chip->chip.pic,
+		    sizeof (struct kvm_pic_state));
 		mutex_exit(&pic_irqchip(kvm)->lock);
 		break;
 	case KVM_IRQCHIP_PIC_SLAVE:
 		mutex_enter(&pic_irqchip(kvm)->lock);
-		memcpy(&pic_irqchip(kvm)->pics[1],
-			&chip->chip.pic,
-			sizeof(struct kvm_pic_state));
+		memcpy(&pic_irqchip(kvm)->pics[1], &chip->chip.pic,
+		    sizeof (struct kvm_pic_state));
 		mutex_exit(&pic_irqchip(kvm)->lock);
 		break;
 	case KVM_IRQCHIP_IOAPIC:
@@ -14407,8 +14514,10 @@ static int kvm_vm_ioctl_set_irqchip(struct kvm *kvm, struct kvm_irqchip *chip)
 		r = EINVAL;
 		break;
 	}
+
 	kvm_pic_update_irq(pic_irqchip(kvm));
-	return r;
+
+	return (r);
 }
 
 /*
@@ -14417,13 +14526,15 @@ static int kvm_vm_ioctl_set_irqchip(struct kvm *kvm, struct kvm_irqchip *chip)
  *  = 0   Interrupt was coalesced (previous irq is still pending)
  *  > 0   Number of CPUs interrupt was delivered to
  */
-int kvm_set_irq(struct kvm *kvm, int irq_source_id, uint32_t irq, int level)
+int
+kvm_set_irq(struct kvm *kvm, int irq_source_id, uint32_t irq, int level)
 {
 	struct kvm_kernel_irq_routing_entry *e, irq_set[KVM_NR_IRQCHIPS];
 	int ret = -1, i = 0;
 	struct kvm_irq_routing_table *irq_rt;
 
-	/* Not possible to detect if the guest uses the PIC or the
+	/*
+	 * Not possible to detect if the guest uses the PIC or the
 	 * IOAPIC.  So set the bit in both. The guest will ignore
 	 * writes to the unused one.
 	 */
@@ -14433,18 +14544,20 @@ int kvm_set_irq(struct kvm *kvm, int irq_source_id, uint32_t irq, int level)
 #else
 	XXX_KVM_SYNC_PROBE;
 	irq_rt = kvm->irq_routing;
-#endif /*XXX*/
+#endif
 	if (irq < irq_rt->nr_rt_entries) {
-		for (e = list_head(&irq_rt->map[irq]); e; e = list_next(&irq_rt->map[irq], e))
+		for (e = list_head(&irq_rt->map[irq]); e != NULL;
+		    e = list_next(&irq_rt->map[irq], e)) {
 			irq_set[i++] = *e;
+		}
 	}
 #ifdef XXX
 	rcu_read_unlock();
 #else
 	XXX_KVM_SYNC_PROBE;
-#endif /*XXX*/
+#endif
 
-	while(i--) {
+	while (i--) {
 		int r;
 		r = irq_set[i].set(&irq_set[i], kvm, irq_source_id, level);
 		if (r < 0)
@@ -14453,16 +14566,18 @@ int kvm_set_irq(struct kvm *kvm, int irq_source_id, uint32_t irq, int level)
 		ret = r + ((ret < 0) ? 0 : ret);
 	}
 
-	return ret;
+	return (ret);
 }
 
-static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
-				    struct kvm_interrupt *irq)
+static int
+kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu, struct kvm_interrupt *irq)
 {
 	if (irq->irq < 0 || irq->irq >= 256)
-		return -EINVAL;
+		return (-EINVAL);
+
 	if (irqchip_in_kernel(vcpu->kvm))
-		return -ENXIO;
+		return (-ENXIO);
+
 	vcpu_load(vcpu);
 
 	kvm_queue_interrupt(vcpu, irq->irq, 0);
@@ -14504,9 +14619,8 @@ kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu, uint64_t *mcg_capp)
 	for (bank = 0; bank < bank_num; bank++)
 		vcpu->arch.mce_banks[bank*4] = ~(uint64_t)0;
 out:
-	return rval;
+	return (rval);
 }
-/* END CSTYLED */
 
 static int
 kvm_vcpu_ioctl_set_sigmask(struct kvm_vcpu *vcpu, sigset_t *sigset)
