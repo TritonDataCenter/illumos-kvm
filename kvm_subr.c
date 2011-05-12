@@ -183,3 +183,31 @@ unsigned long kvm_read_tr_base(void)
 	__asm__("str %0" : "=g"(tr));
 	return segment_base(tr);
 }
+
+static int
+kvm_xcall_func(kvm_xcall_t func, void *arg)
+{
+	(*func)(arg);
+
+	return (0);
+}
+
+void kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg)
+{
+	cpuset_t set;
+
+	CPUSET_ZERO(set);
+
+	if (cpu == KVM_CPUALL) {
+		CPUSET_ALL(set);
+	} else {
+		CPUSET_ADD(set, cpu);
+	}
+
+	kpreempt_disable();
+	xc_sync((xc_arg_t)func, (xc_arg_t)arg, 0, CPUSET2BV(set),
+		(xc_func_t) kvm_xcall_func);
+	kpreempt_enable();
+}
+
+

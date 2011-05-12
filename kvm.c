@@ -632,6 +632,24 @@ set_guest_debug(struct kvm_vcpu *vcpu, struct kvm_guest_debug *dbg)
 	update_exception_bitmap(vcpu);
 }
 
+extern struct vmcs_config vmcs_config;
+
+static int setup_vmcs_config(struct vmcs_config *vmcs_conf);
+
+static void vmx_check_processor_compat(void *rtn)
+{
+	struct vmcs_config vmcs_conf;
+
+	if (setup_vmcs_config(&vmcs_conf) < 0)
+		*(int *)rtn |= EIO;
+	if (memcmp(&vmcs_config, &vmcs_conf, sizeof (struct vmcs_config))
+	    != 0) {
+		cmn_err(CE_WARN, "kvm: CPU %d feature inconsistency!\n",
+			curthread->t_cpu->cpu_id);
+		*(int *)rtn |= EIO;
+	}
+}
+
 static struct kvm_x86_ops vmx_x86_ops = {
 	.cpu_has_kvm_support = nulldev, /* XXX: cpu_has_kvm_support? */
 	.disabled_by_bios = nulldev, /* XXX: vmx_disabled_by_bios? */
@@ -639,7 +657,7 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.hardware_enable = vmx_hardware_enable,
 	.hardware_disable = hardware_disable,
 
-	.check_processor_compatibility = (void(*)(void *))nulldev, /* XXX */
+	.check_processor_compatibility = vmx_check_processor_compat,
 
 	.hardware_setup = vmx_hardware_setup,
 
@@ -1264,17 +1282,23 @@ skip_emulated_instruction(struct kvm_vcpu *vcpu)
  */
 
 struct vmcs **vmxarea;  /* 1 per cpu */
+struct vmcs **current_vmcs;
+
+uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
 
 static int
 alloc_kvm_area(void)
 {
 	int i, j;
+	pfn_t pfn;
 
 	/*
 	 * linux seems to do the allocations in a numa-aware
 	 * fashion.  We'll just allocate...
 	 */
 	vmxarea = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
+	vmxarea_pa = kmem_alloc(ncpus * sizeof (uint64_t *), KM_SLEEP);
+	current_vmcs = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
 
 	for (i = 0; i < ncpus; i++) {
 		struct vmcs *vmcs;
@@ -1284,6 +1308,10 @@ alloc_kvm_area(void)
 		/* via kmem_cache_create, but I'm lazy */
 		vmcs = kmem_zalloc(PAGESIZE, KM_SLEEP);
 		vmxarea[i] = vmcs;
+		current_vmcs[i] = vmcs;
+		pfn = hat_getpfnum(kas.a_hat, (caddr_t)vmcs);
+		vmxarea_pa[i] = ((uint64_t)pfn << PAGESHIFT) |
+			((uint64_t)vmxarea[i] & PAGEOFFSET);
 	}
 
 	return (0);
@@ -2847,6 +2875,14 @@ page_t *bad_page;
 pfn_t bad_pfn;
 kmem_cache_t *kvm_vcpu_cache;
 
+void
+kvm_arch_check_processor_compat(void *rtn)
+{
+	kvm_x86_ops->check_processor_compatibility(rtn);
+}
+
+extern void kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg);
+
 int
 kvm_init(void *opaque, unsigned int vcpu_size)
 {
@@ -2883,6 +2919,10 @@ kvm_init(void *opaque, unsigned int vcpu_size)
 			goto out_free_1;
 	}
 #else
+	r = 0;
+	kvm_xcall(KVM_CPUALL, kvm_arch_check_processor_compat, &r);
+	if (r < 0)
+		goto out_free_1;
 	XXX_KVM_PROBE;
 #endif
 
@@ -3409,17 +3449,15 @@ extern unsigned int ddi_enter_critical(void);
 extern void ddi_exit_critical(unsigned int d);
 
 /*
- * XXX the following needs to run on
- * every cpu.  Right now, only run on the current
- * cpu.
+ * The following needs to run on each cpu.  Currently,
+ * wait is always 1, so we use the kvm_xcall() routine which
+ * calls xc_sync.  Later, if needed, the implementation can be
+ * changed to use xc_call or xc_call_nowait.
  */
 #define	on_each_cpu(func, info, wait)	\
 	/*CSTYLED*/			\
 	({				\
-	unsigned int d;			\
-	d = ddi_enter_critical();	\
-	func(info);			\
-	ddi_exit_critical(d);		\
+		kvm_xcall(KVM_CPUALL, func, info);	\
 	0;				\
 	})
 
@@ -4586,14 +4624,14 @@ __vcpu_clear(void *arg)
 
 	if (vmx->vcpu.cpu == cpu)
 		vmcs_clear(vmx->vmcs);
-#ifdef XXX
-	if (per_cpu(current_vmcs, cpu) == vmx->vmcs)
-		per_cpu(current_vmcs, cpu) = NULL;
+
+	if (current_vmcs[cpu] == vmx->vmcs)
+		current_vmcs[cpu] = NULL;
 	rdtscll(vmx->vcpu.arch.host_tsc);
+#ifdef XXX
 	list_del(&vmx->local_vcpus_link);
 #else
 	XXX_KVM_PROBE;
-	rdtscll(vmx->vcpu.arch.host_tsc);
 #endif
 	vmx->vcpu.cpu = -1;
 	vmx->launched = 0;
@@ -4609,7 +4647,7 @@ static void vcpu_clear(struct vcpu_vmx *vmx)
 	 *
 	 * smp_call_function_single(vmx->vcpu.cpu, __vcpu_clear, vmx, 1);
 	 */
-	__vcpu_clear(vmx);
+	kvm_xcall(vmx->vcpu.cpu, __vcpu_clear, vmx);
 }
 
 
@@ -4964,31 +5002,15 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 #endif
 	}
 
-#ifdef XXX
-	if (per_cpu(current_vmcs, cpu) != vmx->vmcs) {
+	if (current_vmcs[cpu] != vmx->vmcs) {
 		uint8_t error;
 
-		per_cpu(current_vmcs, cpu) = vmx->vmcs;
+		current_vmcs[cpu] = vmx->vmcs;
 
 		/*CSTYLED*/
-		__asm__ volatile (__ex(ASM_VMX_VMPTRLD_RAX) "; setna %0"
+		__asm__ volatile (ASM_VMX_VMPTRLD_RAX "; setna %0"
 		    : "=g"(error) : "a"(&phys_addr), "m"(phys_addr)
 		    : "cc");
-#else
-	{
-		uint8_t error;
-
-		/*CSTYLED*/
-		__asm__ volatile (ASM_VMX_VMPTRLD_RAX ";\n\t setna %0"
-		    : "=g"(error) : "a"(&phys_addr), "m"(phys_addr)
-		    : "cc");
-
-		XXX_KVM_PROBE;
-
-		if (error)
-			cmn_err(CE_PANIC, "kvm: vmptrld %p/%lx fail\n",
-			    vmx->vmcs, phys_addr);
-#endif
 	}
 
 	if (vcpu->cpu != cpu) {

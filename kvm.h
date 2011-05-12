@@ -19,6 +19,9 @@
 #define XXX_KVM_SYNC_PROBE DTRACE_PROBE2(kvm__xxx__sync, \
 	char *, __FILE__, int, __LINE__)
 
+#define KVM_CPUALL -1
+typedef void (*kvm_xcall_t)(void *);
+
 #ifdef _KERNEL
 #include "bitops.h"
 #ifdef CONFIG_MMU_NOTIFIER

@@ -325,6 +325,7 @@ extern uint64_t shadow_dirty_mask;
 extern pfn_t hat_getpfnum(hat_t *hat, caddr_t addr);
 struct vmcs_config vmcs_config;
 extern inline void ept_sync_global(void);
+extern uint64_t *vmxarea_pa;
 
 int
 vmx_hardware_enable(void *garbage)
@@ -337,9 +338,8 @@ vmx_hardware_enable(void *garbage)
 #else
 	uint64_t phys_addr;
 	XXX_KVM_PROBE;
-	pfn = hat_getpfnum(kas.a_hat, (caddr_t)vmxarea[cpu]);
-	phys_addr = ((uint64_t)pfn << PAGESHIFT) |
-	    ((uint64_t)vmxarea[cpu] & PAGEOFFSET);
+	phys_addr = vmxarea_pa[cpu];
+
 #endif
 
 	((struct vmcs *)(vmxarea[cpu]))->revision_id = vmcs_config.revision_id;
