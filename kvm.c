@@ -14688,6 +14688,74 @@ kvm_vcpu_ioctl_set_msrs(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs, int *rv)
 	return (0);
 }
 
+/*
+ * Get (and clear) the dirty memory log for a memory slot.
+ */
+int
+kvm_vm_ioctl_get_dirty_log(struct kvm *kvm, struct kvm_dirty_log *log)
+{
+	int r, i;
+	struct kvm_memory_slot *memslot;
+	unsigned long n;
+	unsigned long is_dirty = 0;
+	unsigned long *dirty_bitmap = NULL;
+
+	mutex_enter(&kvm->slots_lock);
+
+	r = EINVAL;
+	if (log->slot >= KVM_MEMORY_SLOTS)
+		goto out;
+
+	memslot = &kvm->memslots->memslots[log->slot];
+	r = ENOENT;
+	if (!memslot->dirty_bitmap)
+		goto out;
+
+	n = kvm_dirty_bitmap_bytes(memslot);
+
+	dirty_bitmap = kmem_alloc(n, KM_SLEEP);
+	memset(dirty_bitmap, 0, n);
+
+	for (i = 0; !is_dirty && i < n / sizeof (long); i++)
+		is_dirty = memslot->dirty_bitmap[i];
+
+	/* If nothing is dirty, don't bother messing with page tables. */
+	if (is_dirty) {
+		struct kvm_memslots *slots, *old_slots;
+
+		mutex_enter(&kvm->mmu_lock);
+		kvm_mmu_slot_remove_write_access(kvm, log->slot);
+		mutex_exit(&kvm->mmu_lock);
+
+		slots = kmem_zalloc(sizeof (struct kvm_memslots), KM_SLEEP);
+		if (!slots)
+			goto out_free;
+
+		memcpy(slots, kvm->memslots, sizeof (struct kvm_memslots));
+		slots->memslots[log->slot].dirty_bitmap = dirty_bitmap;
+
+		old_slots = kvm->memslots;
+#ifdef XXX
+		rcu_assign_pointer(kvm->memslots, slots);
+		kvm_synchronize_srcu_expedited(&kvm->srcu);
+#else
+		kvm->memslots = slots;
+		XXX_KVM_SYNC_PROBE;
+#endif
+		dirty_bitmap = old_slots->memslots[log->slot].dirty_bitmap;
+		kmem_free(old_slots, sizeof (struct kvm_memslots));
+	}
+
+	r = 0;
+	if (copyout(dirty_bitmap, log->v.dirty_bitmap, n) != 0)
+		r = EFAULT;
+out_free:
+	kmem_free(dirty_bitmap, n);
+out:
+	mutex_exit(&kvm->slots_lock);
+	return (r);
+}
+
 static int
 kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 {
@@ -15378,6 +15446,23 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		rval = kvm_vm_ioctl_set_irqchip(kvmp, &chip);
+		break;
+	}
+	case KVM_GET_DIRTY_LOG: {
+		struct kvm_dirty_log log;
+		struct kvm *kvmp;
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		if (copyin(argp, &log, sizeof (struct kvm_dirty_log)) != 0) {
+			rval = EFAULT;
+			break;
+		}
+
+		rval = kvm_vm_ioctl_get_dirty_log(kvmp, &log);
 		break;
 	}
 	default:
