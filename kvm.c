@@ -2162,6 +2162,64 @@ kvm_mmu_page_unlink_children(struct kvm *kvm, struct kvm_mmu_page *sp)
 	}
 }
 
+struct kvm_memory_slot *
+gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
+{
+	int i;
+#ifdef XXX_KVM_DECLARATION
+	struct kvm_memslots *slots = rcu_dereference(kvm->memslots);
+#else
+	struct kvm_memslots *slots = kvm->memslots;
+#endif
+
+	for (i = 0; i < slots->nmemslots; ++i) {
+		struct kvm_memory_slot *memslot = &slots->memslots[i];
+
+		if (gfn >= memslot->base_gfn &&
+		    gfn < memslot->base_gfn + memslot->npages)
+			return (memslot);
+	}
+	return (NULL);
+}
+
+extern int * slot_largepage_idx(gfn_t gfn, struct kvm_memory_slot *slot,
+				int level);
+
+static void account_shadowed(struct kvm *kvm, gfn_t gfn)
+{
+	struct kvm_memory_slot *slot;
+	int *write_count;
+	int i;
+
+	gfn = unalias_gfn(kvm, gfn);
+
+	slot = gfn_to_memslot_unaliased(kvm, gfn);
+	for (i = PT_DIRECTORY_LEVEL;
+		i < PT_PAGE_TABLE_LEVEL + KVM_NR_PAGE_SIZES; ++i) {
+			write_count = slot_largepage_idx(gfn, slot, i);
+			*write_count += 1;
+	}
+}
+
+static void unaccount_shadowed(struct kvm *kvm, gfn_t gfn)
+{
+	struct kvm_memory_slot *slot;
+	int *write_count;
+	int i;
+
+	gfn = unalias_gfn(kvm, gfn);
+	for (i = PT_DIRECTORY_LEVEL;
+		i < PT_PAGE_TABLE_LEVEL + KVM_NR_PAGE_SIZES; ++i) {
+			slot = gfn_to_memslot_unaliased(kvm, gfn);
+			write_count = slot_largepage_idx(gfn, slot, i);
+			*write_count -= 1;
+			if (*write_count < 0)
+				cmn_err(CE_WARN,
+				"unaccount_shadowed: *write_count = %d (< 0)\n",
+				*write_count);
+	}
+}
+
 int
 kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 {
@@ -2171,12 +2229,10 @@ kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 	kvm_mmu_page_unlink_children(kvm, sp);
 	kvm_mmu_unlink_parents(kvm, sp);
 	kvm_flush_remote_tlbs(kvm);
-#ifdef XXX
+
 	if (!sp->role.invalid && !sp->role.direct)
 		unaccount_shadowed(kvm, sp->gfn);
-#else
-	XXX_KVM_PROBE;
-#endif
+
 	if (sp->unsync)
 		kvm_unlink_unsync_page(kvm, sp);
 
@@ -2399,11 +2455,7 @@ kvm_mmu_get_page(struct kvm_vcpu *vcpu, gfn_t gfn, gva_t gaddr, unsigned level,
 	if (!direct) {
 		if (rmap_write_protect(vcpu->kvm, gfn))
 			kvm_flush_remote_tlbs(vcpu->kvm);
-#ifdef XXX
 		account_shadowed(vcpu->kvm, gfn);
-#else
-		XXX_KVM_PROBE;
-#endif
 	}
 
 	if (shadow_trap_nonpresent_pte != shadow_notrap_nonpresent_pte)
@@ -5812,26 +5864,6 @@ kvm_queue_interrupt(struct kvm_vcpu *vcpu, uint8_t vector, int soft)
 	vcpu->arch.interrupt.pending = 1;
 	vcpu->arch.interrupt.soft = soft;
 	vcpu->arch.interrupt.nr = vector;
-}
-
-struct kvm_memory_slot *
-gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
-{
-	int i;
-#ifdef XXX_KVM_DECLARATION
-	struct kvm_memslots *slots = rcu_dereference(kvm->memslots);
-#else
-	struct kvm_memslots *slots = kvm->memslots;
-#endif
-
-	for (i = 0; i < slots->nmemslots; ++i) {
-		struct kvm_memory_slot *memslot = &slots->memslots[i];
-
-		if (gfn >= memslot->base_gfn &&
-		    gfn < memslot->base_gfn + memslot->npages)
-			return (memslot);
-	}
-	return (NULL);
 }
 
 inline unsigned long

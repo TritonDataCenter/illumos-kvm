@@ -2748,7 +2748,7 @@ gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
  * Return the pointer to the largepage write count for a given
  * gfn, handling slots that are not large page aligned.
  */
-static int *
+int *
 slot_largepage_idx(gfn_t gfn, struct kvm_memory_slot *slot, int level)
 {
 	unsigned long idx;
