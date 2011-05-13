@@ -3561,32 +3561,6 @@ mmu_notifier_to_kvm(struct mmu_notifier *mn)
 
 extern pfn_t hat_getpfnum(struct hat *hat, caddr_t);
 
-void
-kvm_mmu_zap_all(struct kvm *kvm)
-{
-	struct kvm_mmu_page *sp, *node;
-
-	/*
-	 * In the following loop, sp may be freed and deleted
-	 * from the list indirectly from kvm_mmu_zap_page.
-	 * So we hold onto the next element before zapping.
-	 */
-	mutex_enter(&kvm->mmu_lock);
-	sp = list_head(&kvm->arch.active_mmu_pages);
-	if (sp)
-		nsp = list_next(&kvm->arch.active_mmu_pages, sp);
-
-	while (sp) {
-		(void) kvm_mmu_zap_page(kvm, sp);
-		sp = nsp;
-		if (sp)
-			nsp = list_next(&kvm->arch.active_mmu_pages, sp);
-	}
-
-	mutex_exit(&kvm->mmu_lock);
-	kvm_flush_remote_tlbs(kvm);
-}
-
 static void
 kvm_mmu_notifier_invalidate_page(struct mmu_notifier *mn,
     struct mm_struct *mm, unsigned long address)
@@ -3768,8 +3742,6 @@ kvm_mmu_zap_all(struct kvm *kvm)
 	while (sp) {
 		(void) kvm_mmu_zap_page(kvm, sp);
 		sp = nsp;
-		if (sp == list_head(&kvm->arch.active_mmu_pages))
-			break;
 		if (sp)
 			nsp = list_next(&kvm->arch.active_mmu_pages, sp);
 	}
