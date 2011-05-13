@@ -455,6 +455,7 @@ static uint32_t group2_table[] = {
 #elif defined(__i386__)
 #define	_LO32 ""		/* force 32-bit operand */
 #define	_STK  "%%esp"		/* stack pointer */
+#error 32-bit variant of _PRE_EFLAGS not supported
 #endif
 
 /*
@@ -474,7 +475,7 @@ static uint32_t group2_table[] = {
 	"pushf; "                                                       \
 	"notl %"_LO32 _tmp"; "                                          \
 	"andl %"_LO32 _tmp",("_STK"); "                                 \
-	"andl %"_LO32 _tmp","__stringify(64/4)"("_STK"); "	\
+	"andl %"_LO32 _tmp",16("_STK"); "	\
 	"pop  %"_tmp"; "                                                \
 	"orl  %"_LO32 _tmp",("_STK"); "                                 \
 	"popf; "                                                        \
