@@ -5,5 +5,6 @@
 struct kvm;
 
 void kvm_free_pit(struct kvm *);
+struct kvm_pit *kvm_create_pit(struct kvm *kvm, uint32_t flags);
 
 #endif

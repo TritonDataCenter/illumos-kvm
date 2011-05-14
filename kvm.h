@@ -2117,6 +2117,7 @@ void kvm_arch_sync_events(struct kvm *kvm);
 
 int kvm_cpu_has_pending_timer(struct kvm_vcpu *vcpu);
 void kvm_vcpu_kick(struct kvm_vcpu *vcpu);
+void kvm_timer_fire(void *);
 
 void kvm_sigprocmask(int how, sigset_t *, sigset_t *);
 
