@@ -389,8 +389,8 @@ typedef struct kvm_vcpu {
 	int fpu_active;
 	int guest_fpu_loaded;
 
-	kmutex_t kvcpu_timer_lock;
-	kcondvar_t kvcpu_timer_cv;
+	kmutex_t kvcpu_kick_lock;
+	kcondvar_t kvcpu_kick_cv;
 
 	int sigset_active;
 	sigset_t sigset;
@@ -1573,7 +1573,7 @@ typedef struct kvm_id_map_addr_ioc {
 #define KVM_CREATE_PIT            _IO(KVMIO,   0x64)
 #define KVM_GET_PIT               _IOWR(KVMIO, 0x65, struct kvm_pit_state)
 #define KVM_SET_PIT               _IOR(KVMIO,  0x66, struct kvm_pit_state)
-#define KVM_CREATE_PIT2		  _IOW(KVMIO,  0x77, struct kvm_pit_config_ioc)
+#define KVM_CREATE_PIT2		  _IOW(KVMIO,  0x77, struct kvm_pit_config)
 
 #define KVM_REGISTER_COALESCED_MMIO \
 			_IOW(KVMIO,  0x67, struct kvm_coalesced_mmio_zone_ioc)

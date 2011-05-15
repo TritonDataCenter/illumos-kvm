@@ -12197,18 +12197,32 @@ kvm_vcpu_block(struct kvm_vcpu *vcpu)
 		if (issig(JUSTLOOKING))
 			break;
 
-		mutex_enter(&vcpu->kvcpu_timer_lock);
+		mutex_enter(&vcpu->kvcpu_kick_lock);
 
 		if (kvm_cpu_has_pending_timer(vcpu)) {
-			mutex_exit(&vcpu->kvcpu_timer_lock);
+			mutex_exit(&vcpu->kvcpu_kick_lock);
 			break;
 		}
 
-		(void) cv_wait_sig_swap(&vcpu->kvcpu_timer_cv,
-		    &vcpu->kvcpu_timer_lock);
+		(void) cv_wait_sig_swap(&vcpu->kvcpu_kick_cv,
+		    &vcpu->kvcpu_kick_lock);
 
-		mutex_exit(&vcpu->kvcpu_timer_lock);
+		mutex_exit(&vcpu->kvcpu_kick_lock);
 	}
+}
+
+void
+kvm_vcpu_kick(struct kvm_vcpu *vcpu)
+{
+	mutex_enter(&vcpu->kvcpu_kick_lock);
+
+#ifdef XXX_KVM_STAT
+	if (CV_HAS_WAITERS(&vcpu->kvcpu_kick_cv))
+		++vcpu->stat.halt_wakeup;
+#endif
+
+	cv_broadcast(&vcpu->kvcpu_kick_cv);
+	mutex_exit(&vcpu->kvcpu_kick_lock);
 }
 
 static void
@@ -13686,7 +13700,7 @@ kvm_timer_fire(void *arg)
 	if (vcpu == NULL)
 		return;
 
-	mutex_enter(&vcpu->kvcpu_timer_lock);
+	mutex_enter(&vcpu->kvcpu_kick_lock);
 
 	if (timer->reinject || !timer->pending) {
 		atomic_add_32(&timer->pending, 1);
@@ -13695,9 +13709,8 @@ kvm_timer_fire(void *arg)
 
 	timer->intervals++;
 
-	cv_broadcast(&vcpu->kvcpu_timer_cv);
-
-	mutex_exit(&vcpu->kvcpu_timer_lock);
+	cv_broadcast(&vcpu->kvcpu_kick_cv);
+	mutex_exit(&vcpu->kvcpu_kick_lock);
 }
 
 void
@@ -14085,6 +14098,43 @@ out:
 }
 
 static int
+kvm_vm_ioctl_get_pit2(struct kvm *kvm, struct kvm_pit_state2 *ps)
+{
+	struct kvm_pit *vpit = kvm->arch.vpit;
+
+	mutex_enter(&vpit->pit_state.lock);
+	memcpy(ps->channels, &vpit->pit_state.channels, sizeof (ps->channels));
+	ps->flags = vpit->pit_state.flags;
+	mutex_exit(&vpit->pit_state.lock);
+
+	return (0);
+}
+
+static int
+kvm_vm_ioctl_set_pit2(struct kvm *kvm, struct kvm_pit_state2 *ps)
+{
+	boolean_t prev_legacy, cur_legacy, start = B_FALSE;
+	struct kvm_pit *vpit = kvm->arch.vpit;
+
+	mutex_enter(&vpit->pit_state.lock);
+	prev_legacy = vpit->pit_state.flags & KVM_PIT_FLAGS_HPET_LEGACY;
+	cur_legacy = ps->flags & KVM_PIT_FLAGS_HPET_LEGACY;
+
+	if (!prev_legacy && cur_legacy)
+		start = B_TRUE;
+
+	memcpy(&vpit->pit_state.channels, &ps->channels,
+	    sizeof (vpit->pit_state.channels));
+
+	vpit->pit_state.flags = ps->flags;
+	kvm_pit_load_count(kvm, 0, vpit->pit_state.channels[0].count, start);
+
+	mutex_exit(&vpit->pit_state.lock);
+
+	return (0);
+}
+
+static int
 kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 {
 	int rval = DDI_SUCCESS;
@@ -14107,10 +14157,11 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 	} u;
 
 	struct {
-		int cmd;
-		void *func;
-		size_t size;
-		boolean_t copyout;
+		int cmd;		/* command */
+		void *func;		/* function to call */
+		size_t size;		/* size of user-level structure */
+		boolean_t copyout;	/* boolean: copy out after func */
+		boolean_t vmwide;	/* boolean: ioctl is not per-VCPU */
 	} *ioctl, ioctltab[] = {
 		{ KVM_RUN, kvm_arch_vcpu_ioctl_run },
 		{ KVM_X86_SETUP_MCE, kvm_vcpu_ioctl_x86_setup_mce,
@@ -14151,21 +14202,18 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		    sizeof (struct kvm_interrupt) },
 		{ KVM_SET_VAPIC_ADDR, kvm_lapic_set_vapic_addr,
 		    sizeof (struct kvm_vapic_addr) },
+		{ KVM_GET_PIT2, kvm_vm_ioctl_get_pit2,
+		    sizeof (struct kvm_pit_state2), B_TRUE, B_TRUE },
+		{ KVM_SET_PIT2, kvm_vm_ioctl_set_pit2,
+		    sizeof (struct kvm_pit_state2), B_FALSE, B_TRUE },
 		{ 0, NULL }
 	};
 
 	for (ioctl = &ioctltab[0]; ioctl->func != NULL; ioctl++) {
 		caddr_t buf = NULL;
-		kvm_vcpu_t *vcpu;
-		int (*func)(kvm_vcpu_t *, void *, int *);
 
 		if (ioctl->cmd != cmd)
 			continue;
-
-		if ((vcpu = ksp->kds_vcpu) == NULL) {
-			rval = EINVAL;
-			break;
-		}
 
 		if (ioctl->size != 0) {
 			buf = kmem_alloc(ioctl->size, KM_SLEEP);
@@ -14176,8 +14224,29 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 			}
 		}
 
-		func = (int(*)(kvm_vcpu_t *, void *, int *))ioctl->func;
-		rval = func(vcpu, buf, rv);
+		if (ioctl->vmwide) {
+			kvm_t *kvmp;
+			int (*func)(kvm_t *, void *, int *);
+
+			if ((kvmp = ksp->kds_kvmp) == NULL) {
+				kmem_free(buf, ioctl->size);
+				return (EINVAL);
+			}
+
+			func = (int(*)(kvm_t *, void *, int *))ioctl->func;
+			rval = func(kvmp, buf, rv);
+		} else {
+			kvm_vcpu_t *vcpu;
+			int (*func)(kvm_vcpu_t *, void *, int *);
+
+			if ((vcpu = ksp->kds_vcpu) == NULL) {
+				kmem_free(buf, ioctl->size);
+				return (EINVAL);
+			}
+
+			func = (int(*)(kvm_vcpu_t *, void *, int *))ioctl->func;
+			rval = func(vcpu, buf, rv);
+		}
 
 		if (rval == 0 && ioctl->size != 0 && ioctl->copyout) {
 			if (copyout(buf, argp, ioctl->size) != 0) {
@@ -14263,25 +14332,37 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		*rv = ptob(KVM_VCPU_MMAP_LENGTH);
 		break;
 
+	case KVM_CREATE_PIT2:
+		if (copyin(argp, &u.pit_config,
+		    sizeof (struct kvm_pit_config)) != 0) {
+			rval = EFAULT;
+			break;
+		}
+		/*FALLTHROUGH*/
+
 	case KVM_CREATE_PIT: {
 		struct kvm *kvmp;
 
-		kvmp = ksp->kds_kvmp;
-		if (kvmp == NULL) {
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
 			break;
 		}
 
-		u.pit_config.flags = KVM_PIT_SPEAKER_DUMMY;
+		if (cmd == KVM_CREATE_PIT) {
+			u.pit_config.flags = KVM_PIT_SPEAKER_DUMMY;
+		} else {
+			ASSERT(cmd == KVM_CREATE_PIT2);
+		}
+
 		mutex_enter(&kvmp->slots_lock);
-		rval = EEXIST;
-		if (kvmp->arch.vpit)
-			goto create_pit_unlock;
-		rval = ENOMEM;
-		kvmp->arch.vpit = kvm_create_pit(kvmp, u.pit_config.flags);
-		if (kvmp->arch.vpit)
-			rval = 0;
-	create_pit_unlock:
+
+		if (kvmp->arch.vpit != NULL) {
+			rval = EEXIST;
+		} else if ((kvmp->arch.vpit = kvm_create_pit(kvmp,
+		    u.pit_config.flags)) == NULL) {
+			rval = ENOMEM;
+		}
+
 		mutex_exit(&kvmp->slots_lock);
 		break;
 	}

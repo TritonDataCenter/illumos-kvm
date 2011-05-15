@@ -886,29 +886,6 @@ apic_clear_vector(int vec, caddr_t bitmap)
 }
 
 void
-kvm_vcpu_kick(struct kvm_vcpu *vcpu)
-{
-#ifdef XXX
-	int me;
-	int cpu = vcpu->cpu;
-
-	if (waitqueue_active(&vcpu->wq)) {
-		wake_up_interruptible(&vcpu->wq);
-		++vcpu->stat.halt_wakeup;
-	}
-
-	me = get_cpu();
-
-	if (cpu != me && (unsigned)cpu < nr_cpu_ids && cpu_online(cpu))
-		if (!test_and_set_bit(KVM_REQ_KICK, &vcpu->requests))
-			smp_send_reschedule(cpu);
-	put_cpu();
-#else
-	XXX_KVM_PROBE;
-#endif
-}
-
-void
 kvm_inject_nmi(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.nmi_pending = 1;

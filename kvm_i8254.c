@@ -267,12 +267,14 @@ kvm_pit_ack_irq(struct kvm_irq_ack_notifier *kian)
 static void
 destroy_pit_timer(struct kvm_timer *pt)
 {
-#ifdef XXX
-	pr_debug("pit: " "execute del timer!\n");
-	hrtimer_cancel_p(&pt->timer);
-#else
-	XXX_KVM_PROBE;
-#endif
+	mutex_enter(&cpu_lock);
+
+	if (pt->active) {
+		cyclic_remove(pt->kvm_cyclic_id);
+		pt->active = 0;
+	}
+
+	mutex_exit(&cpu_lock);
 }
 
 static int
@@ -371,6 +373,30 @@ pit_load_count(struct kvm *kvm, int channel, uint32_t val)
 		break;
 	default:
 		destroy_pit_timer(&ps->pit_timer);
+	}
+}
+
+void
+kvm_pit_load_count(struct kvm *kvm, int channel,
+    uint32_t val, boolean_t hpet_legacy_start)
+{
+	uint8_t saved_mode;
+
+	if (hpet_legacy_start) {
+		/*
+		 * Save existing mode for later reenablement.
+		 */
+		saved_mode = kvm->arch.vpit->pit_state.channels[0].mode;
+
+		/*
+		 * Set the mode to 0xff to disable the timer.
+		 */
+		kvm->arch.vpit->pit_state.channels[0].mode = 0xff;
+		pit_load_count(kvm, channel, val);
+
+		kvm->arch.vpit->pit_state.channels[0].mode = saved_mode;
+	} else {
+		pit_load_count(kvm, channel, val);
 	}
 }
 
