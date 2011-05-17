@@ -1284,6 +1284,7 @@ skip_emulated_instruction(struct kvm_vcpu *vcpu)
 
 struct vmcs **vmxarea;  /* 1 per cpu */
 struct vmcs **current_vmcs;
+static struct kvm_shared_msrs **shared_msrs;
 
 uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
 
@@ -1300,6 +1301,8 @@ alloc_kvm_area(void)
 	vmxarea = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
 	vmxarea_pa = kmem_alloc(ncpus * sizeof (uint64_t *), KM_SLEEP);
 	current_vmcs = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
+	shared_msrs = kmem_alloc(ncpus * sizeof (struct kvm_shared_msrs *),
+	    KM_SLEEP);
 
 	for (i = 0; i < ncpus; i++) {
 		struct vmcs *vmcs;
@@ -1313,6 +1316,8 @@ alloc_kvm_area(void)
 		pfn = hat_getpfnum(kas.a_hat, (caddr_t)vmcs);
 		vmxarea_pa[i] = ((uint64_t)pfn << PAGESHIFT) |
 			((uint64_t)vmxarea[i] & PAGEOFFSET);
+		shared_msrs[i] = kmem_zalloc(sizeof (struct kvm_shared_msrs),
+		    KM_SLEEP);
 	}
 
 	return (0);
@@ -7943,9 +7948,6 @@ vmx_vcpu_run(struct kvm_vcpu *vcpu)
 #undef R
 #undef Q
 
-/* XXX - need to dynamic alloc based on cpus, not vcpus */
-static struct kvm_shared_msrs shared_msrs[KVM_MAX_VCPUS];
-
 static void kvm_on_user_return(struct kvm_vcpu *,
     struct kvm_user_return_notifier *);
 
@@ -7954,12 +7956,8 @@ shared_msr_update(unsigned slot, uint32_t msr)
 {
 	struct kvm_shared_msrs *smsr;
 	uint64_t value;
-#ifdef XXX
-	smsr = &__get_cpu_var(shared_msrs);
-#else
-	smsr = &shared_msrs[0];
-	XXX_KVM_PROBE;
-#endif
+	smsr = shared_msrs[CPU->cpu_id];
+
 	/*
 	 * only read, and nobody should modify it at this time,
 	 * so don't need lock
@@ -7987,11 +7985,7 @@ void
 kvm_set_shared_msr(struct kvm_vcpu *vcpu, unsigned slot, uint64_t value,
     uint64_t mask)
 {
-#ifdef XXX_KVM_DECLARATION
-	struct kvm_shared_msrs *smsr = &__get_cpu_var(shared_msrs);
-#else
-	struct kvm_shared_msrs *smsr = &shared_msrs[0];
-#endif
+	struct kvm_shared_msrs *smsr = shared_msrs[CPU->cpu_id];
 
 	if (((value ^ smsr->values[slot].curr) & mask) == 0)
 		return;
