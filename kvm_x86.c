@@ -1910,10 +1910,59 @@ vmx_destroy_vcpu(struct kvm_vcpu *vcpu)
 struct kvm_vcpu *
 kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 {
-	/* for right now, assume always on x86 */
-	/* later, if needed, we'll add something here */
-	/* to call architecture dependent routine */
-	return (kvm_x86_ops->vcpu_create(kvm, id));
+	char buf[32];
+	struct kvm_vcpu *vcpu;
+	kstat_t *kstat;
+
+	(void) snprintf(buf, sizeof (buf), "vcpu-%d", kvm->kvmid);
+
+	if ((kstat = kstat_create("kvm", id, buf, "misc", KSTAT_TYPE_NAMED,
+	    sizeof (kvm_vcpu_stats_t) / sizeof (kstat_named_t),
+	    KSTAT_FLAG_VIRTUAL)) == NULL) {
+		return (NULL);
+	}
+
+	vcpu = kvm_x86_ops->vcpu_create(kvm, id);
+
+	if (vcpu == NULL) {
+		kstat_delete(kstat);
+		return (NULL);
+	}
+
+	vcpu->kvcpu_kstat = kstat;
+	vcpu->kvcpu_kstat->ks_data = &vcpu->kvcpu_stats;
+
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_id, "id");
+	vcpu->kvcpu_stats.kvmvs_id.value.ui64 = kvm->kvmid;
+
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_id, "pid");
+	vcpu->kvcpu_stats.kvmvs_id.value.ui64 = kvm->kvm_pid;
+
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_nmi_injections, "nmi-injections");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_irq_injections, "irq-injections");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_fpu_reload, "fpu-reload");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_host_state_reload, "host-state-reload");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_insn_emulation, "insn-emulation");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_insn_emulation_fail,
+	    "inst-emulation-fail");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_exits, "exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_halt_exits, "halt-exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_irq_exits, "irq-exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_io_exits, "io-exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_mmio_exits, "mmio-exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_nmi_window_exits, "nmi-window-exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_irq_window_exits, "irq-window-exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_request_irq_exits, "request-irq-exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_signal_exits, "signal-exits");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_halt_wakeup, "halt-wakeup");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_invlpg, "invlpg");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_pf_guest, "pf-guest");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_pf_fixed, "pf-fixed");
+	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_hypercalls, "hypercalls");
+
+	kstat_install(vcpu->kvcpu_kstat);
+
+	return (vcpu);
 }
 
 void
@@ -1924,6 +1973,9 @@ kvm_arch_vcpu_free(struct kvm_vcpu *vcpu)
 		XXX_KVM_PROBE;
 		vcpu->arch.time_page = NULL;
 	}
+
+	if (vcpu->kvcpu_kstat != NULL)
+		kstat_delete(vcpu->kvcpu_kstat);
 
 	kvm_x86_ops->vcpu_free(vcpu);
 }
@@ -3473,9 +3525,7 @@ __direct_map(struct kvm_vcpu *vcpu, gpa_t v, int write,
 		if (iterator.level == level) {
 			mmu_set_spte(vcpu, iterator.sptep, ACC_ALL, ACC_ALL,
 			    0, write, 1, &pt_write, level, gfn, pfn, 0, 1);
-#ifdef XXX_KVM_STAT
-			++vcpu->stat.pf_fixed;
-#endif
+			KVM_VCPU_KSTAT_INC(vcpu, kvmvs_pf_fixed);
 			break;
 		}
 

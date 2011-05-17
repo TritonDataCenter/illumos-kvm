@@ -28,6 +28,7 @@
 #include <sys/proc.h>
 #include <vm/seg_kpm.h>
 #include <sys/avl.h>
+#include <sys/condvar_impl.h>
 
 #include "vmx.h"
 #include "msr-index.h"
@@ -1146,9 +1147,8 @@ vmx_inject_nmi(struct kvm_vcpu *vcpu)
 		vmx->vnmi_blocked_time = 0;
 	}
 
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.nmi_injections;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_nmi_injections);
+
 	if (vmx->rmode.vm86_active) {
 		vmx->rmode.irq.pending = 1;
 		vmx->rmode.irq.vector = NMI_VECTOR;
@@ -1174,9 +1174,8 @@ vmx_inject_irq(struct kvm_vcpu *vcpu)
 #ifdef XXX_KVM_TRACE
 	trace_kvm_inj_virq(irq);
 #endif
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.irq_injections;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_irq_injections);
+
 	if (vmx->rmode.vm86_active) {
 		vmx->rmode.irq.pending = 1;
 		vmx->rmode.irq.vector = irq;
@@ -3836,7 +3835,7 @@ kvm_create_vm(void)
 	kvmp->kvm_kstat->ks_data = &kvmp->kvm_stats;
 
 	KVM_KSTAT_INIT(kvmp, kvmks_pid, "pid");
-	kvmp->kvm_stats.kvmks_pid.value.ui64 = curproc->p_pid;
+	kvmp->kvm_stats.kvmks_pid.value.ui64 = kvmp->kvm_pid = curproc->p_pid;
 
 	KVM_KSTAT_INIT(kvmp, kvmks_mmu_pte_write, "mmu-pte-write");
 	KVM_KSTAT_INIT(kvmp, kvmks_mmu_pte_updated, "mmu-pte-updated");
@@ -5127,14 +5126,8 @@ kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
 	vcpu->guest_fpu_loaded = 0;
 	kvm_fx_save(&vcpu->arch.guest_fx_image);
 	kvm_fx_restore(&vcpu->arch.host_fx_image);
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.fpu_reload;
-#endif
-#ifdef XXX_KVM_DOESNTCOMPILE
-	BT_SET(&vcpu->requests, KVM_REQ_DEACTIVATE_FPU);
-#else
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_fpu_reload);
 	set_bit(KVM_REQ_DEACTIVATE_FPU, &vcpu->requests);
-#endif
 #ifdef XXX_KVM_TRACE
 	trace_kvm_fpu(0);
 #endif
@@ -5198,9 +5191,8 @@ __vmx_load_host_state(struct vcpu_vmx *vmx)
 	if (!vmx->host_state.loaded)
 		return;
 
-#ifdef XXX_KVM_STAT
-	++vmx->vcpu.stat.host_state_reload;
-#endif
+	KVM_VCPU_KSTAT_INC(&vmx->vcpu, kvmvs_host_state_reload);
+
 	vmx->host_state.loaded = 0;
 	if (vmx->host_state.fs_reload_needed)
 		kvm_load_fs(vmx->host_state.fs_sel);
@@ -8117,9 +8109,7 @@ void
 kvm_inject_page_fault(struct kvm_vcpu *vcpu, unsigned long addr,
     uint32_t error_code)
 {
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.pf_guest;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_pf_guest);
 	vcpu->arch.cr2 = addr;
 	kvm_queue_exception_e(vcpu, PF_VECTOR, error_code);
 }
@@ -8822,13 +8812,11 @@ emulate_instruction(struct kvm_vcpu *vcpu, unsigned long cr2,
 				return (EMULATE_FAIL);
 		}
 
-#ifdef XXX_KVM_STAT
-		++vcpu->stat.insn_emulation;
-#endif
+		KVM_VCPU_KSTAT_INC(vcpu, kvmvs_insn_emulation);
+
 		if (r)  {
-#ifdef XXX_KVM_STAT
-			++vcpu->stat.insn_emulation_fail;
-#endif
+			KVM_VCPU_KSTAT_INC(vcpu, kvmvs_insn_emulation_fail);
+
 			if (kvm_mmu_unprotect_page_virt(vcpu, cr2))
 				return (EMULATE_DONE);
 			return (EMULATE_FAIL);
@@ -8900,9 +8888,7 @@ kvm_mmu_page_fault(struct kvm_vcpu *vcpu, gva_t cr2, uint32_t error_code)
 		return (1);
 
 	case EMULATE_DO_MMIO:
-#ifdef XXX_KVM_STAT
-		++vcpu->stat.mmio_exits;
-#endif
+		KVM_VCPU_KSTAT_INC(vcpu, kvmvs_mmio_exits);
 		return (0);
 
 	case EMULATE_FAIL:
@@ -9006,9 +8992,8 @@ handle_rmode_exception(struct kvm_vcpu *vcpu, int vec, uint32_t err_code)
 int
 kvm_emulate_halt(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.halt_exits;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_halt_exits);
+
 	if (irqchip_in_kernel(vcpu->kvm)) {
 		vcpu->arch.mp_state = KVM_MP_STATE_HALTED;
 		return (1);
@@ -9130,9 +9115,7 @@ handle_exception(struct kvm_vcpu *vcpu)
 static int
 handle_external_interrupt(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.irq_exits;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_irq_exits);
 	return (1);
 }
 
@@ -9300,9 +9283,8 @@ handle_io(struct kvm_vcpu *vcpu)
 	int size, in, string;
 	unsigned port;
 
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.io_exits;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_io_exits);
+
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
 	string = (exit_qualification & 16) != 0;
 
@@ -9330,9 +9312,7 @@ handle_nmi_window(struct kvm_vcpu *vcpu)
 	cpu_based_vm_exec_control &= ~CPU_BASED_VIRTUAL_NMI_PENDING;
 	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL, cpu_based_vm_exec_control);
 
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.nmi_window_exits;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_nmi_window_exits);
 
 	return (1);
 }
@@ -10228,9 +10208,8 @@ kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 out:
 	kvm_register_write(vcpu, VCPU_REGS_RAX, ret);
 
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.hypercalls;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_hypercalls);
+
 	return (r);
 }
 
@@ -10261,9 +10240,7 @@ kvm_mmu_invlpg(struct kvm_vcpu *vcpu, gva_t gva)
 {
 	vcpu->arch.mmu.invlpg(vcpu, gva);
 	kvm_mmu_flush_tlb(vcpu);
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.invlpg;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_invlpg);
 }
 
 static int
@@ -11258,9 +11235,8 @@ handle_interrupt_window(struct kvm_vcpu *vcpu)
 	cpu_based_vm_exec_control &= ~CPU_BASED_VIRTUAL_INTR_PENDING;
 	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL, cpu_based_vm_exec_control);
 
-#ifdef XXX_KVM_STAT
-	++vcpu->stat.irq_window_exits;
-#endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_irq_window_exits);
+
 	/*
 	 * If the user space waits to inject interrupts, exit as soon as
 	 * possible
@@ -12142,11 +12118,11 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 #ifdef XXX
 	local_irq_enable();  /* XXX - should be ok with kpreempt_enable below */
 
-	++vcpu->stat.exits;
 	barrier();
 #else
 	XXX_KVM_PROBE;
 #endif
+	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_exits);
 	kvm_guest_exit();
 
 	kpreempt_enable();
@@ -12222,10 +12198,8 @@ kvm_vcpu_kick(struct kvm_vcpu *vcpu)
 {
 	mutex_enter(&vcpu->kvcpu_kick_lock);
 
-#ifdef XXX_KVM_STAT
 	if (CV_HAS_WAITERS(&vcpu->kvcpu_kick_cv))
-		++vcpu->stat.halt_wakeup;
-#endif
+		KVM_VCPU_KSTAT_INC(vcpu, kvmvs_halt_wakeup);
 
 	cv_broadcast(&vcpu->kvcpu_kick_cv);
 	mutex_exit(&vcpu->kvcpu_kick_lock);
@@ -12408,17 +12382,13 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 		if (dm_request_for_irq_injection(vcpu)) {
 			r = -EINTR;
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
-#ifdef XXX_KVM_STAT
-			++vcpu->stat.request_irq_exits;
-#endif
+			KVM_VCPU_KSTAT_INC(vcpu, kvmvs_irq_exits);
 		}
 
 		if (issig(JUSTLOOKING)) {
 			r = -EINTR;
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
-#ifdef XXX_KVM_STAT
-			++vcpu->stat.signal_exits;
-#endif
+			KVM_VCPU_KSTAT_INC(vcpu, kvmvs_signal_exits);
 		}
 
 		if (CPU->cpu_runrun || CPU->cpu_kprunrun)

@@ -373,6 +373,36 @@ typedef struct kvm_lapic {
 struct vcpu_vmx;
 struct kvm_user_return_notifier;
 
+typedef struct kvm_vcpu_stats {
+	kstat_named_t kvmvs_id;			/* instance of associated kvm */
+	kstat_named_t kvmvs_nmi_injections;	/* number of NMI injections */
+	kstat_named_t kvmvs_irq_injections;	/* number of IRQ injections */
+	kstat_named_t kvmvs_fpu_reload;		/* number of FPU reloads */
+	kstat_named_t kvmvs_host_state_reload;	/* host state (re)loads */
+	kstat_named_t kvmvs_insn_emulation;	/* instruction emulation */
+	kstat_named_t kvmvs_insn_emulation_fail; /* emulation failures */
+	kstat_named_t kvmvs_exits; 		/* total VM exits */
+	kstat_named_t kvmvs_halt_exits; 	/* exits due to HLT */
+	kstat_named_t kvmvs_irq_exits; 		/* exits due to IRQ */
+	kstat_named_t kvmvs_io_exits; 		/* exits due to I/O instrn */
+	kstat_named_t kvmvs_mmio_exits; 	/* exits due to mem mppd I/O */
+	kstat_named_t kvmvs_nmi_window_exits; 	/* exits due to NMI window */
+	kstat_named_t kvmvs_irq_window_exits; 	/* exits due to IRQ window */
+	kstat_named_t kvmvs_request_irq_exits; 	/* exits due to requested IRQ */
+	kstat_named_t kvmvs_signal_exits; 	/* exits due to pending sig */
+	kstat_named_t kvmvs_halt_wakeup; 	/* wakeups from HLT */
+	kstat_named_t kvmvs_invlpg; 		/* INVLPG instructions */
+	kstat_named_t kvmvs_pf_guest;		/* injected guest pagefaults */
+	kstat_named_t kvmvs_pf_fixed; 		/* fixed pagefaults */
+	kstat_named_t kvmvs_hypercalls; 	/* hypercalls (VMCALL instrn) */
+} kvm_vcpu_stats_t;
+
+#define KVM_VCPU_KSTAT_INIT(vcpu, field, name) \
+	kstat_named_init(&((vcpu)->kvcpu_stats.field), name, KSTAT_DATA_UINT64);
+
+#define KVM_VCPU_KSTAT_INC(vcpu, field) \
+	(vcpu)->kvcpu_stats.field.value.ui64++;
+
 typedef struct kvm_vcpu {
 	struct kvm *kvm;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
@@ -391,10 +421,11 @@ typedef struct kvm_vcpu {
 
 	kmutex_t kvcpu_kick_lock;
 	kcondvar_t kvcpu_kick_cv;
+	kvm_vcpu_stats_t kvcpu_stats;
+	kstat_t *kvcpu_kstat;
 
 	int sigset_active;
 	sigset_t sigset;
-	struct kstat *kvcpu_kstat;
 
   /*#ifdef CONFIG_HAS_IOMEM*/
 	int mmio_needed;
@@ -1197,6 +1228,7 @@ typedef struct kvm {
 #endif
 	int kvmid;  /* unique identifier for this kvm */
 	int kvm_clones;
+	pid_t kvm_pid;			/* pid associated with this kvm */
 	kmutex_t kvm_avllock;
 	avl_tree_t kvm_avlmp;		/* avl tree for mmu to page_t mapping */
 } kvm_t;
