@@ -1416,17 +1416,13 @@ apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 		break;
 
 	case APIC_TMICT:
-#ifdef XXX
-		hrtimer_cancel(&apic->lapic_timer.timer);
-#else
 		mutex_enter(&cpu_lock);
 		if (apic->lapic_timer.active) {
 			cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
 			apic->lapic_timer.active = 0;
 		}
 		mutex_exit(&cpu_lock);
-		XXX_KVM_PROBE;
-#endif
+
 		apic_set_reg(apic, APIC_TMICT, val);
 		start_apic_timer(apic);
 		break;
@@ -3390,12 +3386,8 @@ mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep, unsigned pt_access,
 		kvm_x86_ops->tlb_flush(vcpu);
 	}
 
-#ifdef XXX
 	if (!was_rmapped && is_large_pte(*sptep))
-		++vcpu->kvm->stat.lpages;
-#else
-	XXX_KVM_PROBE;
-#endif
+		KVM_KSTAT_INC(vcpu->kvm, kvmks_lpages);
 
 	page_header_update_slot(vcpu->kvm, sptep, gfn);
 	if (!was_rmapped) {
@@ -3481,10 +3473,8 @@ __direct_map(struct kvm_vcpu *vcpu, gpa_t v, int write,
 		if (iterator.level == level) {
 			mmu_set_spte(vcpu, iterator.sptep, ACC_ALL, ACC_ALL,
 			    0, write, 1, &pt_write, level, gfn, pfn, 0, 1);
-#ifdef XXX
+#ifdef XXX_KVM_STAT
 			++vcpu->stat.pf_fixed;
-#else
-			XXX_KVM_PROBE;
 #endif
 			break;
 		}
@@ -3528,11 +3518,7 @@ __kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 		sp = list_head(&vcpu->kvm->arch.active_mmu_pages);
 #endif
 		kvm_mmu_zap_page(vcpu->kvm, sp);
-#ifdef XXX
-		++vcpu->kvm->stat.mmu_recycled;
-#else
-		XXX_KVM_PROBE;
-#endif
+		KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_recycled);
 	}
 }
 
@@ -3888,13 +3874,8 @@ make_all_cpus_request(struct kvm *kvm, unsigned int req)
 void
 kvm_flush_remote_tlbs(struct kvm *kvm)
 {
-#ifdef XXX
 	if (make_all_cpus_request(kvm, KVM_REQ_TLB_FLUSH))
-		++kvm->stat.remote_tlb_flush;
-#else
-	XXX_KVM_PROBE;
-	(void) make_all_cpus_request(kvm, KVM_REQ_TLB_FLUSH);
-#endif
+		KVM_KSTAT_INC(kvm, kvmks_remote_tlb_flush);
 }
 
 inline uint64_t
@@ -3987,19 +3968,12 @@ mmu_pte_write_new_pte(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
     uint64_t *spte, const void *new)
 {
 	if (sp->role.level != PT_PAGE_TABLE_LEVEL) {
-#ifdef XXX
-		++vcpu->kvm->stat.mmu_pde_zapped;
-#else
-		XXX_KVM_PROBE;
-#endif
+		KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_pte_zapped);
 		return;
 	}
 
-#ifdef XXX
-	++vcpu->kvm->stat.mmu_pte_updated;
-#else
-	XXX_KVM_PROBE;
-#endif
+	KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_pte_updated);
+
 	if (sp->role.glevels == PT32_ROOT_LEVEL)
 		paging32_update_pte(vcpu, sp, spte, new);
 	else
@@ -4701,10 +4675,7 @@ kvm_vm_ioctl(struct kvm *kvmp, unsigned int ioctl, unsigned long arg, int mode)
 	int r;
 	proc_t *p;
 
-	if (drv_getparm(UPROCP, &p) != 0)
-		cmn_err(CE_PANIC, "Cannot get proc_t for current process\n");
-
-	if (kvmp->mm != p->p_as)
+	if (kvmp->mm != curproc->p_as)
 		return (EIO);
 
 	switch (ioctl) {

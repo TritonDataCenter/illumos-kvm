@@ -394,7 +394,7 @@ typedef struct kvm_vcpu {
 
 	int sigset_active;
 	sigset_t sigset;
-	struct kstat stat;
+	struct kstat *kvcpu_kstat;
 
   /*#ifdef CONFIG_HAS_IOMEM*/
 	int mmio_needed;
@@ -1127,6 +1127,27 @@ enum kvm_bus {
 	KVM_NR_BUSES
 };
 
+typedef struct kvm_stats {
+	kstat_named_t kvmks_pid;		/* PID of opening process */
+	kstat_named_t kvmks_mmu_pte_write;	/* page table entry writes */
+	kstat_named_t kvmks_mmu_pte_zapped;	/* zapped page table entries */
+	kstat_named_t kvmks_mmu_pte_updated;	/* page table entry updates */
+	kstat_named_t kvmks_mmu_flooded;	/* # of pages flooded */
+	kstat_named_t kvmks_mmu_cache_miss;	/* misses in page cache */
+	kstat_named_t kvmks_mmu_recycled;	/* recycles from free list */
+	kstat_named_t kvmks_remote_tlb_flush;	/* remote TLB flushes */
+	kstat_named_t kvmks_lpages;		/* large pages in use */
+} kvm_stats_t;
+
+#define KVM_KSTAT_INIT(kvmp, field, name) \
+	kstat_named_init(&((kvmp)->kvm_stats.field), name, KSTAT_DATA_UINT64);
+
+#define KVM_KSTAT_INC(kvmp, field) \
+	(kvmp)->kvm_stats.field.value.ui64++;
+
+#define KVM_KSTAT_DEC(kvmp, field) \
+	(kvmp)->kvm_stats.field.value.ui64--;
+
 typedef struct kvm {
 	kmutex_t mmu_lock;
 	kmutex_t requests_lock;
@@ -1152,7 +1173,8 @@ typedef struct kvm {
 	} irqfds;
 	struct list_head ioeventfds;
 #endif
-	struct kstat kvm_kstat;
+	struct kstat *kvm_kstat;
+	kvm_stats_t kvm_stats;
 	struct kvm_arch arch;
 	volatile int users_count;
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET

@@ -93,7 +93,6 @@ static int kvm_getinfo(dev_info_t *dip, ddi_info_cmd_t infocmd, void *arg,
 static int kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd);
 static int kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd);
 
-
 static struct cb_ops kvm_cb_ops = {
 	kvm_open,
 	kvm_close,	/* close */
@@ -224,6 +223,7 @@ static int kvm_avlmmucmp(const void *, const void *);
 
 int get_ept_level(void);
 static void vmx_cache_reg(struct kvm_vcpu *vcpu, enum kvm_reg reg);
+
 
 struct vcpu_vmx *
 to_vmx(struct kvm_vcpu *vcpu)
@@ -2353,9 +2353,7 @@ rmap_write_protect(struct kvm *kvm, uint64_t gfn)
 
 			if (is_writable_pte(*spte)) {
 				rmap_remove(kvm, spte);
-#ifdef XXX_KVM_STAT
-				--kvm->stat.lpages;
-#endif
+				KVM_KSTAT_DEC(kvm, kvmks_lpages);
 				__set_spte(spte, shadow_trap_nonpresent_pte);
 				spte = NULL;
 				write_protected = 1;
@@ -2442,9 +2440,8 @@ kvm_mmu_get_page(struct kvm_vcpu *vcpu, gfn_t gfn, gva_t gaddr, unsigned level,
 			return (sp);
 		}
 	}
-#ifdef XXX_KVM_STAT
-	++vcpu->kvm->stat.mmu_cache_miss;
-#endif
+
+	KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_cache_miss);
 	sp = kvm_mmu_alloc_page(vcpu, parent_pte);
 
 	if (!sp)
@@ -3768,7 +3765,6 @@ kvm_create_vm(void)
 	int rval = 0;
 	int i;
 	struct kvm *kvmp = kvm_arch_create_vm();
-	proc_t *p;
 
 	if (kvmp == NULL)
 		return (NULL);
@@ -3782,12 +3778,7 @@ kvm_create_vm(void)
 		    offsetof(struct kvm_irq_ack_notifier, link));
 #endif
 
-	kvmp->memslots = kmem_zalloc(sizeof (struct kvm_memslots), KM_NOSLEEP);
-
-	if (kvmp->memslots == NULL) {
-		kvm_arch_destroy_vm(kvmp);
-		return (NULL);
-	}
+	kvmp->memslots = kmem_zalloc(sizeof (struct kvm_memslots), KM_SLEEP);
 
 	rw_init(&kvmp->kvm_rwlock, NULL, RW_DRIVER, NULL);
 
@@ -3804,14 +3795,11 @@ kvm_create_vm(void)
 		return (NULL);
 	}
 
-	if (drv_getparm(UPROCP, &p) != 0)
-		cmn_err(CE_PANIC, "Cannot get proc_t for current process\n");
-
 	/*
 	 * XXX note that the as struct does not contain  a refcnt, may
 	 * have to go lower
 	 */
-	kvmp->mm = p->p_as;
+	kvmp->mm = curproc->p_as;
 	mutex_init(&kvmp->mmu_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->requests_lock, NULL, MUTEX_DRIVER, NULL);
 #ifdef XXX
@@ -3826,11 +3814,36 @@ kvm_create_vm(void)
 	mutex_init(&kvmp->kvm_avllock, NULL, MUTEX_DRIVER, NULL);
 	avl_create(&kvmp->kvm_avlmp, kvm_avlmmucmp, sizeof (kvm_mmu_page_t),
 	    offsetof(kvm_mmu_page_t, kmp_avlnode));
-	kvmp->kvmid = kvmid++;
+
 	mutex_enter(&kvm_lock);
+	kvmp->kvmid = kvmid++;
 	kvmp->users_count = 1;
 	list_insert_tail(&vm_list, kvmp);
 	mutex_exit(&kvm_lock);
+
+	if ((kvmp->kvm_kstat = kstat_create("kvm", kvmp->kvmid, "vm",
+	    "misc", KSTAT_TYPE_NAMED, sizeof (kvm_stats_t) /
+	    sizeof (kstat_named_t), KSTAT_FLAG_VIRTUAL)) == NULL) {
+		kvm_destroy_vm(kvmp);
+		return (NULL);
+	}
+
+	kvmp->kvm_kstat->ks_data = &kvmp->kvm_stats;
+
+	KVM_KSTAT_INIT(kvmp, kvmks_pid, "pid");
+	kvmp->kvm_stats.kvmks_pid.value.ui64 = curproc->p_pid;
+
+	KVM_KSTAT_INIT(kvmp, kvmks_mmu_pte_write, "mmu-pte-write");
+	KVM_KSTAT_INIT(kvmp, kvmks_mmu_pte_updated, "mmu-pte-updated");
+	KVM_KSTAT_INIT(kvmp, kvmks_mmu_pte_zapped, "mmu-pte-zapped");
+	KVM_KSTAT_INIT(kvmp, kvmks_mmu_flooded, "mmu-flooded");
+	KVM_KSTAT_INIT(kvmp, kvmks_mmu_cache_miss, "mmu-cache-miss");
+	KVM_KSTAT_INIT(kvmp, kvmks_mmu_recycled, "mmu-recycled");
+	KVM_KSTAT_INIT(kvmp, kvmks_remote_tlb_flush, "remote-tlb-flush");
+	KVM_KSTAT_INIT(kvmp, kvmks_lpages, "lpages");
+
+	kstat_install(kvmp->kvm_kstat);
+
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	kvm_coalesced_mmio_init(kvmp);
 #endif
@@ -3847,6 +3860,9 @@ kvm_destroy_vm(struct kvm *kvmp)
 	if (kvmp == NULL)
 		return;
 
+	if (kvmp->kvm_kstat != NULL)
+		kstat_delete(kvmp->kvm_kstat);
+
 	kvm_arch_destroy_vm_comps(kvmp);
 
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
@@ -3859,7 +3875,8 @@ kvm_destroy_vm(struct kvm *kvmp)
 	 * properly cleaning them up somewhere else.
 	 */
 	cookie = NULL;
-	while (avl_destroy_nodes(&kvmp->kvm_avlmp, &cookie) != NULL);
+	while (avl_destroy_nodes(&kvmp->kvm_avlmp, &cookie) != NULL)
+		continue;
 	avl_destroy(&kvmp->kvm_avlmp);
 	mutex_destroy(&kvmp->kvm_avllock);
 	mutex_destroy(&kvmp->slots_lock);
@@ -8367,10 +8384,9 @@ mmu_pte_write_zap_pte(struct kvm_vcpu *vcpu,
 		}
 	}
 	__set_spte(spte, shadow_trap_nonpresent_pte);
-#ifdef XXX_KVM_STAT
+
 	if (is_large_pte(pte))
-		--vcpu->kvm->stat.lpages;
-#endif
+		KVM_KSTAT_DEC(vcpu->kvm, kvmks_lpages);
 }
 
 static int
@@ -8420,10 +8436,8 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 	mutex_enter(&vcpu->kvm->mmu_lock);
 	kvm_mmu_access_page(vcpu, gfn);
 	kvm_mmu_free_some_pages(vcpu);
-#ifdef XXX_KVM_STAT
-	++vcpu->kvm->stat.mmu_pte_write;
-	kvm_mmu_audit(vcpu, "pre pte write");
-#endif
+	KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_pte_write);
+
 	if (guest_initiated) {
 		if (gfn == vcpu->arch.last_pt_write_gfn &&
 		    !last_updated_pte_accessed(vcpu)) {
@@ -8473,9 +8487,7 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 			XXX_KVM_PROBE;
 			kvm_mmu_zap_page(vcpu->kvm, sp);
 #endif
-#ifdef XXX_KVM_STAT
-			++vcpu->kvm->stat.mmu_flooded;
-#endif
+			KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_flooded);
 			continue;
 		}
 		page_offset = offset;
