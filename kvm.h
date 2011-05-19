@@ -1818,6 +1818,8 @@ typedef struct vcpu_vmx {
 	uint64_t 		      msr_guest_kernel_gs_base;
 #endif
 	struct vmcs          *vmcs;
+	uint64_t	vmcs_pa;  /* physical address of vmcs for this vmx */
+
 	struct {
 		int           loaded;
 		unsigned short           fs_sel, gs_sel, ldt_sel;

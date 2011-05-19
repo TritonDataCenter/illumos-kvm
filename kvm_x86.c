@@ -22,6 +22,7 @@
 #include <sys/mman.h>
 #include <sys/mach_mmu.h>
 #include <sys/int_limits.h>
+#include <sys/x_call.h>
 
 #include "msr-index.h"
 #include "msr.h"
@@ -1714,7 +1715,7 @@ extern int enable_ept;
 extern int enable_unrestricted_guest;
 extern int emulate_invalid_guest_state;
 
-extern void vmcs_clear(struct vmcs *vmcs);
+extern void vmcs_clear(uint64_t vmcs_pa);
 extern void vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
 extern void vmx_vcpu_put(struct kvm_vcpu *vcpu);
 
@@ -1835,6 +1836,9 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 		return (NULL);
 	}
 
+	vmx->vmcs_pa = (hat_getpfnum(kas.a_hat, (caddr_t)vmx->vmcs) <<
+	    PAGESHIFT) | ((int64_t)(vmx->vmcs) & 0xfff);
+
 	kpreempt_disable();
 
 	cpu = curthread->t_cpu->cpu_seqid;
@@ -1842,7 +1846,7 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 	cmn_err(CE_NOTE, "vmcs revision_id = %x\n", vmcs_config.revision_id);
 	vmx->vmcs->revision_id = vmcs_config.revision_id;
 
-	vmcs_clear(vmx->vmcs);
+	vmcs_clear(vmx->vmcs_pa);
 
 	vmx_vcpu_load(&vmx->vcpu, cpu);
 	err = vmx_vcpu_setup(vmx);
@@ -3872,51 +3876,52 @@ kvm_read_guest_atomic(struct kvm *kvm, gpa_t gpa, void *data, unsigned long len)
 	return (0);
 }
 
+extern void kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg);
+extern int kvm_xcall_func(kvm_xcall_t func, void *arg);
+
+static void
+ack_flush(void *_completed)
+{
+}
+
+extern int kvm_xcall_func(kvm_xcall_t func, void *arg);
+
 int
 make_all_cpus_request(struct kvm *kvm, unsigned int req)
 {
-	int i, cpu, me;
+	int i;
+	cpuset_t set;
+	processorid_t me, cpu;
 #ifdef XXX_KVM_DECLARATION
 	cpumask_var_t cpus;
 #endif
-	int called = 1;
+	int called = 0;
 	struct kvm_vcpu *vcpu;
 
-#ifdef XXX
-	zalloc_cpumask_var(&cpus, GFP_ATOMIC);
+	CPUSET_ZERO(set);
+
 	mutex_enter(&kvm->requests_lock);
-	me = smp_processor_id();
-	kvm_for_each_vcpu(i, vcpu, kvm) {
-#else
-	XXX_KVM_PROBE;
+	me = curthread->t_cpu->cpu_id;
 	for (i = 0; i < 1; i++) {
 		vcpu = kvm->vcpus[i];
 		if (!vcpu)
-			return (0);
-#endif
-
+			break;
 		if (test_and_set_bit(req, &vcpu->requests))
 			continue;
 		cpu = vcpu->cpu;
-#ifdef XXX
-		if (cpus != NULL && cpu != -1 && cpu != me)
-			cpumask_set_cpu(cpu, cpus);
-#else
-		XXX_KVM_PROBE;
-#endif
+		if (cpu != -1 && cpu != me)
+			CPUSET_ADD(set, cpu);
 	}
-#ifdef XXX
-	if (unlikely(cpus == NULL))
-		smp_call_function_many(cpu_online_mask, ack_flush, NULL, 1);
-	else if (!cpumask_empty(cpus))
-		smp_call_function_many(cpus, ack_flush, NULL, 1);
-	else
-		called = false;
+	if (CPUSET_ISNULL(set))
+		kvm_xcall(KVM_CPUALL, ack_flush, NULL);
+	else {
+		kpreempt_disable();
+		xc_sync((xc_arg_t) ack_flush, (xc_arg_t) NULL,
+			0, CPUSET2BV(set), (xc_func_t) kvm_xcall_func);
+		kpreempt_enable();
+	}
 	mutex_exit(&kvm->requests_lock);
-	free_cpumask_var(cpus);
-#else
-	XXX_KVM_PROBE;
-#endif
+	called = 1;
 
 	return (called);
 }

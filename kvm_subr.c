@@ -184,7 +184,7 @@ unsigned long kvm_read_tr_base(void)
 	return segment_base(tr);
 }
 
-static int
+int
 kvm_xcall_func(kvm_xcall_t func, void *arg)
 {
 	(*func)(arg);

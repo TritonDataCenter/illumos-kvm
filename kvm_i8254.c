@@ -755,32 +755,6 @@ fail:
 	return (NULL);
 }
 
-void
-kvm_free_pit(struct kvm *kvmp)
-{
-	struct kvm_timer *kptp;
-
-	if (kvmp->arch.vpit == NULL)
-		return;
-
-	mutex_enter(&kvmp->arch.vpit->pit_state.lock);
-	kvm_unregister_irq_mask_notifier(kvmp, 0,
-	    &kvmp->arch.vpit->mask_notifier);
-	kvm_unregister_irq_ack_notifier(kvmp,
-	    &kvmp->arch.vpit->pit_state.irq_ack_notifier);
-	mutex_exit(&kvmp->arch.vpit->pit_state.lock);
-
-	mutex_enter(&cpu_lock);
-	kptp = &kvmp->arch.vpit->pit_state.pit_timer;
-	if (kptp->active)
-		cyclic_remove(kptp->kvm_cyclic_id);
-	mutex_exit(&cpu_lock);
-	mutex_destroy(&kvmp->arch.vpit->pit_state.lock);
-	kvm_free_irq_source_id(kvmp, kvmp->arch.vpit->irq_source_id);
-	kmem_free(kvmp->arch.vpit, sizeof (struct kvm_pit));
-	kvmp->arch.vpit = NULL;
-}
-
 static void
 __inject_pit_timer_intr(struct kvm *kvm)
 {
@@ -838,4 +812,48 @@ kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu)
 		if (inject)
 			__inject_pit_timer_intr(kvm);
 	}
+}
+
+void
+kvm_free_pit(struct kvm *kvmp)
+{
+	struct kvm_timer *kptp;
+
+	if (kvmp->arch.vpit == NULL)
+		return;
+
+	mutex_enter(&kvmp->arch.vpit->pit_state.lock);
+	kvm_unregister_irq_mask_notifier(kvmp, 0,
+	    &kvmp->arch.vpit->mask_notifier);
+	kvm_unregister_irq_ack_notifier(kvmp,
+	    &kvmp->arch.vpit->pit_state.irq_ack_notifier);
+	mutex_exit(&kvmp->arch.vpit->pit_state.lock);
+
+	mutex_enter(&cpu_lock);
+	kptp = &kvmp->arch.vpit->pit_state.pit_timer;
+	if (kptp->active)
+		cyclic_remove(kptp->kvm_cyclic_id);
+	mutex_exit(&cpu_lock);
+	mutex_destroy(&kvmp->arch.vpit->pit_state.lock);
+	kvm_free_irq_source_id(kvmp, kvmp->arch.vpit->irq_source_id);
+	kmem_free(kvmp->arch.vpit, sizeof (struct kvm_pit));
+	kvmp->arch.vpit = NULL;
+}
+
+void
+__kvm_migrate_pit_timer(struct kvm_vcpu *vcpu)
+{
+#ifdef XXX
+	struct kvm_pit *pit = vcpu->kvm->arch.vpit;
+	struct hrtimer *timer;
+
+	if (!kvm_vcpu_is_bsp(vcpu) || !pit)
+		return;
+
+	timer = &pit->pit_state.pit_timer.timer;
+	if (hrtimer_cancel_p(timer))
+		kvm_hrtimer_start_expires(timer, HRTIMER_MODE_ABS);
+#else
+	XXX_KVM_PROBE;
+#endif
 }

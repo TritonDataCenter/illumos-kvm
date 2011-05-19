@@ -122,3 +122,21 @@ kvm_free_lapic(struct kvm_vcpu *vcpu)
 
 	kmem_free(vcpu->arch.apic, sizeof (struct kvm_lapic));
 }
+
+void
+__kvm_migrate_apic_timer(struct kvm_vcpu *vcpu)
+{
+#ifdef XXX
+	struct kvm_lapic *apic = vcpu->arch.apic;
+	struct hrtimer *timer;
+
+	if (!apic)
+		return;
+
+	timer = &apic->lapic_timer.timer;
+	if (hrtimer_cancel_p(timer))
+		kvm_hrtimer_start_expires(timer, HRTIMER_MODE_ABS);
+#else
+	XXX_KVM_PROBE;
+#endif
+}

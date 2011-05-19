@@ -2251,11 +2251,7 @@ kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 		sp->role.invalid = 1;
 		if (!list_link_active(&sp->link))
 			list_insert_head(&kvm->arch.active_mmu_pages, sp);
-#ifdef XXX
 		kvm_reload_remote_mmus(kvm);
-#else
-		XXX_KVM_PROBE;
-#endif
 	}
 	kvm_mmu_reset_last_pte_updated(kvm);
 
@@ -4644,20 +4640,18 @@ out:
 #define	__ex(x) __kvm_handle_fault_on_reboot(x)
 
 void
-vmcs_clear(struct vmcs *vmcs)
+vmcs_clear(uint64_t vmcs_pa)
 {
 	unsigned char error;
-	uint64_t phys_addr = (hat_getpfnum(kas.a_hat, (caddr_t)vmcs) <<
-	    PAGESHIFT) | ((uint64_t)vmcs & PAGEOFFSET);
 
 	/*CSTYLED*/
 	__asm__ volatile (__ex(ASM_VMX_VMCLEAR_RAX) "\n\tsetna %0\n"
-	    : "=g"(error) : "a"(&phys_addr), "m"(phys_addr)
+	    : "=g"(error) : "a"(&vmcs_pa), "m"(vmcs_pa)
 	    : "cc", "memory");
 
 	if (error)
-		cmn_err(CE_PANIC, "kvm: vmclear fail: %p/%lx\n",
-			vmcs, phys_addr);
+		cmn_err(CE_PANIC, "kvm: vmclear fail: %lx\n",
+			vmcs_pa);
 }
 
 void
@@ -4669,7 +4663,7 @@ __vcpu_clear(void *arg)
 	vmx->vmcs->revision_id = vmcs_config.revision_id;
 
 	if (vmx->vcpu.cpu == cpu)
-		vmcs_clear(vmx->vmcs);
+		vmcs_clear(vmx->vmcs_pa);
 
 	if (current_vmcs[cpu] == vmx->vmcs)
 		current_vmcs[cpu] = NULL;
@@ -5019,6 +5013,11 @@ vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	return (0);
 }
 
+static void kvm_migrate_timers(struct kvm_vcpu *vcpu)
+{
+	set_bit(KVM_REQ_MIGRATE_TIMER, &vcpu->requests);
+}
+
 /*
  * Switches to specified vcpu, until a matching vcpu_put(), but assumes
  * vcpu mutex is already taken.
@@ -5033,11 +5032,7 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 
 	if (vcpu->cpu != cpu) {
 		vcpu_clear(vmx);
-#ifdef XXX
 		kvm_migrate_timers(vcpu);
-#else
-		XXX_KVM_PROBE;
-#endif
 		set_bit(KVM_REQ_TLB_FLUSH, &vcpu->requests);
 #ifdef XXX
 		kpreempt_disable();
@@ -12007,11 +12002,7 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	if (vcpu->requests) {
 		if (test_and_clear_bit(KVM_REQ_MIGRATE_TIMER,
 		    &vcpu->requests)) {
-#ifdef XXX
 			__kvm_migrate_timers(vcpu);
-#else
-			XXX_KVM_PROBE;
-#endif
 		}
 		if (test_and_clear_bit(KVM_REQ_KVMCLOCK_UPDATE,
 		    &vcpu->requests)) {
