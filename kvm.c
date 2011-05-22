@@ -37,6 +37,7 @@
 #include "kvm_host.h"
 #include "kvm_x86host.h"
 #include "kvm_i8254.h"
+#include "kvm_lapic.h"
 #include "processor-flags.h"
 #include "hyperv.h"
 #include "apicdef.h"
@@ -203,20 +204,14 @@ static void vmx_decache_cr0_guest_bits(struct kvm_vcpu *vcpu);
 static void vmx_decache_cr4_guest_bits(struct kvm_vcpu *vcpu);
 void vmx_fpu_activate(struct kvm_vcpu *vcpu);
 void kvm_set_pfn_dirty(pfn_t);
-extern int irqchip_in_kernel(struct kvm *kvm);
 extern void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8);
-extern void kvm_set_apic_base(struct kvm_vcpu *vcpu, uint64_t data);
 extern void kvm_release_pfn_dirty(pfn_t pfn);
 extern void kvm_release_pfn_clean(pfn_t pfn);
 extern void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu);
 extern int mmu_topup_memory_caches(struct kvm_vcpu *vcpu);
-extern int kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
-				    struct kvm_lapic_irq *irq);
 static int hardware_enable_all(void);
 static void hardware_disable_all(void);
 extern int sigprocmask(int, const sigset_t *, sigset_t *);
-extern void start_apic_timer(struct kvm_lapic *);
-extern void update_divide_count(struct kvm_lapic *);
 extern void cli(void);
 extern void sti(void);
 static void kvm_destroy_vm(struct kvm *);
@@ -822,135 +817,6 @@ vmx_fpu_deactivate(struct kvm_vcpu *vcpu)
 	vmcs_writel(CR0_GUEST_HOST_MASK, ~vcpu->arch.cr0_guest_owned_bits);
 	vmcs_writel(CR0_READ_SHADOW, vcpu->arch.cr0);
 }
-
-#define	MSR_EFER		0xc0000080 /* extended feature register */
-
-/* Intel-defined CPU features, CPUID level 0x00000001 (edx), word 0 */
-#define	X86_FEATURE_FPU		(0 * 32 + 0)	/* Onboard FPU */
-#define	X86_FEATURE_VME		(0 * 32 + 1)	/* Virtual Mode Extensions */
-#define	X86_FEATURE_DE		(0 * 32 + 2)	/* Debugging Extensions */
-#define	X86_FEATURE_PSE		(0 * 32 + 3)	/* Page Size Extensions */
-#define	X86_FEATURE_TSC		(0 * 32 + 4)	/* Time Stamp Counter */
-#define	X86_FEATURE_MSR		(0 * 32 + 5)	/* Model-Specific Registers */
-#define	X86_FEATURE_PAE		(0 * 32 + 6)	/* Phys. Address Extensions */
-#define	X86_FEATURE_MCE		(0 * 32 + 7)	/* Machine Check Exception */
-#define	X86_FEATURE_CX8		(0 * 32 + 8)	/* CMPXCHG8 instruction */
-#define	X86_FEATURE_APIC	(0 * 32 + 9)	/* Onboard APIC */
-#define	X86_FEATURE_SEP		(0 * 32 + 11)	/* SYSENTER/SYSEXIT */
-#define	X86_FEATURE_MTRR	(0 * 32 + 12)	/* Memory Type Range Regs. */
-#define	X86_FEATURE_PGE		(0 * 32 + 13)	/* Page Global Enable */
-#define	X86_FEATURE_MCA		(0 * 32 + 14)	/* Machine Check Architecture */
-#define	X86_FEATURE_CMOV	(0 * 32 + 15)	/* CMOV instructions */
-						/*  (+ FCMOVcc, FCOMI w/ FPU) */
-#define	X86_FEATURE_PAT		(0 * 32 + 16)	/* Page Attribute Table */
-#define	X86_FEATURE_PSE36	(0 * 32 + 17)	/* 36-bit PSEs */
-#define	X86_FEATURE_PN		(0 * 32 + 18)	/* Processor serial number */
-#define	X86_FEATURE_CLFLSH	(0 * 32 + 19)	/* "clflush" instruction */
-#define	X86_FEATURE_DS		(0 * 32 + 21)	/* "dts" Debug Store */
-#define	X86_FEATURE_ACPI	(0 * 32 + 22)	/* ACPI via MSR */
-#define	X86_FEATURE_MMX		(0 * 32 + 23)	/* Multimedia Extensions */
-#define	X86_FEATURE_FXSR	(0 * 32 + 24)	/* FXSAVE/FXRSTOR, CR4.OSFXSR */
-#define	X86_FEATURE_XMM		(0 * 32 + 25)	/* "sse" */
-#define	X86_FEATURE_XMM2	(0 * 32 + 26)	/* "sse2" */
-#define	X86_FEATURE_SELFSNOOP	(0 * 32 + 27)	/* "ss" CPU self snoop */
-#define	X86_FEATURE_HT		(0 * 32 + 28)	/* Hyper-Threading */
-#define	X86_FEATURE_ACC		(0 * 32 + 29)	/* "tm" Auto. clock control */
-#define	X86_FEATURE_IA64	(0 * 32 + 30)	/* IA-64 processor */
-#define	X86_FEATURE_PBE		(0 * 32 + 31)	/* Pending Break Enable */
-
-/* AMD-defined CPU features, CPUID level 0x80000001, word 1 */
-/* Don't duplicate feature flags which are redundant with Intel! */
-#define	X86_FEATURE_SYSCALL	(1 * 32 + 11)	/* SYSCALL/SYSRET */
-#define	X86_FEATURE_MP		(1 * 32 + 19)	/* MP Capable. */
-#define	X86_FEATURE_NX		(1 * 32 + 20)	/* Execute Disable */
-#define	X86_FEATURE_MMXEXT	(1 * 32 + 22)	/* AMD MMX extensions */
-#define	X86_FEATURE_FXSR_OPT	(1 * 32 + 25)	/* FXSAVE/FXRSTOR optimiztns */
-#define	X86_FEATURE_GBPAGES	(1 * 32 + 26)	/* "pdpe1gb" GB pages */
-#define	X86_FEATURE_RDTSCP	(1 * 32 + 27)	/* RDTSCP */
-#define	X86_FEATURE_LM		(1 * 32 + 29)	/* Long Mode (x86-64) */
-#define	X86_FEATURE_3DNOWEXT	(1 * 32 + 30)	/* AMD 3DNow! extensions */
-#define	X86_FEATURE_3DNOW	(1 * 32 + 31)	/* 3DNow! */
-
-/* cpu types for specific tunings: */
-#define	X86_FEATURE_K8		(3 * 32 + 4)	/* "" Opteron, Athlon64 */
-#define	X86_FEATURE_K7		(3 * 32 + 5)	/* "" Athlon */
-#define	X86_FEATURE_P3		(3 * 32 + 6)	/* "" P3 */
-#define	X86_FEATURE_P4		(3 * 32 + 7)	/* "" P4 */
-#define	X86_FEATURE_CONSTANT_TSC (3 * 32 + 8)	/* TSC ticks at constant rate */
-#define	X86_FEATURE_UP		(3 * 32 + 9)	/* smp kernel running on up */
-#define	X86_FEATURE_FXSAVE_LEAK (3 * 32 + 10)	/* FXSAVE leaks FOP/FIP/FOP */
-#define	X86_FEATURE_ARCH_PERFMON (3 * 32 + 11)	/* Intel Arch. PerfMon */
-#define	X86_FEATURE_PEBS	(3 * 32 + 12)	/* Precise-Event Based Smplng */
-#define	X86_FEATURE_BTS		(3 * 32 + 13)	/* Branch Trace Store */
-#define	X86_FEATURE_SYSCALL32	(3 * 32 + 14)	/* syscall in ia32 userspace */
-#define	X86_FEATURE_SYSENTER32	(3 * 32 + 15)	/* sysenter in ia32 userspace */
-#define	X86_FEATURE_REP_GOOD	(3 * 32 + 16)	/* rep microcode works well */
-#define	X86_FEATURE_MFENCE_RDTSC (3 * 32 + 17)	/* Mfence synchronizes RDTSC */
-#define	X86_FEATURE_LFENCE_RDTSC (3 * 32 + 18)	/* Lfence synchronizes RDTSC */
-#define	X86_FEATURE_11AP	(3 * 32 + 19)	/* Bad local APIC aka 11AP */
-#define	X86_FEATURE_NOPL	(3 * 32 + 20)	/* NOPL (0F 1F) instructions */
-#define	X86_FEATURE_AMDC1E	(3 * 32 + 21)	/* AMD C1E detected */
-#define	X86_FEATURE_XTOPOLOGY	(3 * 32 + 22)	/* topology enum extensions */
-#define	X86_FEATURE_TSC_RELIABLE (3 * 32 + 23)	/* TSC is reliable */
-#define	X86_FEATURE_NONSTOP_TSC	(3 * 32 + 24) 	/* TSC continues in C states */
-#define	X86_FEATURE_CLFLUSH_MONITOR (3 * 32 + 25) /* clflush reqd w/ monitor */
-#define	X86_FEATURE_EXTD_APICID	(3 * 32 + 26)	/* extended APICID (8 bits) */
-#define	X86_FEATURE_AMD_DCM	(3 * 32 + 27)	/* multi-node processor */
-#define	X86_FEATURE_APERFMPERF	(3 * 32 + 28)	/* APERFMPERF */
-
-/* Intel-defined CPU features, CPUID level 0x00000001 (ecx), word 4 */
-#define	X86_FEATURE_XMM3	(4 * 32 + 0)	/* "pni" SSE-3 */
-#define	X86_FEATURE_PCLMULQDQ	(4 * 32 + 1)	/* PCLMULQDQ instruction */
-#define	X86_FEATURE_DTES64	(4 * 32 + 2)	/* 64-bit Debug Store */
-#define	X86_FEATURE_MWAIT	(4 * 32 + 3)	/* "monitor" Monitor/Mwait */
-#define	X86_FEATURE_DSCPL	(4 * 32 + 4)	/* ds_cpl CPL Qual Debug Str */
-#define	X86_FEATURE_VMX		(4 * 32 + 5)	/* Hardware virtualization */
-#define	X86_FEATURE_SMX		(4 * 32 + 6)	/* Safer mode */
-#define	X86_FEATURE_EST		(4 * 32 + 7)	/* Enhanced SpeedStep */
-#define	X86_FEATURE_TM2		(4 * 32 + 8)	/* Thermal Monitor 2 */
-#define	X86_FEATURE_SSSE3	(4 * 32 + 9)	/* Supplemental SSE-3 */
-#define	X86_FEATURE_CID		(4 * 32 + 10)	/* Context ID */
-#define	X86_FEATURE_FMA		(4 * 32 + 12)	/* Fused multiply-add */
-#define	X86_FEATURE_CX16	(4 * 32 + 13)	/* CMPXCHG16B */
-#define	X86_FEATURE_XTPR	(4 * 32 + 14)	/* Send Task Priority Msgs */
-#define	X86_FEATURE_PDCM	(4 * 32 + 15)	/* Performance Capabilities */
-#define	X86_FEATURE_DCA		(4 * 32 + 18)	/* Direct Cache Access */
-#define	X86_FEATURE_XMM4_1	(4 * 32 + 19)	/* "sse4_1" SSE-4.1 */
-#define	X86_FEATURE_XMM4_2	(4 * 32 + 20)	/* "sse4_2" SSE-4.2 */
-#define	X86_FEATURE_X2APIC	(4 * 32 + 21)	/* x2APIC */
-#define	X86_FEATURE_MOVBE	(4 * 32 + 22)	/* MOVBE instruction */
-#define	X86_FEATURE_POPCNT	(4 * 32 + 23)	/* POPCNT instruction */
-#define	X86_FEATURE_AES		(4 * 32 + 25)	/* AES instructions */
-#define	X86_FEATURE_XSAVE	(4 * 32 + 26)	/* XSAVE/XRSTOR/XSETBV/XGETBV */
-#define	X86_FEATURE_OSXSAVE	(4 * 32 + 27)	/* "" XSAVE enabled in the OS */
-#define	X86_FEATURE_AVX		(4 * 32 + 28)	/* Advanced Vector Extensions */
-#define	X86_FEATURE_HYPERVISOR	(4 * 32 + 31)	/* Running on a hypervisor */
-
-/* More extended AMD flags: CPUID level 0x80000001, ecx, word 6 */
-#define	X86_FEATURE_LAHF_LM	(6 * 32 + 0)	/* LAHF/SAHF in long mode */
-#define	X86_FEATURE_CMP_LEGACY	(6 * 32 + 1)	/* HyperThreading invalid */
-#define	X86_FEATURE_SVM		(6 * 32 + 2)	/* Secure virtual machine */
-#define	X86_FEATURE_EXTAPIC	(6 * 32 + 3)	/* Extended APIC space */
-#define	X86_FEATURE_CR8_LEGACY	(6 * 32 + 4)	/* CR8 in 32-bit mode */
-#define	X86_FEATURE_ABM		(6 * 32 + 5)	/* Advanced bit manipulation */
-#define	X86_FEATURE_SSE4A	(6 * 32 + 6)	/* SSE-4A */
-#define	X86_FEATURE_MISALIGNSSE (6 * 32 + 7)	/* Misaligned SSE mode */
-#define	X86_FEATURE_3DNOWPREFETCH (6 * 32 + 8)	/* 3DNow prefetch */
-#define	X86_FEATURE_OSVW	(6 * 32 + 9)	/* OS Visible Workaround */
-#define	X86_FEATURE_IBS		(6 * 32 + 10)	/* Instruction Based Sampling */
-#define	X86_FEATURE_SSE5	(6 * 32 + 11)	/* SSE-5 */
-#define	X86_FEATURE_SKINIT	(6 * 32 + 12)	/* SKINIT/STGI instructions */
-#define	X86_FEATURE_WDT		(6 * 32 + 13)	/* Watchdog timer */
-#define	X86_FEATURE_NODEID_MSR	(6 * 32 + 19)	/* NodeId MSR */
-
-/* Transmeta-defined CPU features, CPUID level 0x80860001, word 2 */
-#define	X86_FEATURE_RECOVERY	(2 * 32 + 0)	/* CPU in recovery mode */
-#define	X86_FEATURE_LONGRUN	(2 * 32 + 1)	/* Longrun power control */
-#define	X86_FEATURE_LRTI	(2 * 32 + 3)	/* LongRun table interface */
-
-
-struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
-    uint32_t function, uint32_t index);
 
 static inline uint32_t
 bit(int bitno)
@@ -5383,25 +5249,6 @@ kvm_find_cpuid_entry(struct kvm_vcpu *vcpu, uint32_t function, uint32_t index)
 /* 14 is the version for Xeon and Pentium 8.4.8 */
 #define	APIC_VERSION			(0x14UL | ((APIC_LVT_NUM - 1) << 16))
 
-extern void apic_set_reg(struct kvm_lapic *apic, int reg_off, uint32_t val);
-
-void
-kvm_apic_set_version(struct kvm_vcpu *vcpu)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	struct kvm_cpuid_entry2 *feat;
-	uint32_t v = APIC_VERSION;
-
-	if (!irqchip_in_kernel(vcpu->kvm))
-		return;
-
-	feat = kvm_find_cpuid_entry(apic->vcpu, 0x1, 0);
-	if (feat && (feat->ecx & (1 << (X86_FEATURE_X2APIC & 31))))
-		v |= APIC_LVR_DIRECTED_EOI;
-	apic_set_reg(apic, APIC_LVR, v);
-}
-
-
 static int
 kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid)
 {
@@ -5744,22 +5591,6 @@ kvm_read_cr0(struct kvm_vcpu *vcpu)
 	return (kvm_read_cr0_bits(vcpu, ~0UL));
 }
 
-extern inline uint32_t apic_get_reg(struct kvm_lapic *apic, int reg_off);
-
-uint64_t
-kvm_lapic_get_cr8(struct kvm_vcpu *vcpu)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	uint64_t tpr;
-
-	if (apic == NULL)
-		return (0);
-
-	tpr = (uint64_t)apic_get_reg(apic, APIC_TASKPRI);
-
-	return ((tpr & 0xf0) >> 4);
-}
-
 unsigned long
 kvm_get_cr8(struct kvm_vcpu *vcpu)
 {
@@ -5769,8 +5600,6 @@ kvm_get_cr8(struct kvm_vcpu *vcpu)
 		return (vcpu->arch.cr8);
 	}
 }
-
-extern uint64_t kvm_get_apic_base(struct kvm_vcpu *vcpu);
 
 int
 kvm_arch_vcpu_ioctl_get_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
@@ -5947,94 +5776,6 @@ vmx_update_cr8_intercept(struct kvm_vcpu *vcpu, int tpr, int irr)
 	vmcs_write32(TPR_THRESHOLD, irr);
 }
 
-static int
-fls(int x)
-{
-	int r = 32;
-
-	if (!x)
-		return (0);
-
-	if (!(x & 0xffff0000u)) {
-		x <<= 16;
-		r -= 16;
-	}
-	if (!(x & 0xff000000u)) {
-		x <<= 8;
-		r -= 8;
-	}
-	if (!(x & 0xf0000000u)) {
-		x <<= 4;
-		r -= 4;
-	}
-	if (!(x & 0xc0000000u)) {
-		x <<= 2;
-		r -= 2;
-	}
-	if (!(x & 0x80000000u)) {
-		x <<= 1;
-		r -= 1;
-	}
-
-	return (r);
-}
-
-static int
-find_highest_vector(void *bitmap)
-{
-	uint32_t *word = bitmap;
-	int word_offset = MAX_APIC_VECTOR >> 5;
-
-	while ((word_offset != 0) && (word[(--word_offset) << 2] == 0))
-		continue;
-
-	if (!word_offset && !word[0])
-		return (-1);
-	else
-		return (fls(word[word_offset << 2]) - 1 + (word_offset << 5));
-}
-
-static inline int
-apic_search_irr(struct kvm_lapic *apic)
-{
-	return (find_highest_vector((void *)((uintptr_t)apic->regs +
-	    APIC_IRR)));
-}
-
-static inline int
-apic_find_highest_irr(struct kvm_lapic *apic)
-{
-	int result;
-
-	if (!apic->irr_pending)
-		return (-1);
-
-	result = apic_search_irr(apic);
-	ASSERT(result == -1 || result >= 16);
-
-	return (result);
-}
-
-int
-kvm_lapic_find_highest_irr(struct kvm_vcpu *vcpu)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	int highest_irr;
-
-	/*
-	 * This may race with setting of irr in __apic_accept_irq() and
-	 * value returned may be wrong, but kvm_vcpu_kick() in __apic_accept_irq
-	 * will cause vmexit immediately and the value will be recalculated
-	 * on the next vmentry.
-	 */
-	if (!apic)
-		return (0);
-
-	highest_irr = apic_find_highest_irr(apic);
-
-	return (highest_irr);
-}
-
 static void
 update_cr8_intercept(struct kvm_vcpu *vcpu)
 {
@@ -6208,7 +5949,6 @@ is_protmode(struct kvm_vcpu *vcpu)
 {
 	return (kvm_read_cr0_bits(vcpu, X86_CR0_PE));
 }
-
 
 int
 kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu)
@@ -6645,88 +6385,6 @@ set_msr_mtrr(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 	}
 
 	kvm_mmu_reset_context(vcpu);
-
-	return (0);
-}
-
-static inline int
-apic_x2apic_mode(struct kvm_lapic *apic)
-{
-	return (apic->vcpu->arch.apic_base & X2APIC_ENABLE);
-}
-
-extern int apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val);
-
-int
-kvm_x2apic_msr_write(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	uint32_t reg = (msr - APIC_BASE_MSR) << 4;
-
-	if (!irqchip_in_kernel(vcpu->kvm) || !apic_x2apic_mode(apic))
-		return (1);
-
-	/* if this is ICR write vector before command */
-	if (msr == 0x830)
-		apic_reg_write(apic, APIC_ICR2, (uint32_t)(data >> 32));
-
-	return (apic_reg_write(apic, reg, (uint32_t)data));
-}
-
-extern int apic_reg_read(struct kvm_lapic *apic,
-    uint32_t offset, int len, void *data);
-
-int
-kvm_x2apic_msr_read(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *data)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	uint32_t reg = (msr - APIC_BASE_MSR) << 4, low, high = 0;
-
-	if (!irqchip_in_kernel(vcpu->kvm) || !apic_x2apic_mode(apic))
-		return (1);
-
-	if (apic_reg_read(apic, reg, 4, &low))
-		return (1);
-
-	if (msr == 0x830)
-		apic_reg_read(apic, APIC_ICR2, 4, &high);
-
-	*data = (((uint64_t)high) << 32) | low;
-
-	return (0);
-}
-
-int
-kvm_hv_vapic_msr_write(struct kvm_vcpu *vcpu, uint32_t reg, uint64_t data)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-
-	if (!irqchip_in_kernel(vcpu->kvm))
-		return (1);
-
-	/* if this is ICR write vector before command */
-	if (reg == APIC_ICR)
-		apic_reg_write(apic, APIC_ICR2, (uint32_t)(data >> 32));
-
-	return (apic_reg_write(apic, reg, (uint32_t)data));
-}
-
-int
-kvm_hv_vapic_msr_read(struct kvm_vcpu *vcpu, uint32_t reg, uint64_t *data)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	uint32_t low, high = 0;
-
-	if (!irqchip_in_kernel(vcpu->kvm))
-		return (1);
-
-	if (apic_reg_read(apic, reg, 4, &low))
-		return (1);
-
-	if (reg == APIC_ICR)
-		apic_reg_read(apic, APIC_ICR2, 4, &high);
-
-	*data = (((uint64_t)high) << 32) | low;
 
 	return (0);
 }
@@ -11103,74 +10761,6 @@ handle_invalid_op(struct kvm_vcpu *vcpu)
 	return (1);
 }
 
-inline int
-apic_find_highest_isr(struct kvm_lapic *apic)
-{
-	int ret;
-
-	ret = find_highest_vector((void *)((uintptr_t)apic->regs + APIC_ISR));
-	ASSERT(ret == -1 || ret >= 16);
-
-	return (ret);
-}
-
-void
-apic_update_ppr(struct kvm_lapic *apic)
-{
-	uint32_t tpr, isrv, ppr;
-	int isr;
-
-	tpr = apic_get_reg(apic, APIC_TASKPRI);
-	isr = apic_find_highest_isr(apic);
-	isrv = (isr != -1) ? isr : 0;
-
-	if ((tpr & 0xf0) >= (isrv & 0xf0))
-		ppr = tpr & 0xff;
-	else
-		ppr = isrv & 0xf0;
-
-	apic_set_reg(apic, APIC_PROCPRI, ppr);
-}
-
-extern inline int apic_enabled(struct kvm_lapic *apic);
-
-int
-kvm_apic_has_interrupt(struct kvm_vcpu *vcpu)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	int highest_irr;
-
-	if (!apic || !apic_enabled(apic))
-		return (-1);
-
-	apic_update_ppr(apic);
-	highest_irr = apic_find_highest_irr(apic);
-	if ((highest_irr == -1) ||
-	    ((highest_irr & 0xF0) <= apic_get_reg(apic, APIC_PROCPRI)))
-		return (-1);
-
-	return (highest_irr);
-}
-
-extern inline int apic_hw_enabled(struct kvm_lapic *apic);
-
-int
-kvm_apic_accept_pic_intr(struct kvm_vcpu *vcpu)
-{
-	uint32_t lvt0 = apic_get_reg(vcpu->arch.apic, APIC_LVT0);
-	int r = 0;
-
-	if (kvm_vcpu_is_bsp(vcpu)) {
-		if (!apic_hw_enabled(vcpu->arch.apic))
-			r = 1;
-		if ((lvt0 & APIC_LVT_MASKED) == 0 &&
-		    GET_APIC_DELIVERY_MODE(lvt0) == APIC_MODE_EXTINT)
-			r = 1;
-	}
-
-	return (r);
-}
-
 /*
  * check if there is pending interrupt without intack.
  */
@@ -11190,34 +10780,6 @@ kvm_cpu_has_interrupt(struct kvm_vcpu *v)
 			return (0);
 	}
 	return (1);
-}
-
-extern inline void apic_set_vector(int vec, caddr_t bitmap);
-extern inline void apic_clear_vector(int vec, caddr_t bitmap);
-
-static inline void
-apic_clear_irr(int vec, struct kvm_lapic *apic)
-{
-	apic->irr_pending = 0;
-	apic_clear_vector(vec, (void *)((uintptr_t)apic->regs + APIC_IRR));
-	if (apic_search_irr(apic) != -1)
-		apic->irr_pending = 1;
-}
-
-int
-kvm_get_apic_interrupt(struct kvm_vcpu *vcpu)
-{
-	int vector = kvm_apic_has_interrupt(vcpu);
-	struct kvm_lapic *apic = vcpu->arch.apic;
-
-	if (vector == -1)
-		return (-1);
-
-	apic_set_vector(vector, (void *)((uintptr_t)apic->regs + APIC_ISR));
-	apic_update_ppr(apic);
-	apic_clear_irr(vector, apic);
-
-	return (vector);
 }
 
 static int
@@ -11429,8 +10991,6 @@ kvm_mmu_unload(struct kvm_vcpu *vcpu)
 	mmu_free_roots(vcpu);
 }
 
-extern void apic_set_tpr(struct kvm_lapic *apic, uint32_t tpr);
-
 /*
  * Often times we have pages that correspond to addresses that are in a users
  * virtual address space. Rather than trying to constantly map them in and out
@@ -11442,74 +11002,6 @@ caddr_t
 page_address(page_t *page)
 {
 	return (hat_kpm_mapin_pfn(page->p_pagenum));
-}
-
-void
-kvm_lapic_sync_from_vapic(struct kvm_vcpu *vcpu)
-{
-	uint32_t data;
-	void *vapic;
-
-	if (!irqchip_in_kernel(vcpu->kvm) || !vcpu->arch.apic->vapic_addr)
-		return;
-
-	vapic = page_address(vcpu->arch.apic->vapic_page);
-
-	data = *(uint32_t *)((uintptr_t)vapic +
-	    offset_in_page(vcpu->arch.apic->vapic_addr));
-#ifdef XXX
-	kunmap_atomic(vapic, KM_USER0);
-#else
-	XXX_KVM_PROBE;
-#endif
-
-	apic_set_tpr(vcpu->arch.apic, data & 0xff);
-}
-
-void
-kvm_lapic_sync_to_vapic(struct kvm_vcpu *vcpu)
-{
-	uint32_t data, tpr;
-	int max_irr, max_isr;
-	struct kvm_lapic *apic;
-	void *vapic;
-
-	if (!irqchip_in_kernel(vcpu->kvm) || !vcpu->arch.apic->vapic_addr)
-		return;
-
-	apic = vcpu->arch.apic;
-	tpr = apic_get_reg(apic, APIC_TASKPRI) & 0xff;
-	max_irr = apic_find_highest_irr(apic);
-	if (max_irr < 0)
-		max_irr = 0;
-	max_isr = apic_find_highest_isr(apic);
-	if (max_isr < 0)
-		max_isr = 0;
-	data = (tpr & 0xff) | ((max_isr & 0xf0) << 8) | (max_irr << 24);
-
-	vapic = page_address(vcpu->arch.apic->vapic_page);
-
-	*(uint32_t *)((uintptr_t)vapic +
-	    offset_in_page(vcpu->arch.apic->vapic_addr)) = data;
-#ifdef XXX
-	kunmap_atomic(vapic, KM_USER0);
-#else
-	XXX_KVM_PROBE;
-#endif
-}
-
-extern inline int apic_sw_enabled(struct kvm_lapic *apic);
-
-int
-kvm_apic_present(struct kvm_vcpu *vcpu)
-{
-	return (vcpu->arch.apic && apic_hw_enabled(vcpu->arch.apic));
-}
-
-int
-kvm_lapic_enabled(struct kvm_vcpu *vcpu)
-{
-	return (kvm_apic_present(vcpu) && apic_sw_enabled(vcpu->arch.apic));
 }
 
 void
@@ -12210,8 +11702,6 @@ vapic_enter(struct kvm_vcpu *vcpu)
 	vcpu->arch.apic->vapic_page = page;
 }
 
-extern int kvm_apic_id(struct kvm_lapic *apic);
-
 static void
 vapic_exit(struct kvm_vcpu *vcpu)
 {
@@ -12232,71 +11722,6 @@ vapic_exit(struct kvm_vcpu *vcpu)
 #else
 	XXX_KVM_SYNC_PROBE;
 #endif
-}
-
-void
-kvm_lapic_reset(struct kvm_vcpu *vcpu)
-{
-	struct kvm_lapic *apic;
-	int i;
-
-	ASSERT(vcpu);
-	apic = vcpu->arch.apic;
-	ASSERT(apic != NULL);
-
-#ifdef XXX
-	/* Stop the timer in case it's a reset to an active apic */
-	hrtimer_cancel(&apic->lapic_timer.timer);
-#else
-	mutex_enter(&cpu_lock);
-	if (apic->lapic_timer.active) {
-		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
-		apic->lapic_timer.active = 0;
-	}
-	mutex_exit(&cpu_lock);
-	XXX_KVM_PROBE;
-#endif
-
-	apic_set_reg(apic, APIC_ID, vcpu->vcpu_id << 24);
-	kvm_apic_set_version(apic->vcpu);
-
-	for (i = 0; i < APIC_LVT_NUM; i++)
-		apic_set_reg(apic, APIC_LVTT + 0x10 * i, APIC_LVT_MASKED);
-
-	apic_set_reg(apic, APIC_LVT0,
-	    SET_APIC_DELIVERY_MODE(0, APIC_MODE_EXTINT));
-
-	apic_set_reg(apic, APIC_DFR, 0xffffffffU);
-	apic_set_reg(apic, APIC_SPIV, 0xff);
-	apic_set_reg(apic, APIC_TASKPRI, 0);
-	apic_set_reg(apic, APIC_LDR, 0);
-	apic_set_reg(apic, APIC_ESR, 0);
-	apic_set_reg(apic, APIC_ICR, 0);
-	apic_set_reg(apic, APIC_ICR2, 0);
-	apic_set_reg(apic, APIC_TDCR, 0);
-	apic_set_reg(apic, APIC_TMICT, 0);
-	for (i = 0; i < 8; i++) {
-		apic_set_reg(apic, APIC_IRR + 0x10 * i, 0);
-		apic_set_reg(apic, APIC_ISR + 0x10 * i, 0);
-		apic_set_reg(apic, APIC_TMR + 0x10 * i, 0);
-	}
-	apic->irr_pending = 0;
-	update_divide_count(apic);
-#ifdef XXX
-	atomic_set(&apic->lapic_timer.pending, 0);
-#else
-	apic->lapic_timer.pending = 0;
-	XXX_KVM_PROBE;
-#endif
-	if (kvm_vcpu_is_bsp(vcpu))
-		vcpu->arch.apic_base |= MSR_IA32_APICBASE_BSP;
-	apic_update_ppr(apic);
-
-	vcpu->arch.apic_arb_prio = 0;
-
-	cmn_err(CE_NOTE, "%s: vcpu=%p, id=%d, base_msr= %lx PRIx64 "
-	    "base_address=%lx\n", __func__, vcpu, kvm_apic_id(apic),
-	    vcpu->arch.apic_base, apic->base_address);
 }
 
 static int
@@ -12968,8 +12393,6 @@ ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 #endif
 	return (kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe));
 }
-
-extern int kvm_apic_set_irq(struct kvm_vcpu *vcpu, struct kvm_lapic_irq *irq);
 
 static int
 ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
@@ -13717,28 +13140,6 @@ kvm_unregister_irq_mask_notifier(struct kvm *kvm, int irq,
 	mutex_exit(&kvm->irq_lock);
 }
 
-void
-kvm_apic_post_state_restore(struct kvm_vcpu *vcpu)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-
-	apic->base_address = vcpu->arch.apic_base &
-	    MSR_IA32_APICBASE_BASE;
-	kvm_apic_set_version(vcpu);
-
-	apic_update_ppr(apic);
-
-	mutex_enter(&cpu_lock);
-	if (apic->lapic_timer.active)
-		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
-	apic->lapic_timer.active = 0;
-	mutex_exit(&cpu_lock);
-
-	update_divide_count(apic);
-	start_apic_timer(apic);
-	apic->irr_pending = 1;
-}
-
 static int
 kvm_vcpu_ioctl_get_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s)
 {
@@ -13913,17 +13314,6 @@ kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu, struct kvm_interrupt *irq)
 	kvm_queue_interrupt(vcpu, irq->irq, 0);
 
 	vcpu_put(vcpu);
-
-	return (0);
-}
-
-static int
-kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, struct kvm_vapic_addr *addr)
-{
-	if (!irqchip_in_kernel(vcpu->kvm))
-		return (EINVAL);
-
-	vcpu->arch.apic->vapic_addr = addr->vapic_addr;
 
 	return (0);
 }
