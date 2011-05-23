@@ -510,10 +510,7 @@ apic_send_ipi(struct kvm_lapic *apic)
 	else
 		irq.dest_id = GET_APIC_DEST_FIELD(icr_high);
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_apic_ipi(icr_low, irq.dest_id);
-#endif
-
+	KVM_TRACE2(apic__ipi, uint32_t, icr_low, uint32_t, irq.dest_id);
 	kvm_irq_delivery_to_apic(apic->vcpu->kvm, apic, &irq);
 }
 
@@ -625,9 +622,7 @@ apic_reg_read(struct kvm_lapic *apic, uint32_t offset, int len, void *data)
 	}
 
 	result = __apic_read(apic, offset & ~0xf);
-#ifdef XXX_KVM_TRACE
-	trace_kvm_apic_read(offset, result);
-#endif
+	KVM_TRACE2(apic__read, uint32_t, offset, uint32_t, result);
 
 	switch (len) {
 	case 1:
@@ -740,9 +735,7 @@ apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 {
 	int ret = 0;
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_apic_write(reg, val);
-#endif
+	KVM_TRACE2(apic__write, uint32_t, reg, uint32_t, val);
 
 	switch (reg) {
 	case APIC_ID:		/* Local APIC ID */

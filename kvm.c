@@ -1037,9 +1037,7 @@ vmx_inject_irq(struct kvm_vcpu *vcpu)
 	uint32_t intr;
 	int irq = vcpu->arch.interrupt.nr;
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_inj_virq(irq);
-#endif
+	KVM_TRACE1(inj__virq, int, irq);
 	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_irq_injections);
 
 	if (vmx->rmode.vm86_active) {
@@ -2239,9 +2237,8 @@ kvm_sync_page(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp)
 		return (1);
 	}
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_mmu_sync_page(sp);
-#endif
+	KVM_TRACE1(mmu__sync__page, struct kvm_mmu_page *, sp);
+
 	if (rmap_write_protect(vcpu->kvm, sp->gfn))
 		kvm_flush_remote_tlbs(vcpu->kvm);
 	kvm_unlink_unsync_page(vcpu->kvm, sp);
@@ -2326,9 +2323,9 @@ kvm_mmu_get_page(struct kvm_vcpu *vcpu, gfn_t gfn, gva_t gaddr, unsigned level,
 		vcpu->arch.mmu.prefetch_page(vcpu, sp);
 	else
 		nonpaging_prefetch_page(vcpu, sp);
-#ifdef XXX_KVM_TRACE
-	trace_kvm_mmu_get_page(sp, true);
-#endif
+
+	KVM_TRACE1(mmu__get__page, struct kvm_mmu_page *, sp);
+
 	return (sp);
 }
 
@@ -4989,9 +4986,7 @@ kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
 	kvm_fx_restore(&vcpu->arch.host_fx_image);
 	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_fpu_reload);
 	set_bit(KVM_REQ_DEACTIVATE_FPU, &vcpu->requests);
-#ifdef XXX_KVM_TRACE
-	trace_kvm_fpu(0);
-#endif
+	KVM_TRACE1(fpu, int, 0);
 }
 
 /* straight from xen code... */
@@ -7886,10 +7881,9 @@ emulator_read_emulated(unsigned long addr, void *val,
 
 	if (vcpu->mmio_read_completed) {
 		memcpy(val, vcpu->mmio_data, bytes);
-#ifdef XXX_KVM_TRACE
-		trace_kvm_mmio(KVM_TRACE_MMIO_READ, bytes,
-		    vcpu->mmio_phys_addr, *(uint64_t *)val);
-#endif
+		KVM_TRACE3(mmio__read, unsigned int, bytes, uintptr_t,
+		    vcpu->mmio_phys_addr, uint64_t, *(uint64_t *)val);
+
 		vcpu->mmio_read_completed = 0;
 		return (X86EMUL_CONTINUE);
 	}
@@ -7914,16 +7908,13 @@ mmio:
 	 * Is this MMIO handled locally?
 	 */
 	if (!vcpu_mmio_read(vcpu, gpa, bytes, val)) {
-#ifdef XXX_KVM_TRACE
-		trace_kvm_mmio(KVM_TRACE_MMIO_READ, bytes, gpa,
-		    *(uint64_t *)val);
-#endif
+		KVM_TRACE3(mmio__read, unsigned int, bytes, uintptr_t, gpa,
+		    uint64_t, *(uint64_t *)val);
 		return (X86EMUL_CONTINUE);
 	}
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_mmio(KVM_TRACE_MMIO_READ_UNSATISFIED, bytes, gpa, 0);
-#endif
+	KVM_TRACE2(mmio__read__unsatisfied, unsigned int, bytes,
+	    uintptr_t, gpa);
 
 	vcpu->mmio_needed = 1;
 	vcpu->mmio_phys_addr = gpa;
@@ -8168,9 +8159,8 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 			++spte;
 		}
 	}
-#ifdef XXX_KVM_TRACE
-	kvm_mmu_audit(vcpu, "post pte write");
-#endif
+
+	KVM_TRACE1(mmu__audit__post__pte, struct kvm_vcpu *, vcpu);
 	mutex_exit(&vcpu->kvm->mmu_lock);
 
 	if (!is_error_pfn(vcpu->arch.update_pte.pfn)) {
@@ -8228,9 +8218,9 @@ emulator_write_emulated_onepage(unsigned long addr, const void *val,
 		return (X86EMUL_CONTINUE);
 
 mmio:
-#ifdef XXX_KVM_TRACE
-	trace_kvm_mmio(KVM_TRACE_MMIO_WRITE, bytes, gpa, *(uint64_t *)val);
-#endif
+	KVM_TRACE3(mmio__write, unsigned int, bytes, uintptr_t, gpa,
+	    uint64_t, *(uint64_t *)val);
+
 	/*
 	 * Is this MMIO handled locally?
 	 */
@@ -8712,9 +8702,9 @@ handle_exception(struct kvm_vcpu *vcpu)
 		if (enable_ept)
 			cmn_err(CE_PANIC, "page fault with ept enabled\n");
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
-#ifdef XXX_KVM_TRACE
-		trace_kvm_page_fault(cr2, error_code);
-#endif
+
+		KVM_TRACE2(page__fault, uintptr_t, cr2, uint32_t, error_code);
+
 		if (kvm_event_needs_reinjection(vcpu))
 			kvm_mmu_unprotect_page_virt(vcpu, cr2);
 		return (kvm_mmu_page_fault(vcpu, cr2, error_code));
@@ -9392,9 +9382,8 @@ handle_cr(struct kvm_vcpu *vcpu)
 	switch ((exit_qualification >> 4) & 3) {
 	case 0: /* mov to cr */
 		val = kvm_register_read(vcpu, reg);
-#ifdef XXX_KVM_TRACE
-		trace_kvm_cr_write(cr, val);
-#endif
+		KVM_TRACE2(cr__write, int, cr, unsigned long, val);
+
 		switch (cr) {
 		case 0:
 			kvm_set_cr0(vcpu, val);
@@ -9429,9 +9418,9 @@ handle_cr(struct kvm_vcpu *vcpu)
 
 	case 2: /* clts */
 		vmx_set_cr0(vcpu, kvm_read_cr0_bits(vcpu, ~X86_CR0_TS));
-#ifdef XXX_KVM_TRACE
-		trace_kvm_cr_write(0, kvm_read_cr0(vcpu));
-#endif
+		KVM_TRACE2(cr__write, int, 0,
+		    unsigned long, kvm_read_cr0(vcpu));
+
 		skip_emulated_instruction(vcpu);
 		vmx_fpu_activate(vcpu);
 		return (1);
@@ -9439,26 +9428,22 @@ handle_cr(struct kvm_vcpu *vcpu)
 		switch (cr) {
 		case 3:
 			kvm_register_write(vcpu, reg, vcpu->arch.cr3);
-#ifdef XXX_KVM_TRACE
-			trace_kvm_cr_read(cr, vcpu->arch.cr3);
-#endif
+			KVM_TRACE2(cr__read, int, cr,
+			    unsigned long, vcpu->arch.cr3);
 			skip_emulated_instruction(vcpu);
 			return (1);
 		case 8:
 			val = kvm_get_cr8(vcpu);
 			kvm_register_write(vcpu, reg, val);
-#ifdef XXX_KVM_TRACE
-			trace_kvm_cr_read(cr, val);
-#endif
+			KVM_TRACE2(cr__read, int, cr, unsigned long, val);
 			skip_emulated_instruction(vcpu);
 			return (1);
 		}
 		break;
 	case 3: /* lmsw */
 		val = (exit_qualification >> LMSW_SOURCE_DATA_SHIFT) & 0x0f;
-#ifdef XXX_KVM_TRACE
-		trace_kvm_cr_write(0, (kvm_read_cr0(vcpu) & ~0xful) | val);
-#endif
+		KVM_TRACE2(cr__write, int, 0, unsigned long,
+		    (kvm_read_cr0(vcpu) & ~0xful) | val);
 		kvm_lmsw(vcpu, val);
 
 		skip_emulated_instruction(vcpu);
@@ -9620,13 +9605,12 @@ kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 		kvm_register_write(vcpu, VCPU_REGS_RDX, best->edx);
 	}
 	kvm_x86_ops->skip_emulated_instruction(vcpu);
-#ifdef XXX_KVM_TRACE
-	trace_kvm_cpuid(function,
-			kvm_register_read(vcpu, VCPU_REGS_RAX),
-			kvm_register_read(vcpu, VCPU_REGS_RBX),
-			kvm_register_read(vcpu, VCPU_REGS_RCX),
-			kvm_register_read(vcpu, VCPU_REGS_RDX));
-#endif
+
+	KVM_TRACE5(cpuid, uint32_t, function,
+	    uint32_t, kvm_register_read(vcpu, VCPU_REGS_RAX),
+	    uint32_t, kvm_register_read(vcpu, VCPU_REGS_RBX),
+	    uint32_t, kvm_register_read(vcpu, VCPU_REGS_RCX),
+	    uint32_t, kvm_register_read(vcpu, VCPU_REGS_RDX));
 }
 
 static int
@@ -9643,16 +9627,12 @@ handle_rdmsr(struct kvm_vcpu *vcpu)
 	uint64_t data;
 
 	if (vmx_get_msr(vcpu, ecx, &data)) {
-#ifdef XXX_KVM_TRACE
-		trace_kvm_msr_read_ex(ecx);
-#endif
+		KVM_TRACE1(msr__read__ex, uint32_t, ecx);
 		kvm_inject_gp(vcpu, 0);
 		return (1);
 	}
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_msr_read(ecx, data);
-#endif
+	KVM_TRACE2(msr__read, uint32_t, ecx, uint64_t, data);
 
 	/* FIXME: handling of bits 32:63 of rax, rdx */
 	vcpu->arch.regs[VCPU_REGS_RAX] = data & -1u;
@@ -9665,20 +9645,16 @@ static int
 handle_wrmsr(struct kvm_vcpu *vcpu)
 {
 	uint32_t ecx = vcpu->arch.regs[VCPU_REGS_RCX];
-	uint64_t data = (vcpu->arch.regs[VCPU_REGS_RAX] & -1u)
-		| ((uint64_t)(vcpu->arch.regs[VCPU_REGS_RDX] & -1u) << 32);
+	uint64_t data = (vcpu->arch.regs[VCPU_REGS_RAX] & -1u) |
+	    ((uint64_t)(vcpu->arch.regs[VCPU_REGS_RDX] & -1u) << 32);
 
 	if (vmx_set_msr(vcpu, ecx, data) != 0) {
-#ifdef XXX_KVM_TRACE
-		trace_kvm_msr_write_ex(ecx, data);
-#endif
+		KVM_TRACE2(msr__write__ex, uint32_t, ecx, uint64_t, data);
 		kvm_inject_gp(vcpu, 0);
 		return (1);
 	}
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_msr_write(ecx, data);
-#endif
+	KVM_TRACE2(msr__write, uint32_t, ecx, uint64_t, data);
 	skip_emulated_instruction(vcpu);
 	return (1);
 }
@@ -9741,9 +9717,9 @@ kvm_hv_hypercall(struct kvm_vcpu *vcpu)
 	rep_cnt = (param >> 32) & 0xfff;
 	rep_idx = (param >> 48) & 0xfff;
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_hv_hypercall(code, fast, rep_cnt, rep_idx, ingpa, outgpa);
-#endif
+	KVM_TRACE6(hv__hypercall, uintptr_t, code, uintptr_t, fast,
+	    uintptr_t, rep_cnt, uintptr_t, rep_idx, uintptr_t, ingpa,
+	    uintptr_t, outgpa);
 
 	switch (code) {
 	case HV_X64_HV_NOTIFY_LONG_SPIN_WAIT:
@@ -9825,9 +9801,8 @@ kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 	a2 = kvm_register_read(vcpu, VCPU_REGS_RDX);
 	a3 = kvm_register_read(vcpu, VCPU_REGS_RSI);
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_hypercall(nr, a0, a1, a2, a3);
-#endif
+	KVM_TRACE5(hypercall, uintptr_t, nr, uintptr_t, a0, uintptr_t, a1,
+	    uintptr_t, a2, uintptr_t, a3);
 
 	if (!is_long_mode(vcpu)) {
 		nr &= 0xFFFFFFFF;
@@ -10612,9 +10587,8 @@ handle_ept_violation(struct kvm_vcpu *vcpu)
 	}
 
 	gpa = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
-#ifdef XXX_KVM_TRACE
-	trace_kvm_page_fault(gpa, exit_qualification);
-#endif
+	KVM_TRACE2(page__fault, gpa_t, gpa, unsigned long, exit_qualification);
+
 	return (kvm_mmu_page_fault(vcpu, gpa & PAGEMASK, 0));
 }
 
@@ -11011,9 +10985,7 @@ kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin)
 	struct hlist_node *n;
 	int gsi;
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_ack_irq(irqchip, pin);
-#endif
+	KVM_TRACE2(ack__irq, unsigned int, irqchip, unsigned int, pin);
 
 #ifdef XXX
 	rcu_read_lock();
@@ -11297,9 +11269,7 @@ kvm_load_guest_fpu(struct kvm_vcpu *vcpu)
 	vcpu->guest_fpu_loaded = 1;
 	kvm_fx_save(&vcpu->arch.host_fx_image);
 	kvm_fx_restore(&vcpu->arch.guest_fx_image);
-#ifdef XXX_KVM_TRACE
-	trace_kvm_fpu(1);
-#endif
+	KVM_TRACE1(fpu, int, 1);
 }
 
 static inline unsigned long
@@ -11577,9 +11547,8 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		set_debugreg(vcpu->arch.eff_db[3], 3);
 	}
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_entry(vcpu->vcpu_id);
-#endif
+	KVM_TRACE1(vm__entry, int, vcpu->vcpu_id);
+
 	kvm_x86_ops->run(vcpu);
 #ifdef XXX
 	/*
@@ -12529,9 +12498,9 @@ kvm_ioapic_set_irq(struct kvm_ioapic *ioapic, int irq, int level)
 			else
 				ret = 0; /* report coalesced interrupt */
 		}
-#ifdef XXX_KVM_TRACE
-		trace_kvm_ioapic_set_irq(entry.bits, irq, ret == 0);
-#endif
+
+		KVM_TRACE3(ioapic__set__irq, uintptr_t, entry.bits,
+		    int, irq, int, ret == 0);
 	}
 	mutex_exit(&ioapic->lock);
 
@@ -12781,10 +12750,9 @@ kvm_pic_set_irq(void *opaque, int irq, int level)
 	if (irq >= 0 && irq < PIC_NUM_PINS) {
 		ret = pic_set_irq1(&s->pics[irq >> 3], irq & 7, level);
 		pic_update_irq(s);
-#ifdef XXX_KVM_TRACE
-		trace_kvm_pic_set_irq(irq >> 3, irq & 7, s->pics[irq >> 3].elcr,
-		    s->pics[irq >> 3].imr, ret == 0);
-#endif
+		KVM_TRACE5(pic__set__irq, uintptr_t, irq >> 3,
+		    uintptr_t, irq & 7, uintptr_t, s->pics[irq >> 3].elcr,
+		    uintptr_t, s->pics[irq >> 3].imr, int, ret == 0);
 	}
 	mutex_exit(&s->lock);
 
@@ -12826,9 +12794,8 @@ kvm_set_msi(struct kvm_kernel_irq_routing_entry *e, struct kvm *kvm,
 	if (!level)
 		return (-1);
 
-#ifdef XXX_KVM_TRACE
-	trace_kvm_msi_set_irq(e->msi.address_lo, e->msi.data);
-#endif
+	KVM_TRACE2(msi__set__irq, uintptr_t, e->msi.address_lo,
+	    uintptr_t, e->msi.data);
 
 	irq.dest_id = (e->msi.address_lo & MSI_ADDR_DEST_ID_MASK) >>
 	    MSI_ADDR_DEST_ID_SHIFT;

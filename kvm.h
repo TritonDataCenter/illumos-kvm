@@ -2335,5 +2335,29 @@ extern struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
 
 #define	MSR_EFER		0xc0000080 /* extended feature register */
 
+#define	KVM_TRACE1(name, type1, arg1)					\
+	DTRACE_PROBE1(kvm__##name, type1, arg1);
+
+#define	KVM_TRACE2(name, type1, arg1, type2, arg2)			\
+	DTRACE_PROBE2(kvm__##name, type1, arg1, type2, arg2);
+
+#define	KVM_TRACE3(name, type1, arg1, type2, arg2, type3, arg3)		\
+	DTRACE_PROBE3(kvm__##name, type1, arg1, type2, arg2, type3, arg3);
+
+#define	KVM_TRACE4(name, type1, arg1, type2, arg2, type3, arg3,		\
+	    type4, arg4)						\
+	DTRACE_PROBE4(kvm__##name, type1, arg1, type2, arg2, 		\
+	    type3, arg3, type4, arg4);
+
+#define	KVM_TRACE5(name, type1, arg1, type2, arg2, type3, arg3,		\
+	    type4, arg4, type5, arg5)					\
+	DTRACE_PROBE5(kvm__##name, type1, arg1, type2, arg2, 		\
+	    type3, arg3, type4, arg4, type5, arg5);
+
+#define	KVM_TRACE6(name, type1, arg1, type2, arg2, type3, arg3,		\
+	    type4, arg4, type5, arg5, type6, arg6)			\
+	DTRACE_PROBE6(kvm__##name, type1, arg1, type2, arg2, 		\
+	    type3, arg3, type4, arg4, type5, arg5, type6, arg6);
+
 #endif
 #endif /*SOLARIS_KVM_H*/
