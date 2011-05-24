@@ -4889,8 +4889,7 @@ void
 vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
-	uint64_t phys_addr = (hat_getpfnum(kas.a_hat, (char *)vmx->vmcs) <<
-	    PAGESHIFT) | ((uint64_t)(vmx->vmcs) & 0xfff);
+	uint64_t phys_addr = vmx->vmcs_pa;
 	uint64_t tsc_this, delta, new_offset;
 
 	if (vcpu->cpu != cpu) {

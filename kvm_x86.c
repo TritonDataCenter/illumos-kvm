@@ -3567,8 +3567,8 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
     struct kvm_memory_slot *memslot, struct kvm_memory_slot old,
     struct kvm_userspace_memory_region *mem, int user_alloc)
 {
-	int npages = memslot->npages;
-	int i;
+	unsigned int npages = memslot->npages;
+	uint64_t i;
 
 	/*
 	 * To keep backward compatibility with older userspace, x86 needs to
@@ -3593,7 +3593,8 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
 
 			XXX_KVM_PROBE;
 
-			userspace_addr = smmap64(NULL, npages * PAGESIZE,
+			userspace_addr = smmap64(NULL,
+			    (size_t)(npages * PAGESIZE),
 			    PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON,
 			    -1, 0);
 
