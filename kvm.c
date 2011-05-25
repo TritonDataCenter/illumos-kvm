@@ -29,6 +29,10 @@
 #include <vm/seg_kpm.h>
 #include <sys/avl.h>
 #include <sys/condvar_impl.h>
+#include <sys/file.h>
+#include <sys/vnode.h>
+#include <sys/strsubr.h>
+#include <sys/stream.h>
 
 #include "vmx.h"
 #include "msr-index.h"
@@ -57,6 +61,11 @@ typedef struct {
 	struct kvm *kds_kvmp;			/* pointer to underlying VM */
 	struct kvm_vcpu *kds_vcpu;		/* pointer to VCPU */
 } kvm_devstate_t;
+
+/*
+ * Tunables
+ */
+static int kvm_hiwat = 0x1000000;
 
 /*
  * Internal driver-wide values
@@ -14196,6 +14205,61 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 
 		rval = kvm_vm_ioctl_get_dirty_log(kvmp, &log);
 		break;
+	}
+	case KVM_NET_QUEUE: {
+		struct vnode *vn;
+		file_t *fp;
+		struct stroptions *stropt;
+		mblk_t *mp;
+		queue_t *q;
+
+		fp = getf(arg);
+		if (fp == NULL) {
+			rval = EINVAL;
+			break;
+		}
+		ASSERT(fp->f_vnode);
+
+		if (fp->f_vnode->v_stream == NULL) {
+			releasef(arg);
+			rval = EINVAL;
+			break;
+		}
+
+		mp = allocb(sizeof (struct stroptions), BPRI_LO);
+		if (mp == NULL) {
+			releasef(arg);
+			rval = ENOMEM;
+		}
+
+		/*
+		 * XXX This really just shouldn't need to exist, etc. and we
+		 * should really get the hiwat value more intelligently at least
+		 * a #define or a tunable god forbid. Oh well, as bmc said
+		 * earlier: 
+		 * "I am in blood steeped in so far that I wade no more.
+		 * Returning were as tedious as go o'er.
+		 *
+		 * We'd love to just putmsg on RD(fp->f_vnode->v_stream->sd_wq)
+		 * however that would be the stream head. Instead, we need to
+		 * get the write version and then go to the next one and then
+		 * the opposite end. The doctor may hemorrhage before the
+		 * patient.
+		 *
+		 * Banquo's ghost is waiting to pop up
+		 */
+		mp->b_datap->db_type = M_SETOPTS;
+		stropt = (struct stroptions *)mp->b_rptr;
+		stropt->so_flags = SO_HIWAT;
+		stropt->so_hiwat = 0x100042;
+		q = WR(fp->f_vnode->v_stream->sd_wrq);
+		q = RD(q->q_next);
+		putnext(q, mp);
+
+		releasef(arg);
+
+		rval = 0;
+		*rv = 0;
 	}
 	default:
 #ifndef XXX

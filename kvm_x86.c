@@ -690,12 +690,6 @@ ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 	union kvm_ioapic_redirect_entry *entry = &ioapic->redirtbl[irq];
 	struct kvm_lapic_irq irqe;
 
-	/* XXX - debug */
-	cmn_err(CE_NOTE, "dest_mode=%x delivery_mode=%x vector=%x "
-	    "trig_mode=%x\n", entry->fields.dest_mode,
-	    entry->fields.delivery_mode, entry->fields.vector,
-	    entry->fields.trig_mode);
-
 	irqe.dest_id = entry->fields.dest_id;
 	irqe.vector = entry->fields.vector;
 	irqe.dest_mode = entry->fields.dest_mode;

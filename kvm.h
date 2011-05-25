@@ -1559,6 +1559,7 @@ typedef struct kvm_set_boot_cpu_id_ioc {
 #define KVM_CREATE_VM             _IO(KVMIO,   0x01) /* returns a VM fd */
 #define KVM_DESTROY_VM		  _IO(KVMIO,   0x0a)
 #define KVM_CLONE                 _IO(KVMIO,   0x20)
+#define KVM_NET_QUEUE             _IO(KVMIO,   0x21)
 
 #define KVM_GET_MSR_INDEX_LIST    _IOWR(KVMIO, 0x02, struct kvm_msr_list)
 

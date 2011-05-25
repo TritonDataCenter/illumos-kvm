@@ -353,10 +353,6 @@ kvm_apic_match_dest(struct kvm_vcpu *vcpu, struct kvm_lapic *source,
 	int result = 0;
 	struct kvm_lapic *target = vcpu->arch.apic;
 
-	/* XXX - debug */
-	cmn_err(CE_NOTE, "target %p, source %p, dest 0x%x, dest_mode 0x%x, "
-	    "short_hand 0x%x\n", target, source, dest, dest_mode, short_hand);
-
 	ASSERT(target != NULL);
 	switch (short_hand) {
 	case APIC_DEST_NOSHORT:
