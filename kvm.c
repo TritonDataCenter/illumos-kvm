@@ -14097,45 +14097,38 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 #endif /* KVM_CAP_IRQ_ROUTING */
 	case KVM_IRQ_LINE_STATUS:
 	case KVM_IRQ_LINE: {
-		struct kvm_irq_level_ioc *irq_event_ioc;
+		struct kvm_irq_level level;
 		struct kvm *kvmp;
-		size_t sz = sizeof (struct kvm_irq_level_ioc);
+		size_t sz = sizeof (struct kvm_irq_level);
 		int32_t status;
 
-		irq_event_ioc = kmem_zalloc(sz, KM_SLEEP);
-
-		if (copyin(argp, irq_event_ioc, sz) != 0) {
-			kmem_free(irq_event_ioc, sz);
+		if (copyin(argp, &level, sz) != 0) {
 			rval = EFAULT;
 			break;
 		}
 
 		if ((kvmp = ksp->kds_kvmp) == NULL) {
-			kmem_free(irq_event_ioc, sz);
 			rval = EINVAL;
 			break;
 		}
 
 		if (!irqchip_in_kernel(kvmp)) {
-			kmem_free(irq_event_ioc, sz);
 			rval = ENXIO;
 			break;
 		}
 
 		status = kvm_set_irq(kvmp, KVM_USERSPACE_IRQ_SOURCE_ID,
-		    irq_event_ioc->event.irq, irq_event_ioc->event.level);
+		    level.irq, level.level);
 
 		if (cmd == KVM_IRQ_LINE_STATUS) {
-			irq_event_ioc->event.status = status;
+			level.status = status;
 
-			if (copyout(irq_event_ioc, argp, sz) != 0) {
-				kmem_free(irq_event_ioc, sz);
+			if (copyout(&level, argp, sz) != 0) {
 				rval = EFAULT;
 				break;
 			}
 		}
 
-		kmem_free(irq_event_ioc, sz);
 		break;
 	}
 

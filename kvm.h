@@ -1583,10 +1583,6 @@ typedef struct kvm_irq_level {
 	uint32_t level;
 } kvm_irq_level_t;
 
-typedef struct kvm_irq_level_ioc {
-	struct kvm_irq_level event;
-} kvm_irq_level_ioc_t;
-
 /*
  * for KVM_SET_IDENTITY_MAP_ADDR
  */
@@ -1618,8 +1614,8 @@ typedef struct kvm_id_map_addr_ioc {
 #define KVM_SET_IDENTITY_MAP_ADDR _IOW(KVMIO,  0x48, struct kvm_id_map_addr_ioc)
 /* Device model IOC */
 #define KVM_CREATE_IRQCHIP        _IO(KVMIO,   0x60)
-#define KVM_IRQ_LINE              _IOW(KVMIO,  0x61, struct kvm_irq_level_ioc)
-#define KVM_IRQ_LINE_STATUS       _IOWR(KVMIO, 0x67, struct kvm_irq_level_ioc)
+#define KVM_IRQ_LINE              _IOW(KVMIO,  0x61, struct kvm_irq_level)
+#define KVM_IRQ_LINE_STATUS       _IOWR(KVMIO, 0x67, struct kvm_irq_level)
 #define KVM_GET_IRQCHIP           _IOWR(KVMIO, 0x62, struct kvm_irqchip)
 #define KVM_SET_IRQCHIP           _IOR(KVMIO,  0x63, struct kvm_irqchip)
 
