@@ -675,17 +675,41 @@ update_divide_count(struct kvm_lapic *apic)
 void
 start_apic_timer(struct kvm_lapic *apic)
 {
-	hrtime_t now = gethrtime();
+	hrtime_t now = gethrtime(), when;
+	struct kvm_timer *timer = &apic->lapic_timer;
 
-	apic->lapic_timer.period = (uint64_t)apic_get_reg(apic, APIC_TMICT) *
+	timer->period = (uint64_t)apic_get_reg(apic, APIC_TMICT) *
 	    APIC_BUS_CYCLE_NS * apic->divide_count;
 
-	if (!apic->lapic_timer.period)
+	if (timer->active) {
+		if (timer->period != 0 && !apic_lvtt_period(apic) &&
+		    timer->kvm_cyc_when.cyt_interval == CY_INFINITY) {
+			/*
+			 * If we were a one-shot timer and we remain a
+			 * one-shot timer, we will cyclic_reprogram() instead
+			 * of horsing around with removing and re-adding
+			 * the cyclic.
+			 */
+			timer->start = gethrtime();
+			timer->kvm_cyc_when.cyt_when = when =
+			    timer->start + timer->period;
+			timer->intervals = 0;
+			cyclic_reprogram(timer->kvm_cyclic_id, when);
+			return;
+		}
+
+		mutex_enter(&cpu_lock);
+		cyclic_remove(timer->kvm_cyclic_id);
+		timer->active = 0;
+		mutex_exit(&cpu_lock);
+	}
+
+	if (!timer->period)
 		return;
 
 	mutex_enter(&cpu_lock);
 
-	apic->lapic_timer.start = gethrtime();
+	timer->start = gethrtime();
 
 	/*
 	 * Do not allow the guest to program periodic timers with small
@@ -695,22 +719,19 @@ start_apic_timer(struct kvm_lapic *apic)
 	 * If it is a one shot, we want to program it differently.
 	 */
 	if (apic_lvtt_period(apic)) {
-		if (apic->lapic_timer.period < NSEC_PER_MSEC / 2)
-			apic->lapic_timer.period = NSEC_PER_MSEC / 2;
-		apic->lapic_timer.kvm_cyc_when.cyt_when = 0;
-		apic->lapic_timer.kvm_cyc_when.cyt_interval =
-		    apic->lapic_timer.period;
+		if (timer->period < NSEC_PER_MSEC / 2)
+			timer->period = NSEC_PER_MSEC / 2;
+		timer->kvm_cyc_when.cyt_when = 0;
+		timer->kvm_cyc_when.cyt_interval = timer->period;
 	} else {
-		apic->lapic_timer.kvm_cyc_when.cyt_when =
-		    apic->lapic_timer.start + apic->lapic_timer.period;
-		apic->lapic_timer.kvm_cyc_when.cyt_interval = CY_INFINITY;
+		timer->kvm_cyc_when.cyt_when = timer->start + timer->period;
+		timer->kvm_cyc_when.cyt_interval = CY_INFINITY;
 	}
 
-	apic->lapic_timer.kvm_cyclic_id =
-	    cyclic_add(&apic->lapic_timer.kvm_cyc_handler,
-	    &apic->lapic_timer.kvm_cyc_when);
-	apic->lapic_timer.active = 1;
-	apic->lapic_timer.intervals = 0;
+	timer->kvm_cyclic_id =
+	    cyclic_add(&timer->kvm_cyc_handler, &timer->kvm_cyc_when);
+	timer->active = 1;
+	timer->intervals = 0;
 	mutex_exit(&cpu_lock);
 }
 
@@ -817,13 +838,6 @@ apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 		break;
 
 	case APIC_TMICT:
-		mutex_enter(&cpu_lock);
-		if (apic->lapic_timer.active) {
-			cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
-			apic->lapic_timer.active = 0;
-		}
-		mutex_exit(&cpu_lock);
-
 		apic_set_reg(apic, APIC_TMICT, val);
 		start_apic_timer(apic);
 		break;
@@ -966,18 +980,13 @@ kvm_lapic_reset(struct kvm_vcpu *vcpu)
 	apic = vcpu->arch.apic;
 	ASSERT(apic != NULL);
 
-#ifdef XXX
 	/* Stop the timer in case it's a reset to an active apic */
-	hrtimer_cancel(&apic->lapic_timer.timer);
-#else
 	mutex_enter(&cpu_lock);
 	if (apic->lapic_timer.active) {
 		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
 		apic->lapic_timer.active = 0;
 	}
 	mutex_exit(&cpu_lock);
-	XXX_KVM_PROBE;
-#endif
 
 	apic_set_reg(apic, APIC_ID, vcpu->vcpu_id << 24);
 	kvm_apic_set_version(apic->vcpu);
@@ -1216,15 +1225,9 @@ kvm_apic_post_state_restore(struct kvm_vcpu *vcpu)
 	kvm_apic_set_version(vcpu);
 
 	apic_update_ppr(apic);
-
-	mutex_enter(&cpu_lock);
-	if (apic->lapic_timer.active)
-		cyclic_remove(apic->lapic_timer.kvm_cyclic_id);
-	apic->lapic_timer.active = 0;
-	mutex_exit(&cpu_lock);
-
 	update_divide_count(apic);
 	start_apic_timer(apic);
+
 	apic->irr_pending = 1;
 }
 
