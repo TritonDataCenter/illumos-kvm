@@ -14229,7 +14229,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		 * XXX This really just shouldn't need to exist, etc. and we
 		 * should really get the hiwat value more intelligently at least
 		 * a #define or a tunable god forbid. Oh well, as bmc said
-		 * earlier: 
+		 * earlier:
 		 * "I am in blood steeped in so far that I wade no more.
 		 * Returning were as tedious as go o'er.
 		 *

@@ -652,14 +652,7 @@ kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 	    kvm_is_dm_lowest_prio(irq))
 		cmn_err(CE_NOTE, "kvm: apic: phys broadcast and lowest prio\n");
 
-#ifdef XXX
 	kvm_for_each_vcpu(i, vcpu, kvm) {
-#else
-	XXX_KVM_PROBE;
-	/* XXX - currently assumes only 1 vcpu */
-	for (i = 0; i < 1; i++) {
-		vcpu = kvm->vcpus[i];
-#endif
 		if (!kvm_apic_present(vcpu))
 			continue;
 
@@ -3482,7 +3475,7 @@ kvm_get_kvm(struct kvm *kvm)
 int
 kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int32_t id, int *rval_p)
 {
-	int r;
+	int r, i;
 	struct kvm_vcpu *vcpu, *v;
 
 	vcpu = kvm_arch_vcpu_create(kvm, id);
@@ -3500,23 +3493,27 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int32_t id, int *rval_p)
 		return (r);
 
 	mutex_enter(&kvm->lock);
+
 #ifdef XXX
 	if (atomic_read(&kvm->online_vcpus) == KVM_MAX_VCPUS) {
-		r = -EINVAL;
+#else
+	XXX_KVM_SYNC_PROBE;
+	if (kvm->online_vcpus == KVM_MAX_VCPUS) {
+#endif
+		r = EINVAL;
 		goto vcpu_destroy;
 	}
 
-	kvm_for_each_vcpu(r, v, kvm)
+	/* kvm_for_each_vcpu(r, v, kvm) */
+	for (i = 0; i < kvm->online_vcpus; i++) {
+		v = kvm->vcpus[i];
 		if (v->vcpu_id == id) {
 			r = -EEXIST;
 			goto vcpu_destroy;
 		}
+	}
 
-	BUG_ON(kvm->vcpus[atomic_read(&kvm->online_vcpus)]);
-
-#else
-	XXX_KVM_PROBE;
-#endif
+	/* BUG_ON(kvm->vcpus[atomic_read(&kvm->online_vcpus)]); */
 
 	/* Now it's all set up, let userspace reach it */
 	kvm_get_kvm(kvm);
