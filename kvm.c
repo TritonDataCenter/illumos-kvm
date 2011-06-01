@@ -11783,9 +11783,6 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
 			KVM_VCPU_KSTAT_INC(vcpu, kvmvs_signal_exits);
 		}
-
-		if (CPU->cpu_runrun || CPU->cpu_kprunrun)
-			preempt();
 	}
 #ifdef XXX
 	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
