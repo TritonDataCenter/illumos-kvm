@@ -4549,7 +4549,8 @@ __vcpu_clear(void *arg)
 	vmx->launched = 0;
 }
 
-static void vcpu_clear(struct vcpu_vmx *vmx)
+static void
+vcpu_clear(struct vcpu_vmx *vmx)
 {
 	if (vmx->vcpu.cpu == -1)
 		return;
@@ -4930,6 +4931,7 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		unsigned long sysenter_esp;
 
 		vcpu->cpu = cpu;
+
 		/*
 		 * Linux uses per-cpu TSS and GDT, so set these when switching
 		 * processors.
@@ -11656,6 +11658,8 @@ kvm_vcpu_block(struct kvm_vcpu *vcpu)
 void
 kvm_vcpu_kick(struct kvm_vcpu *vcpu)
 {
+	processorid_t cpu = vcpu->cpu;
+
 	mutex_enter(&vcpu->kvcpu_kick_lock);
 
 	if (CV_HAS_WAITERS(&vcpu->kvcpu_kick_cv))
@@ -11663,6 +11667,17 @@ kvm_vcpu_kick(struct kvm_vcpu *vcpu)
 
 	cv_broadcast(&vcpu->kvcpu_kick_cv);
 	mutex_exit(&vcpu->kvcpu_kick_lock);
+
+	if (cpu != CPU->cpu_id && cpu != -1) {
+		if (!test_and_set_bit(KVM_REQ_KICK, &vcpu->requests)) {
+			/*
+			 * If we haven't already kicked this VCPU, we'll send
+			 * an empty cross call to the CPU on which it's
+			 * running.  (This will serve to induce a VM exit.)
+			 */
+			kvm_xcall(cpu, NULL, NULL);
+		}
+	}
 }
 
 static void

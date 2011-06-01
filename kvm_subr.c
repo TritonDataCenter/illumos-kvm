@@ -38,8 +38,8 @@ kvm_get_vcpu(struct kvm *kvm, int i)
 {
 #ifdef XXX
 	smp_rmb();
-#endif /*XXX*/
-	return kvm->vcpus[i];
+#endif
+	return (kvm->vcpus[i]);
 }
 
 void
@@ -63,7 +63,7 @@ kvm_fx_finit(void)
 uint32_t
 get_rdx_init_val(void)
 {
-	return 0x600; /* P6 family */
+	return (0x600); /* P6 family */
 }
 
 void
@@ -83,9 +83,9 @@ kvm_sigprocmask(int how, sigset_t *setp, sigset_t *osetp)
 	sigutok(setp, &kset);
 
 	if (osetp != NULL)
-                sigktou(&curthread->t_hold, osetp);
+		sigktou(&curthread->t_hold, osetp);
 
-       (void) lwp_sigmask(SIG_SETMASK,
+	(void) lwp_sigmask(SIG_SETMASK,
 	    kset.__sigbits[0], kset.__sigbits[1], kset.__sigbits[2], 0);
 }
 
@@ -94,8 +94,8 @@ native_read_tscp(unsigned int *aux)
 {
 	unsigned long low, high;
 	__asm__ volatile(".byte 0x0f,0x01,0xf9"
-		     : "=a" (low), "=d" (high), "=c" (*aux));
-	return low | ((uint64_t)high << 32);
+		: "=a" (low), "=d" (high), "=c" (*aux));
+	return (low | ((uint64_t)high << 32));
 }
 
 unsigned long long
@@ -104,7 +104,7 @@ native_read_msr(unsigned int msr)
 	DECLARE_ARGS(val, low, high);
 
 	__asm__ volatile("rdmsr" : EAX_EDX_RET(val, low, high) : "c" (msr));
-	return EAX_EDX_VAL(val, low, high);
+	return (EAX_EDX_VAL(val, low, high));
 }
 
 void
@@ -121,7 +121,7 @@ __native_read_tsc(void)
 
 	__asm__ volatile("rdtsc" : EAX_EDX_RET(val, low, high));
 
-	return EAX_EDX_VAL(val, low, high);
+	return (EAX_EDX_VAL(val, low, high));
 }
 
 unsigned long long
@@ -130,15 +130,8 @@ native_read_pmc(int counter)
 	DECLARE_ARGS(val, low, high);
 
 	__asm__ volatile("rdpmc" : EAX_EDX_RET(val, low, high) : "c" (counter));
-	return EAX_EDX_VAL(val, low, high);
+	return (EAX_EDX_VAL(val, low, high));
 }
-
-#ifdef XXX_KVM_DOESNOTLINK
-void wrmsr(unsigned msr, unsigned low, unsigned high)
-{
-	native_write_msr(msr, low, high);
-}
-#endif /* XXX_KVM_DOESNOTLINK*/
 
 int
 wrmsr_safe(unsigned msr, unsigned low, unsigned high)
@@ -159,17 +152,18 @@ int
 rdmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t *l, uint32_t *h)
 {
 	rdmsr(msr_no, *l, *h);
-	return 0;
+	return (0);
 }
 
 int
 wrmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t l, uint32_t h)
 {
 	wrmsr(msr_no, l, h);
-	return 0;
+	return (0);
 }
 
-unsigned long read_msr(unsigned long msr)
+unsigned long
+read_msr(unsigned long msr)
 {
 	uint64_t value;
 
@@ -177,22 +171,25 @@ unsigned long read_msr(unsigned long msr)
 	return (value);
 }
 
-unsigned long kvm_read_tr_base(void)
+unsigned long
+kvm_read_tr_base(void)
 {
 	unsigned short tr;
 	__asm__("str %0" : "=g"(tr));
-	return segment_base(tr);
+	return (segment_base(tr));
 }
 
 int
 kvm_xcall_func(kvm_xcall_t func, void *arg)
 {
-	(*func)(arg);
+	if (func != NULL)
+		(*func)(arg);
 
 	return (0);
 }
 
-void kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg)
+void
+kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg)
 {
 	cpuset_t set;
 
@@ -209,5 +206,3 @@ void kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg)
 		(xc_func_t) kvm_xcall_func);
 	kpreempt_enable();
 }
-
-
