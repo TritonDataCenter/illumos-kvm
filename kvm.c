@@ -1157,6 +1157,7 @@ skip_emulated_instruction(struct kvm_vcpu *vcpu)
 struct vmcs **vmxarea;  /* 1 per cpu */
 struct vmcs **current_vmcs;
 static struct kvm_shared_msrs **shared_msrs;
+list_t **vcpus_on_cpu;
 
 uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
 
@@ -1175,6 +1176,7 @@ alloc_kvm_area(void)
 	current_vmcs = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
 	shared_msrs = kmem_alloc(ncpus * sizeof (struct kvm_shared_msrs *),
 	    KM_SLEEP);
+	vcpus_on_cpu = kmem_alloc(ncpus * sizeof (list_t *), KM_SLEEP);
 
 	for (i = 0; i < ncpus; i++) {
 		struct vmcs *vmcs;
@@ -1190,6 +1192,9 @@ alloc_kvm_area(void)
 			((uint64_t)vmxarea[i] & PAGEOFFSET);
 		shared_msrs[i] = kmem_zalloc(sizeof (struct kvm_shared_msrs),
 		    KM_SLEEP);
+		vcpus_on_cpu[i] = kmem_alloc(sizeof (list_t), KM_SLEEP);
+		list_create(vcpus_on_cpu[i], sizeof (struct vcpu_vmx),
+			    offsetof(struct vcpu_vmx, local_vcpus_link));
 	}
 
 	return (0);
@@ -4540,11 +4545,9 @@ __vcpu_clear(void *arg)
 	if (current_vmcs[cpu] == vmx->vmcs)
 		current_vmcs[cpu] = NULL;
 	rdtscll(vmx->vcpu.arch.host_tsc);
-#ifdef XXX
-	list_del(&vmx->local_vcpus_link);
-#else
-	XXX_KVM_PROBE;
-#endif
+
+	list_remove(vcpus_on_cpu[cpu], vmx);
+
 	vmx->vcpu.cpu = -1;
 	vmx->launched = 0;
 }
@@ -4906,13 +4909,9 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		vcpu_clear(vmx);
 		kvm_migrate_timers(vcpu);
 		set_bit(KVM_REQ_TLB_FLUSH, &vcpu->requests);
-#ifdef XXX
 		kpreempt_disable();
-		list_add(&vmx->local_vcpus_link, &per_cpu(vcpus_on_cpu, cpu));
+		list_insert_head(vcpus_on_cpu[cpu], vmx);
 		kpreempt_enable();
-#else
-		XXX_KVM_PROBE;
-#endif
 	}
 
 	if (current_vmcs[cpu] != vmx->vmcs) {

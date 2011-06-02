@@ -323,6 +323,7 @@ extern pfn_t hat_getpfnum(hat_t *hat, caddr_t addr);
 struct vmcs_config vmcs_config;
 extern inline void ept_sync_global(void);
 extern uint64_t *vmxarea_pa;
+extern list_t **vcpus_on_cpu;
 
 int
 vmx_hardware_enable(void *garbage)
@@ -423,16 +424,17 @@ kvm_arch_hardware_enable(void *garbage)
 
 static void vmclear_local_vcpus(void)
 {
-#ifdef XXX
-	int cpu = raw_smp_processor_id();
+	int cpu = CPU->cpu_id;
 	struct vcpu_vmx *vmx, *n;
 
-	list_for_each_entry_safe(vmx, n, &per_cpu(vcpus_on_cpu, cpu),
-	    local_vcpus_link)
+	/*
+	 * list_for_each_entry_safe(vmx, n, &per_cpu(vcpus_on_cpu, cpu),
+	 *   local_vcpus_link)
+	 *	__vcpu_clear(vmx);
+	 */
+	for (vmx = list_head(vcpus_on_cpu[cpu]); vmx;
+	    vmx = list_next(vcpus_on_cpu[cpu], vmx))
 		__vcpu_clear(vmx);
-#else
-	XXX_KVM_PROBE;
-#endif /* XXX */
 }
 
 
