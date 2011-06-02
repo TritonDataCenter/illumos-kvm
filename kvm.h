@@ -120,38 +120,6 @@ typedef void (*kvm_xcall_t)(void *);
 #define KVM_MAX_MCE_BANKS 32
 #define KVM_MCE_CAP_SUPPORTED MCG_CTL_P
 
-#define KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
-	(X86_CR0_WP | X86_CR0_NE | X86_CR0_NW | X86_CR0_CD)
-#define KVM_GUEST_CR0_MASK						\
-	(KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST | X86_CR0_PG | X86_CR0_PE)
-#define KVM_VM_CR0_ALWAYS_ON_UNRESTRICTED_GUEST				\
-	(X86_CR0_WP | X86_CR0_NE)
-#define KVM_VM_CR0_ALWAYS_ON						\
-	(KVM_VM_CR0_ALWAYS_ON_UNRESTRICTED_GUEST | X86_CR0_PG | X86_CR0_PE)
-#define KVM_CR4_GUEST_OWNED_BITS				      \
-	(X86_CR4_PVI | X86_CR4_DE | X86_CR4_PCE | X86_CR4_OSFXSR      \
-	 | X86_CR4_OSXMMEXCPT)
-
-#define KVM_PMODE_VM_CR4_ALWAYS_ON (X86_CR4_PAE | X86_CR4_VMXE)
-#define KVM_RMODE_VM_CR4_ALWAYS_ON (X86_CR4_VME | X86_CR4_PAE | X86_CR4_VMXE)
-
-#define RMODE_GUEST_OWNED_EFLAGS_BITS (~(X86_EFLAGS_IOPL | X86_EFLAGS_VM))
-
-/*
- * These 2 parameters are used to config the controls for Pause-Loop Exiting:
- * ple_gap:    upper bound on the amount of time between two successive
- *             executions of PAUSE in a loop. Also indicate if ple enabled.
- *             According to test, this time is usually small than 41 cycles.
- * ple_window: upper bound on the amount of time a guest is allowed to execute
- *             in a PAUSE loop. Tests indicate that most spinlocks are held for
- *             less than 2^12 cycles
- * Time is measured based on a counter that runs at the same rate as the TSC,
- * refer SDM volume 3b section 21.6.13 & 22.1.3.
- */
-#define KVM_VMX_DEFAULT_PLE_GAP    41
-#define KVM_VMX_DEFAULT_PLE_WINDOW 4096
-
-
 #ifdef __ASSEMBLY__
 # define __IA64_UL(x)		(x)
 # define __IA64_UL_CONST(x)	x
@@ -1639,17 +1607,6 @@ typedef struct kvm_id_map_addr_ioc {
  */
 #define KVM_CHECK_EXTENSION       _IO(KVMIO,   0x03)
 
-typedef struct vmcs_config {
-	int size;
-	int order;
-	uint32_t revision_id;
-	uint32_t pin_based_exec_ctrl;
-	uint32_t cpu_based_exec_ctrl;
-	uint32_t cpu_based_2nd_exec_ctrl;
-	uint32_t vmexit_ctrl;
-	uint32_t vmentry_ctrl;
-} vmcs_config_t;
-
 #define RMAP_EXT 4
 
 typedef struct kvm_rmap_desc {
@@ -1657,17 +1614,6 @@ typedef struct kvm_rmap_desc {
 	struct kvm_rmap_desc *more;
 } kvm_rmap_desc_t;
 
-
-typedef struct vmx_capability {
-	uint32_t ept;
-	uint32_t vpid;
-} vmx_capability_t;
-
-typedef struct vmcs {
-	uint32_t revision_id;
-	uint32_t abort;
-	char data[1];  /* size is read from MSR */
-} vmcs_t;
 
 /* for KVM_INTERRUPT */
 typedef struct kvm_interrupt {
@@ -1793,62 +1739,7 @@ struct ldttss_desc64 {
 
 typedef struct ldttss_desc64 ldttss_desc64_t;
 
-typedef struct shared_msr_entry {
-	unsigned index;
-	uint64_t data;
-	uint64_t mask;
-} shared_msr_entry_t;
-
 #ifdef _KERNEL
-typedef struct vcpu_vmx {
-	struct kvm_vcpu       vcpu;
-	list_t      local_vcpus_link;
-	unsigned long         host_rsp;
-	int                   launched;
-	unsigned char                    fail;
-	uint32_t                   idt_vectoring_info;
-	struct shared_msr_entry *guest_msrs;
-	int                   nmsrs;
-	int                   save_nmsrs;
-#ifdef CONFIG_X86_64
-	uint64_t 		      msr_host_kernel_gs_base;
-	uint64_t 		      msr_guest_kernel_gs_base;
-#endif
-	struct vmcs          *vmcs;
-	uint64_t	vmcs_pa;  /* physical address of vmcs for this vmx */
-
-	struct {
-		int           loaded;
-		unsigned short           fs_sel, gs_sel, ldt_sel;
-		int           gs_ldt_reload_needed;
-		int           fs_reload_needed;
-	} host_state;
-	struct {
-		int vm86_active;
-		ulong save_rflags;
-		struct kvm_save_segment {
-			unsigned short selector;
-			unsigned long base;
-			uint32_t limit;
-			uint32_t ar;
-		} tr, es, ds, fs, gs;
-		struct {
-			char pending;
-			unsigned char vector;
-			unsigned rip;
-		} irq;
-	} rmode;
-	int vpid;
-	char emulation_required;
-
-	/* Support for vnmi-less CPUs */
-	int soft_vnmi_blocked;
-	time_t entry_time;
-	int64_t vnmi_blocked_time;
-	uint32_t exit_reason;
-
-	char rdtscp_enabled;
-} vcpu_vmx_t;
 
 #define kvm_for_each_vcpu(idx, vcpup, kvm) \
 	for (idx = 0, vcpup = kvm_get_vcpu(kvm, idx); \

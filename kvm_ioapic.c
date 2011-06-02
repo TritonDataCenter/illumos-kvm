@@ -468,5 +468,5 @@ kvm_set_ioapic(struct kvm *kvm, struct kvm_ioapic_state *state)
 struct kvm_ioapic *
 ioapic_irqchip(struct kvm *kvm)
 {
-	return kvm->arch.vioapic;
+	return (kvm->arch.vioapic);
 }

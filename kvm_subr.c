@@ -206,3 +206,19 @@ kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg)
 		(xc_func_t) kvm_xcall_func);
 	kpreempt_enable();
 }
+
+uint32_t
+bit(int bitno)
+{
+	return (1 << (bitno & 31));
+}
+
+int
+is_long_mode(struct kvm_vcpu *vcpu)
+{
+#ifdef CONFIG_X86_64
+	return (vcpu->arch.efer & EFER_LMA);
+#else
+	return (0);
+#endif
+}

@@ -989,15 +989,6 @@ enum {
 /*asmlinkage*/ void kvm_handle_fault_on_reboot(void);
 
 
-#define __kvm_handle_fault_on_reboot(insn) \
-	"666: " insn "\n\t" \
-	".pushsection .fixup, \"ax\" \n" \
-	"667: \n\t" \
-	__ASM_SIZE(push) " $666b \n\t"	      \
-	".popsection \n\t" \
-	".pushsection __ex_table, \"a\" \n\t" \
-	_ASM_PTR " 666b, 667b \n\t" \
-	".popsection \n\t"
 
 #define KVM_ARCH_WANT_MMU_NOTIFIER
 
