@@ -16,16 +16,8 @@
  * Copyright 2011, Joyent Inc. All Rights Reserved.
  */
 
-/*
- * XXX Everytime I do this I die a bit more inside ~ rm
- * Please save me from header file hell!
- */
-#include "vmx.h"
-#include "msr.h"
-#include "kvm_host.h"
-#include "kvm_x86host.h"
 #include "iodev.h"
-#include "kvm.h"
+#include <sys/errno.h>
 
 void
 kvm_iodevice_init(struct kvm_io_device *dev,

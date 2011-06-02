@@ -17,6 +17,7 @@
 #ifndef __KVM_TYPES_H__
 #define __KVM_TYPES_H__
 
+#include <sys/types.h>
 
 /*
  * Address types:
