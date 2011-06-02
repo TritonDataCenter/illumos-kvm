@@ -45,7 +45,7 @@
 #include "processor-flags.h"
 #include "hyperv.h"
 #include "apicdef.h"
-#include "iodev.h"
+#include "kvm_iodev.h"
 #include "kvm.h"
 #include "irq.h"
 #include "tss.h"

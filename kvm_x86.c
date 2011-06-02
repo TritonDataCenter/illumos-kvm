@@ -32,7 +32,7 @@
 #include "kvm_types.h"
 #include "kvm_host.h"
 #include "kvm_x86host.h"
-#include "iodev.h"
+#include "kvm_iodev.h"
 
 #define	PER_CPU_ATTRIBUTES
 #define	PER_CPU_DEF_ATTRIBUTES

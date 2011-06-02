@@ -16,7 +16,7 @@
  * Copyright 2011, Joyent Inc. All Rights Reserved.
  */
 
-#include "iodev.h"
+#include "kvm_iodev.h"
 #include <sys/errno.h>
 
 void

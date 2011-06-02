@@ -51,7 +51,7 @@
 #include "msr-index.h"
 #include "msr.h"
 #include "processor-flags.h"
-#include "iodev.h"
+#include "kvm_iodev.h"
 #include "kvm.h"
 
 /*

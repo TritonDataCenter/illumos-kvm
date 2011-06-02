@@ -2,7 +2,7 @@
 #include "irqflags.h"
 #include "kvm_host.h"
 #include "kvm_x86host.h"
-#include "iodev.h"
+#include "kvm_iodev.h"
 #include "kvm.h"
 #include "irq.h"
 

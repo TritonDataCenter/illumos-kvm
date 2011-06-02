@@ -20,7 +20,7 @@
 #include "msr.h"
 #include "vmx.h"
 #include "irqflags.h"
-#include "iodev.h"
+#include "kvm_iodev.h"
 #include "kvm_host.h"
 #include "kvm_x86host.h"
 #include "kvm.h"
