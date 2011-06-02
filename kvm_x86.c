@@ -40,7 +40,7 @@
 #include "percpu-defs.h"
 #include "coalesced_mmio.h"
 #include "kvm.h"
-#include "ioapic.h"
+#include "kvm_ioapic.h"
 #include "irq.h"
 #include "kvm_i8254.h"
 #include "kvm_lapic.h"

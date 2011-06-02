@@ -31,7 +31,7 @@
 #include "iodev.h"
 #include "kvm.h"
 #include "irq.h"
-#include "ioapic.h"
+#include "kvm_ioapic.h"
 
 /* XXX This should never exist */
 extern int irqchip_in_kernel(struct kvm *);

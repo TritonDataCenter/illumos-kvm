@@ -55,11 +55,8 @@ typedef struct kvm_ioapic {
 #endif /*XXX*/
 } kvm_ioapic_t;
 
-static struct kvm_ioapic *ioapic_irqchip(struct kvm *kvm)
-{
-	return kvm->arch.vioapic;
-}
 
+struct kvm_ioapic *ioapic_irqchip(struct kvm *kvm);
 void kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode);
 int kvm_ioapic_init(struct kvm *kvm);
 void kvm_ioapic_destroy(struct kvm *kvm);
