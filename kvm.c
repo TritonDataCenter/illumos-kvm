@@ -6363,11 +6363,11 @@ kvm_vcpu_kick(struct kvm_vcpu *vcpu)
 	if (cpu != CPU->cpu_id && cpu != -1) {
 		if (!test_and_set_bit(KVM_REQ_KICK, &vcpu->requests)) {
 			/*
-			 * If we haven't already kicked this VCPU, we'll send
-			 * an empty cross call to the CPU on which it's
-			 * running.  (This will serve to induce a VM exit.)
+			 * If we haven't already kicked this VCPU, we'll poke
+			 * the the CPU on which it's running.  (This will serve
+			 * to induce a VM exit.)
 			 */
-			kvm_xcall(cpu, NULL, NULL);
+			poke_cpu(cpu);
 		}
 	}
 }
