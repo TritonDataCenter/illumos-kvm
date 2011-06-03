@@ -52,6 +52,7 @@
 #include "kvm_coalesced_mmio.h"
 #include "kvm_i8254.h"
 #include "kvm_mmu.h"
+#include "kvm_cache_regs.h"
 
 #undef DEBUG
 
@@ -288,45 +289,7 @@ struct kvm_x86_ops *kvm_x86_ops;
 
 
 
-inline ulong
-kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask)
-{
-	ulong tmask = mask & KVM_POSSIBLE_CR0_GUEST_BITS;
 
-	if (tmask & vcpu->arch.cr0_guest_owned_bits)
-		kvm_x86_ops->decache_cr0_guest_bits(vcpu);
-
-	return (vcpu->arch.cr0 & mask);
-}
-
-unsigned long
-kvm_register_read(struct kvm_vcpu *vcpu, enum kvm_reg reg)
-{
-	if (!test_bit(reg, (unsigned long *)&vcpu->arch.regs_avail))
-		kvm_x86_ops->cache_reg(vcpu, reg);
-
-	return (vcpu->arch.regs[reg]);
-}
-
-inline void
-kvm_register_write(struct kvm_vcpu *vcpu, enum kvm_reg reg, unsigned long val)
-{
-	vcpu->arch.regs[reg] = val;
-	__set_bit(reg, (unsigned long *)&vcpu->arch.regs_dirty);
-	__set_bit(reg, (unsigned long *)&vcpu->arch.regs_avail);
-}
-
-inline unsigned long
-kvm_rip_read(struct kvm_vcpu *vcpu)
-{
-	return (kvm_register_read(vcpu, VCPU_REGS_RIP));
-}
-
-inline void
-kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val)
-{
-	kvm_register_write(vcpu, VCPU_REGS_RIP, val);
-}
 
 inline int
 kvm_exception_is_soft(unsigned int nr)
@@ -427,9 +390,6 @@ kvm_reload_remote_mmus(struct kvm *kvm)
 {
 	make_all_cpus_request(kvm, KVM_REQ_MMU_RELOAD);
 }
-
-
-extern inline uint64_t kvm_pdptr_read(struct kvm_vcpu *vcpu, int index);
 
 gfn_t
 unalias_gfn_instantiation(struct kvm *kvm, gfn_t gfn)
@@ -2186,16 +2146,6 @@ ldt_load(void)
 	wr_ldtr(ULDT_SEL);
 }
 
-inline ulong
-kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask)
-{
-	uint64_t tmask = mask & KVM_POSSIBLE_CR4_GUEST_BITS;
-
-	if (tmask & vcpu->arch.cr4_guest_owned_bits)
-		kvm_x86_ops->decache_cr4_guest_bits(vcpu);
-
-	return (vcpu->arch.cr4 & mask);
-}
 
 inline int
 is_pae(struct kvm_vcpu *vcpu)
@@ -2548,19 +2498,6 @@ kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 	vcpu_put(vcpu);
 
 	return (0);
-}
-
-
-inline ulong
-kvm_read_cr4(struct kvm_vcpu *vcpu)
-{
-	return (kvm_read_cr4_bits(vcpu, ~0UL));
-}
-
-inline ulong
-kvm_read_cr0(struct kvm_vcpu *vcpu)
-{
-	return (kvm_read_cr0_bits(vcpu, ~0UL));
 }
 
 unsigned long

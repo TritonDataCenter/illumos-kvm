@@ -43,6 +43,7 @@
 #include "irq.h"
 #include "kvm_i8254.h"
 #include "kvm_lapic.h"
+#include "kvm_cache_regs.h"
 
 #undef DEBUG
 
@@ -56,10 +57,8 @@ extern unsigned long find_first_zero_bit(const unsigned long *addr,
     unsigned long size);
 extern uint32_t vmcs_read32(unsigned long field);
 extern uint16_t vmcs_read16(unsigned long field);
-extern ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
 extern void kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val);
 extern int kvm_is_mmio_pfn(pfn_t pfn);
-extern ulong kvm_read_cr4_bits(struct kvm_vcpu *vcpu, ulong mask);
 extern int is_long_mode(struct kvm_vcpu *vcpu);
 extern void kvm_mmu_unload(struct kvm_vcpu *);
 extern void kvm_free_physmem_slot(struct kvm_memory_slot *,
@@ -757,8 +756,6 @@ kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 		vcpu->arch.cr8 = cr8;
 }
 
-extern inline ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask);
-
 int
 is_paging(struct kvm_vcpu *vcpu)
 {
@@ -1126,16 +1123,7 @@ kvm_flush_remote_tlbs(struct kvm *kvm)
 		KVM_KSTAT_INC(kvm, kvmks_remote_tlb_flush);
 }
 
-inline uint64_t
-kvm_pdptr_read(struct kvm_vcpu *vcpu, int index)
-{
-	if (!test_bit(VCPU_EXREG_PDPTR,
-	    (unsigned long *)&vcpu->arch.regs_avail)) {
-		kvm_x86_ops->cache_reg(vcpu, VCPU_EXREG_PDPTR);
-	}
 
-	return (vcpu->arch.pdptrs[index]);
-}
 
 
 gfn_t
