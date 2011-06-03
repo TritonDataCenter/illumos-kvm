@@ -246,7 +246,6 @@ extern void kvm_mmu_sync_roots(struct kvm_vcpu *);
 extern void kvm_mmu_flush_tlb(struct kvm_vcpu *);
 extern void kvm_mmu_unload(struct kvm_vcpu *vcpu);
 extern int kvm_pic_set_irq(void *, int, int);
-extern 
 
 /*
  * Find the first cleared bit in a memory region.
@@ -5613,26 +5612,6 @@ out:
 	return (ret);
 }
 
-/*
- * check if there is pending interrupt without intack.
- */
-int
-kvm_cpu_has_interrupt(struct kvm_vcpu *v)
-{
-	struct kvm_pic *s;
-
-	if (!irqchip_in_kernel(v->kvm))
-		return (v->arch.interrupt.pending);
-
-	if (kvm_apic_has_interrupt(v) == -1) {	/* LAPIC */
-		if (kvm_apic_accept_pic_intr(v)) {
-			s = pic_irqchip(v->kvm);	/* PIC */
-			return (s->output);
-		} else
-			return (0);
-	}
-	return (1);
-}
 
 
 
@@ -5673,29 +5652,6 @@ page_address(page_t *page)
 }
 
 
-/*
- * Read pending interrupt vector and intack.
- */
-int
-kvm_cpu_get_interrupt(struct kvm_vcpu *v)
-{
-	struct kvm_pic *s;
-	int vector;
-
-	if (!irqchip_in_kernel(v->kvm))
-		return (v->arch.interrupt.nr);
-
-	vector = kvm_get_apic_interrupt(v);	/* APIC */
-	if (vector == -1) {
-		if (kvm_apic_accept_pic_intr(v)) {
-			s = pic_irqchip(v->kvm);
-			s->output = 0;		/* PIC */
-			vector = kvm_pic_read_irq(v->kvm);
-		}
-	}
-
-	return (vector);
-}
 
 static void
 inject_pending_event(struct kvm_vcpu *vcpu)
