@@ -2221,11 +2221,11 @@ is_rsvd_bits_set(struct kvm_vcpu *vcpu, uint64_t gpte, int level)
 }
 
 #define	PTTYPE 64
-#include "paging_tmpl.h"
+#include "kvm_paging_tmpl.h"
 #undef PTTYPE
 
 #define	PTTYPE 32
-#include "paging_tmpl.h"
+#include "kvm_paging_tmpl.h"
 #undef PTTYPE
 
 static void
