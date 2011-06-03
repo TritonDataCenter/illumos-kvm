@@ -28,8 +28,8 @@
 #include <linux/kvm_host.h>
 #include <linux/spinlock.h>
 
-#include "iodev.h"
-#include "ioapic.h"
+#include "kvm_iodev.h"
+#include "kvm_ioapic.h"
 #include "kvm_lapic.h"
 #endif /*XXX*/
 
