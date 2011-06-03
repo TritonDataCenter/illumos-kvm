@@ -244,28 +244,8 @@ typedef struct fxsave {
 
 #ifdef _KERNEL
 
-typedef struct kvm_timer {
-#ifdef XXX
-	struct hrtimer timer;
-#else
-	cyclic_id_t kvm_cyclic_id;
-	cyc_handler_t kvm_cyc_handler;
-	cyc_time_t kvm_cyc_when;
-	int active;
-	int intervals;
-	hrtime_t start;
-#endif /*XXX*/
-	int64_t period; 				/* unit: ns */
-	int pending;			/* accumulated triggered timers */
-	int reinject;
-	struct kvm_timer_ops *t_ops;
-	struct kvm *kvm;
-	struct kvm_vcpu *vcpu;
-} kvm_timer_t;
-
-typedef struct kvm_timer_ops {
-        int (*is_periodic)(struct kvm_timer *);
-} kvm_timer_ops_t;
+/* XXX This shouldn't be necessary */
+#include "kvm_timer.h"
 
 typedef struct kvm_lapic {
 	unsigned long base_address;
@@ -2076,7 +2056,6 @@ void kvm_arch_sync_events(struct kvm *kvm);
 
 int kvm_cpu_has_pending_timer(struct kvm_vcpu *vcpu);
 void kvm_vcpu_kick(struct kvm_vcpu *vcpu);
-void kvm_timer_fire(void *);
 
 void kvm_sigprocmask(int how, sigset_t *, sigset_t *);
 

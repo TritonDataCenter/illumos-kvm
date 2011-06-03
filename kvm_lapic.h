@@ -1,6 +1,8 @@
 #ifndef __KVM_X86_LAPIC_H
 #define __KVM_X86_LAPIC_H
 
+#include "kvm_timer.h"
+
 struct kvm_vapic_addr;
 
 extern int kvm_create_lapic(struct kvm_vcpu *);
