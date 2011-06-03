@@ -48,6 +48,7 @@
 #define	DPRINTF(x...) do {} while (0)
 #endif
 
+#include "kvm_mmu.h"
 #include "msr-index.h"
 #include "msr.h"
 #include "processor-flags.h"

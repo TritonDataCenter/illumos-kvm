@@ -37,65 +37,6 @@ typedef void (*kvm_xcall_t)(void *);
 
 #define offset_in_page(p)	((unsigned long)(p) & ~PAGEMASK)
 
-#define PT_WRITABLE_SHIFT 1
-#define PT_PRESENT_MASK (1ULL << 0)
-#define PT64_BASE_ADDR_MASK (((1ULL << 52) - 1) & ~(uint64_t)(PAGESIZE-1))
-#define PT_WRITABLE_MASK (1ULL << PT_WRITABLE_SHIFT)
-#define PT_USER_MASK (1ULL << 2)
-#define ACC_EXEC_MASK    1
-#define ACC_WRITE_MASK   PT_WRITABLE_MASK
-#define ACC_USER_MASK    PT_USER_MASK
-#define ACC_ALL          (ACC_EXEC_MASK | ACC_WRITE_MASK | ACC_USER_MASK)
-
-#define PT64_PT_BITS 9
-#define PT64_ENT_PER_PAGE (1 << PT64_PT_BITS)
-#define PT32_PT_BITS 10
-#define PT32_ENT_PER_PAGE (1 << PT32_PT_BITS)
-
-#define PT64_PT_BITS 9
-#define PT64_ENT_PER_PAGE (1 << PT64_PT_BITS)
-#define PT32_PT_BITS 10
-#define PT32_ENT_PER_PAGE (1 << PT32_PT_BITS)
-
-#define PT_WRITABLE_SHIFT 1
-
-#define PT_PRESENT_MASK (1ULL << 0)
-#define PT_WRITABLE_MASK (1ULL << PT_WRITABLE_SHIFT)
-#define PT_USER_MASK (1ULL << 2)
-#define PT_PWT_MASK (1ULL << 3)
-#define PT_PCD_MASK (1ULL << 4)
-#define PT_ACCESSED_SHIFT 5
-#define PT_ACCESSED_MASK (1ULL << PT_ACCESSED_SHIFT)
-#define PT_DIRTY_MASK (1ULL << 6)
-#define PT_PAGE_SIZE_MASK (1ULL << 7)
-#define PT_PAT_MASK (1ULL << 7)
-#define PT_GLOBAL_MASK (1ULL << 8)
-#define PT64_NX_SHIFT 63
-#define PT64_NX_MASK (1ULL << PT64_NX_SHIFT)
-
-#define PT_PAT_SHIFT 7
-#define PT_DIR_PAT_SHIFT 12
-#define PT_DIR_PAT_MASK (1ULL << PT_DIR_PAT_SHIFT)
-
-#define PT32_DIR_PSE36_SIZE 4
-#define PT32_DIR_PSE36_SHIFT 13
-#define PT32_DIR_PSE36_MASK \
-	(((1ULL << PT32_DIR_PSE36_SIZE) - 1) << PT32_DIR_PSE36_SHIFT)
-
-#define PT64_ROOT_LEVEL 4
-#define PT32_ROOT_LEVEL 2
-#define PT32E_ROOT_LEVEL 3
-
-#define PT_PDPE_LEVEL 3
-#define PT_DIRECTORY_LEVEL 2
-#define PT_PAGE_TABLE_LEVEL 1
-
-#define PFERR_PRESENT_MASK (1U << 0)
-#define PFERR_WRITE_MASK (1U << 1)
-#define PFERR_USER_MASK (1U << 2)
-#define PFERR_RSVD_MASK (1U << 3)
-#define PFERR_FETCH_MASK (1U << 4)
-
 /* borrowed liberally from linux... */
 
 #define MAX_IO_MSRS 256
@@ -847,32 +788,8 @@ typedef struct kvm_assigned_dev_kernel {
 	(type *)( (char *)__mptr - offsetof(type,member) );})
 #endif /*container_of*/
 
-#define PT64_ROOT_LEVEL 4
-#define PT32_ROOT_LEVEL 2
-#define PT32E_ROOT_LEVEL 3
-
-#define PT_PDPE_LEVEL 3
-#define PT_DIRECTORY_LEVEL 2
-#define PT_PAGE_TABLE_LEVEL 1
-
-#define KVM_PAGE_ARRAY_NR 16
-
 /* Avoid include hell */
 #define NMI_VECTOR 0x02
-
-
-typedef struct kvm_mmu_pages {
-	struct mmu_page_and_offset {
-		struct kvm_mmu_page *sp;
-		unsigned int idx;
-	} page[KVM_PAGE_ARRAY_NR];
-	unsigned int nr;
-} kvm_mmu_pages_t;
-
-typedef struct mmu_page_path {
-	struct kvm_mmu_page *parent[PT64_ROOT_LEVEL-1];
-	unsigned int idx[PT64_ROOT_LEVEL-1];
-} mmu_page_path_t;
 
 /*
  * Save the original ist values for checking stack pointers during debugging
@@ -1101,24 +1018,6 @@ typedef struct kvm_kirq_routing {
 #endif /*x86*/
 
 #ifdef _KERNEL
-
-typedef struct kvm_shadow_walk_iterator {
-	uint64_t addr;
-	hpa_t shadow_addr;
-	uint64_t *sptep;
-	int level;
-	unsigned index;
-} kvm_shadow_walk_iterator_t;
-
-extern void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
-			     struct kvm_vcpu *vcpu, uint64_t addr);
-extern int shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator, struct kvm_vcpu *vcpu);
-extern void shadow_walk_next(struct kvm_shadow_walk_iterator *iterator);
-
-#define for_each_shadow_entry(_vcpu, _addr, _walker)    \
-	for (shadow_walk_init(&(_walker), _vcpu, _addr);	\
-	     shadow_walk_okay(&(_walker), _vcpu);			\
-	     shadow_walk_next(&(_walker)))
 
 enum kvm_bus {
 	KVM_MMIO_BUS,
@@ -1606,14 +1505,6 @@ typedef struct kvm_id_map_addr_ioc {
  * return is 1 (yes) or 0 (no, sorry).
  */
 #define KVM_CHECK_EXTENSION       _IO(KVMIO,   0x03)
-
-#define RMAP_EXT 4
-
-typedef struct kvm_rmap_desc {
-	uint64_t *sptes[RMAP_EXT];
-	struct kvm_rmap_desc *more;
-} kvm_rmap_desc_t;
-
 
 /* for KVM_INTERRUPT */
 typedef struct kvm_interrupt {
@@ -2211,13 +2102,6 @@ extern int kvm_vcpu_is_bsp(struct kvm_vcpu *);
 
 extern struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
     uint32_t function, uint32_t index);
-
-#define for_each_unsync_children(bitmap, idx)		\
-	for (idx = bt_getlowbit(bitmap, 0, 512);	\
-	     idx < 512;					\
-	     idx = bt_getlowbit(bitmap, idx+1, 512))
-
-#define PT_PAGE_SIZE_MASK (1ULL << 7)
 
 #define	BITS_PER_LONG	(sizeof (unsigned long) * 8)
 

@@ -73,7 +73,6 @@ void kvm_put_kvm(struct kvm *kvm);
 #define HPA_MSB ((sizeof(hpa_t) * 8) - 1)
 #define HPA_ERR_MASK ((hpa_t)1 << HPA_MSB)
 static int is_error_hpa(hpa_t hpa) { return hpa >> HPA_MSB; }
-page_t gva_to_page(struct kvm_vcpu *vcpu, gva_t gva);
 
 extern page_t *bad_page;
 extern pfn_t bad_pfn;
