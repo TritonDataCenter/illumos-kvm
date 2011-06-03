@@ -1783,52 +1783,6 @@ static void kvm_free_irq_routing(struct kvm *kvm) {}
 
 #define KVM_USERSPACE_IRQ_SOURCE_ID	0
 
-typedef struct kvm_kpit_channel_state {
-	uint32_t count; /* can be 65536 */
-	uint16_t latched_count;
-	uint8_t count_latched;
-	uint8_t status_latched;
-	uint8_t status;
-	uint8_t read_state;
-	uint8_t write_state;
-	uint8_t write_latch;
-	uint8_t rw_mode;
-	uint8_t mode;
-	uint8_t bcd; /* not supported */
-	uint8_t gate; /* timer start */
-	hrtime_t count_load_time;
-} kvm_kpit_channel_state_t;
-
-typedef struct kvm_kpit_state {
-	struct kvm_kpit_channel_state channels[3];
-	uint32_t flags;
-	struct kvm_timer pit_timer;
-	int is_periodic;
-	uint32_t    speaker_data_on;
-	kmutex_t lock;
-	struct kvm_pit *pit;
-	kmutex_t inject_lock;
-	unsigned long irq_ack;
-	struct kvm_irq_ack_notifier irq_ack_notifier;
-} kvm_kpit_state_t;
-
-typedef struct kvm_pit {
-	unsigned long base_addresss;
-	struct kvm_io_device dev;
-	struct kvm_io_device speaker_dev;
-	struct kvm *kvm;
-	struct kvm_kpit_state pit_state;
-	int irq_source_id;
-	struct kvm_irq_mask_notifier mask_notifier;
-} kvm_pit_t;
-
-#define KVM_PIT_BASE_ADDRESS	    0x40
-#define KVM_SPEAKER_BASE_ADDRESS    0x61
-#define KVM_PIT_MEM_LENGTH	    4
-#define KVM_PIT_FREQ		    1193181
-#define KVM_MAX_PIT_INTR_INTERVAL   HZ / 100
-#define KVM_PIT_CHANNEL_MASK	    0x3
-
 #define RW_STATE_LSB 1
 #define RW_STATE_MSB 2
 #define RW_STATE_WORD0 3

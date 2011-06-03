@@ -40,7 +40,6 @@
 #include "irqflags.h"
 #include "kvm_host.h"
 #include "kvm_x86host.h"
-#include "kvm_i8254.h"
 #include "kvm_lapic.h"
 #include "processor-flags.h"
 #include "hyperv.h"
@@ -51,6 +50,7 @@
 #include "tss.h"
 #include "kvm_ioapic.h"
 #include "kvm_coalesced_mmio.h"
+#include "kvm_i8254.h"
 #include "kvm_mmu.h"
 
 #undef DEBUG

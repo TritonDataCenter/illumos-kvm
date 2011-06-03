@@ -41,6 +41,7 @@
 #include "kvm_x86host.h"
 #include "kvm_iodev.h"
 #include "kvm.h"
+#include "kvm_i8254.h"
 #include "irq.h"
 
 extern int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu);
