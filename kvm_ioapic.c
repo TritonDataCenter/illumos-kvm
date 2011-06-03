@@ -41,32 +41,12 @@
 #include "kvm_ioapic.h"
 #include "irq.h"
 
-static int
-ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
+static int ioapic_deliver(struct kvm_ioapic *, int);
+
+struct kvm_ioapic *
+ioapic_irqchip(struct kvm *kvm)
 {
-	union kvm_ioapic_redirect_entry *entry = &ioapic->redirtbl[irq];
-	struct kvm_lapic_irq irqe;
-
-	irqe.dest_id = entry->fields.dest_id;
-	irqe.vector = entry->fields.vector;
-	irqe.dest_mode = entry->fields.dest_mode;
-	irqe.trig_mode = entry->fields.trig_mode;
-	irqe.delivery_mode = entry->fields.delivery_mode << 8;
-	irqe.level = 1;
-	irqe.shorthand = 0;
-
-#ifdef CONFIG_X86
-	/* Always delivery PIT interrupt to vcpu 0 */
-	if (irq == 0) {
-		irqe.dest_mode = 0; /* Physical mode. */
-		/*
-		 * need to read apic_id from apic regiest since
-		 * it can be rewritten
-		 */
-		irqe.dest_id = ioapic->kvm->bsp_vcpu->vcpu_id;
-	}
-#endif
-	return (kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe));
+	return (kvm->arch.vioapic);
 }
 
 static unsigned long
@@ -189,6 +169,34 @@ ioapic_write_indirect(struct kvm_ioapic *ioapic, uint32_t val)
 			ioapic_service(ioapic, index);
 		break;
 	}
+}
+
+static int
+ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
+{
+	union kvm_ioapic_redirect_entry *entry = &ioapic->redirtbl[irq];
+	struct kvm_lapic_irq irqe;
+
+	irqe.dest_id = entry->fields.dest_id;
+	irqe.vector = entry->fields.vector;
+	irqe.dest_mode = entry->fields.dest_mode;
+	irqe.trig_mode = entry->fields.trig_mode;
+	irqe.delivery_mode = entry->fields.delivery_mode << 8;
+	irqe.level = 1;
+	irqe.shorthand = 0;
+
+#ifdef CONFIG_X86
+	/* Always delivery PIT interrupt to vcpu 0 */
+	if (irq == 0) {
+		irqe.dest_mode = 0; /* Physical mode. */
+		/*
+		 * need to read apic_id from apic regiest since
+		 * it can be rewritten
+		 */
+		irqe.dest_id = ioapic->kvm->bsp_vcpu->vcpu_id;
+	}
+#endif
+	return (kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe));
 }
 
 int
@@ -463,10 +471,4 @@ kvm_set_ioapic(struct kvm *kvm, struct kvm_ioapic_state *state)
 	mutex_exit(&ioapic->lock);
 
 	return (0);
-}
-
-struct kvm_ioapic *
-ioapic_irqchip(struct kvm *kvm)
-{
-	return (kvm->arch.vioapic);
 }
