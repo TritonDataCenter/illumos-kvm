@@ -204,7 +204,7 @@ typedef struct shared_msr_entry {
 
 typedef struct vcpu_vmx {
 	struct kvm_vcpu		vcpu;
-	list_t			local_vcpus_link;
+	struct list_node	local_vcpus_link;
 	unsigned long		host_rsp;
 	int			launched;
 	unsigned char		fail;
@@ -1593,7 +1593,7 @@ alloc_kvm_area(void)
 	current_vmcs = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
 	shared_msrs = kmem_alloc(ncpus * sizeof (struct kvm_shared_msrs *),
 	    KM_SLEEP);
-	vcpus_on_cpu = kmem_alloc(ncpus * sizeof (list_t *), KM_SLEEP);
+	vcpus_on_cpu = kmem_zalloc(ncpus * sizeof (list_t *), KM_SLEEP);
 
 	for (i = 0; i < ncpus; i++) {
 		struct vmcs *vmcs;
@@ -1609,7 +1609,7 @@ alloc_kvm_area(void)
 			((uint64_t)vmxarea[i] & PAGEOFFSET);
 		shared_msrs[i] = kmem_zalloc(sizeof (struct kvm_shared_msrs),
 		    KM_SLEEP);
-		vcpus_on_cpu[i] = kmem_alloc(sizeof (list_t), KM_SLEEP);
+		vcpus_on_cpu[i] = kmem_zalloc(sizeof (list_t), KM_SLEEP);
 		list_create(vcpus_on_cpu[i], sizeof (struct vcpu_vmx),
 			    offsetof(struct vcpu_vmx, local_vcpus_link));
 	}
