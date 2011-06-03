@@ -26,7 +26,7 @@
  *   Port from Qemu.
  *
  * Ported from Linux to illumos by Joyent.
- * Copyright 2011 Joyent, Inc. All Rights Reserved. 
+ * Copyright 2011 Joyent, Inc. All Rights Reserved.
  */
 
 /* XXX Includes are always in bad shape, what a surprise! */
@@ -616,4 +616,3 @@ kvm_destroy_pic(struct kvm *kvm)
 		kmem_free(vpic, sizeof (struct kvm_pic));
 	}
 }
-

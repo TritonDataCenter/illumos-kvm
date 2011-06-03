@@ -50,7 +50,7 @@
 #include "irq.h"
 #include "tss.h"
 #include "kvm_ioapic.h"
-#include "coalesced_mmio.h"
+#include "kvm_coalesced_mmio.h"
 #include "kvm_mmu.h"
 
 #undef DEBUG

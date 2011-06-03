@@ -10,6 +10,8 @@
  *
  */
 
+/* XXX Linux doesn't define these structures here so why do we? */
+
 typedef struct kvm_coalesced_mmio_zone {
 	uint64_t addr;
 	uint32_t size;
@@ -27,9 +29,6 @@ typedef struct kvm_coalesced_mmio_zone_ioc {
 
 /* for KVM_REGISTER_COALESCED_MMIO / KVM_UNREGISTER_COALESCED_MMIO */
 
-
-#ifdef _KERNEL
-
 typedef struct kvm_coalesced_mmio_dev {
 	struct kvm_io_device dev;
 	struct kvm *kvm;
@@ -38,19 +37,17 @@ typedef struct kvm_coalesced_mmio_dev {
 	struct kvm_coalesced_mmio_zone zone[KVM_COALESCED_MMIO_ZONE_MAX];
 } kvm_coalesced_mmio_dev_t;
 
-int kvm_coalesced_mmio_init(struct kvm *kvm);
-void kvm_coalesced_mmio_free(struct kvm *kvm);
-int kvm_vm_ioctl_register_coalesced_mmio(struct kvm *kvm,
-                                       struct kvm_coalesced_mmio_zone *zone);
-int kvm_vm_ioctl_unregister_coalesced_mmio(struct kvm *kvm,
-                                         struct kvm_coalesced_mmio_zone *zone);
-#endif /*_KERNEL*/
+extern int kvm_coalesced_mmio_init(struct kvm *);
+extern void kvm_coalesced_mmio_free(struct kvm *);
+extern int kvm_vm_ioctl_register_coalesced_mmio(struct kvm *,
+    struct kvm_coalesced_mmio_zone *);
+extern int kvm_vm_ioctl_unregister_coalesced_mmio(struct kvm *,
+    struct kvm_coalesced_mmio_zone *);
 
 #else
 
-static int kvm_coalesced_mmio_init(struct kvm *kvm) { return 0; }
-static void kvm_coalesced_mmio_free(struct kvm *kvm) { }
+#error "CONFIG_KVM_MMIO must be suupported"
 
-#endif
+#endif /* CONFIG_KVM_MMIO */
 
-#endif
+#endif /* __KVM_COALESCED_MMIO_H__ */
