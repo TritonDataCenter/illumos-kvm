@@ -247,18 +247,6 @@ typedef struct fxsave {
 /* XXX This shouldn't be necessary */
 #include "kvm_timer.h"
 
-typedef struct kvm_lapic {
-	unsigned long base_address;
-	struct kvm_io_device dev;
-	struct kvm_timer lapic_timer;
-	uint32_t divide_count;
-	struct kvm_vcpu *vcpu;
-	int irr_pending;
-	void *regs;
-	gpa_t vapic_addr;
-	page_t *vapic_page;
-} kvm_lapic_t;
-
 struct vcpu_vmx;
 struct kvm_user_return_notifier;
 

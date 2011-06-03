@@ -44,10 +44,6 @@ extern int kvm_vm_ioctl_register_coalesced_mmio(struct kvm *,
 extern int kvm_vm_ioctl_unregister_coalesced_mmio(struct kvm *,
     struct kvm_coalesced_mmio_zone *);
 
-#else
-
-#error "CONFIG_KVM_MMIO must be suupported"
-
 #endif /* CONFIG_KVM_MMIO */
 
 #endif /* __KVM_COALESCED_MMIO_H__ */

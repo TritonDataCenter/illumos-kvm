@@ -1,9 +1,20 @@
 #ifndef __KVM_X86_LAPIC_H
 #define __KVM_X86_LAPIC_H
 
+#include "kvm_iodev.h"
 #include "kvm_timer.h"
 
-struct kvm_vapic_addr;
+typedef struct kvm_lapic {
+	unsigned long base_address;
+	struct kvm_io_device dev;
+	struct kvm_timer lapic_timer;
+	uint32_t divide_count;
+	struct kvm_vcpu *vcpu;
+	int irr_pending;
+	void *regs;
+	gpa_t vapic_addr;
+	page_t *vapic_page;
+} kvm_lapic_t;
 
 extern int kvm_create_lapic(struct kvm_vcpu *);
 extern void kvm_lapic_reset(struct kvm_vcpu *);
@@ -29,7 +40,7 @@ extern int kvm_apic_compare_prio(struct kvm_vcpu *, struct kvm_vcpu *);
 
 extern void kvm_lapic_set_tpr(struct kvm_vcpu *vcpu, unsigned long cr8);
 extern void kvm_lapic_set_base(struct kvm_vcpu *vcpu, uint64_t value);
-extern int kvm_lapic_set_vapic_addr(struct kvm_vcpu *, struct kvm_vapic_addr *);
+extern int kvm_lapic_set_vapic_addr(struct kvm_vcpu *, gpa_t); 
 
 extern int kvm_x2apic_msr_write(struct kvm_vcpu *, uint32_t, uint64_t);
 extern int kvm_x2apic_msr_read(struct kvm_vcpu *, uint32_t, uint64_t *);
@@ -48,8 +59,8 @@ extern void kvm_apic_post_state_restore(struct kvm_vcpu *);
 
 /*
  * XXX: needs to be in vmx
- */
 extern int vm_need_virtualize_apic_accesses(struct kvm *kvm);
+ */
 
 
 #endif

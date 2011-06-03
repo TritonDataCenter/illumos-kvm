@@ -32,6 +32,7 @@
 #include "kvm.h"
 #include "apicdef.h"
 #include "kvm_ioapic.h"
+#include "kvm_lapic.h"
 #include "irq.h"
 
 int __apic_accept_irq(struct kvm_lapic *, int, int, int, int);
@@ -1300,12 +1301,12 @@ kvm_lapic_sync_to_vapic(struct kvm_vcpu *vcpu)
 }
 
 int
-kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, struct kvm_vapic_addr *addr)
+kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, gpa_t vapic_addr)
 {
 	if (!irqchip_in_kernel(vcpu->kvm))
 		return (EINVAL);
 
-	vcpu->arch.apic->vapic_addr = addr->vapic_addr;
+	vcpu->arch.apic->vapic_addr = vapic_addr;
 
 	return (0);
 }
