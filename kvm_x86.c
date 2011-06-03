@@ -468,16 +468,6 @@ apic_x2apic_mode(struct kvm_lapic *apic)
 
 extern unsigned long kvm_rip_read(struct kvm_vcpu *vcpu);
 
-inline static int
-kvm_is_dm_lowest_prio(struct kvm_lapic_irq *irq)
-{
-#ifdef CONFIG_IA64
-	return (irq->delivery_mode ==
-		(IOSAPIC_LOWEST_PRIORITY << IOSAPIC_DELIVERY_SHIFT));
-#else
-	return (irq->delivery_mode == APIC_DM_LOWEST);
-#endif
-}
 
 void
 kvm_inject_nmi(struct kvm_vcpu *vcpu)
@@ -485,41 +475,6 @@ kvm_inject_nmi(struct kvm_vcpu *vcpu)
 	vcpu->arch.nmi_pending = 1;
 }
 
-int
-kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
-    struct kvm_lapic_irq *irq)
-{
-	int i, r = -1;
-	struct kvm_vcpu *vcpu, *lowest = NULL;
-
-	if (irq->dest_mode == 0 && irq->dest_id == 0xff &&
-	    kvm_is_dm_lowest_prio(irq))
-		cmn_err(CE_NOTE, "kvm: apic: phys broadcast and lowest prio\n");
-
-	kvm_for_each_vcpu(i, vcpu, kvm) {
-		if (!kvm_apic_present(vcpu))
-			continue;
-
-		if (!kvm_apic_match_dest(vcpu, src, irq->shorthand,
-		    irq->dest_id, irq->dest_mode))
-			continue;
-
-		if (!kvm_is_dm_lowest_prio(irq)) {
-			if (r < 0)
-				r = 0;
-			r += kvm_apic_set_irq(vcpu, irq);
-		} else {
-			if (!lowest)
-				lowest = vcpu;
-			else if (kvm_apic_compare_prio(vcpu, lowest) < 0)
-				lowest = vcpu;
-		}
-	}
-	if (lowest)
-		r = kvm_apic_set_irq(lowest, irq);
-
-	return (r);
-}
 
 static int
 ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
