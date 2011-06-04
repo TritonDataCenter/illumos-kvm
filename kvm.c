@@ -34,14 +34,15 @@
 #include <sys/strsubr.h>
 #include <sys/stream.h>
 
+#include "bitops.h"
 #include "vmx.h"
 #include "msr-index.h"
 #include "msr.h"
 #include "irqflags.h"
 #include "kvm_host.h"
-#include "kvm_x86host.h"
 #include "kvm_lapic.h"
 #include "processor-flags.h"
+#include "kvm_cpuid.h"
 #include "hyperv.h"
 #include "apicdef.h"
 #include "kvm_iodev.h"
@@ -85,7 +86,6 @@ static volatile uint32_t hardware_enable_failed;
 static int kvm_usage_count;
 static list_t vm_list;
 kmutex_t kvm_lock;
-kmem_cache_t *kvm_cache;
 
 /*
  * Driver forward declarations
@@ -871,8 +871,6 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	kvm_dip = dip;
 	kvm_base_minor = instance;
 
-	kvm_cache = kmem_cache_create("kvm_cache", KVM_VM_DATA_SIZE,
-	    ptob(1),  NULL, NULL, NULL, NULL, NULL, 0);
 	list_create(&vm_list, sizeof (struct kvm),
 	    offsetof(struct kvm, vm_list));
 	kvm_minor = vmem_create("kvm_minor", (void *)1, UINT32_MAX - 1, 1,
@@ -896,7 +894,6 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	VERIFY(instance == kvm_base_minor);
 	ddi_prop_remove_all(dip);
 	ddi_remove_minor_node(dip, NULL);
-	kmem_cache_destroy(kvm_cache);
 	list_destroy(&vm_list);
 	vmem_destroy(kvm_minor);
 	kvm_dip = NULL;
@@ -4973,6 +4970,12 @@ get_desc_limit(const struct desc_struct *desc)
 	return (desc->c.b.limit0 | (desc->c.b.limit << 16));
 }
 
+unsigned long get_desc_base(const struct desc_struct *desc)
+{
+       return (unsigned)(desc->c.b.base0 | ((desc->c.b.base1) << 16) | ((desc->c.b.base2) << 24));
+}
+
+
 static void
 seg_desct_to_kvm_desct(struct desc_struct *seg_desc, uint16_t selector,
     struct kvm_segment *kvm_desct)
@@ -5552,7 +5555,7 @@ out:
 
 
 
-static inline void
+void
 kvm_guest_exit(void)
 {
 #ifdef XXX
@@ -5563,7 +5566,7 @@ kvm_guest_exit(void)
 #endif
 }
 
-static inline void
+void
 kvm_guest_enter(void)
 {
 #ifdef XXX
@@ -7210,7 +7213,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 #endif
 #ifdef KVM_CAP_IRQ_ROUTING
 	case KVM_SET_GSI_ROUTING: {
-		struct kvm_kirq_routing *route;
+		struct kvm_irq_routing *route;
 		struct kvm *kvmp;
 		struct kvm_irq_routing_entry *entries;
 		uint32_t nroutes;
@@ -7219,20 +7222,20 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		 * Note the route must be allocated on the heap. The sizeof
 		 * (kvm_kirq_routing) is approximately 0xc038 currently.
 		 */
-		route = kmem_zalloc(sizeof (kvm_kirq_routing_t), KM_SLEEP);
+		route = kmem_zalloc(sizeof (kvm_irq_routing_t), KM_SLEEP);
 
 		/*
 		 * copyin the number of routes, then copyin the routes
 		 * themselves.
 		 */
 		if (copyin(argp, &nroutes, sizeof (nroutes)) != 0) {
-			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			kmem_free(route, sizeof (kvm_irq_routing_t));
 			rval = EFAULT;
 			break;
 		}
 
 		if (nroutes <= 0) {
-			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			kmem_free(route, sizeof (kvm_irq_routing_t));
 			rval = EINVAL;
 			break;
 		}
@@ -7240,26 +7243,26 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		if (copyin(argp, route,
 		    sizeof (struct kvm_irq_routing) + (nroutes - 1) *
 		    sizeof (struct kvm_irq_routing_entry)) != 0) {
-			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			kmem_free(route, sizeof (kvm_irq_routing_t));
 			rval = EFAULT;
 			break;
 		}
 
 		if ((kvmp = ksp->kds_kvmp) == NULL) {
-			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			kmem_free(route, sizeof (kvm_irq_routing_t));
 			rval = EINVAL;
 			break;
 		}
 
 		if (route->nr >= KVM_MAX_IRQ_ROUTES || route->flags) {
-			kmem_free(route, sizeof (kvm_kirq_routing_t));
+			kmem_free(route, sizeof (kvm_irq_routing_t));
 			rval = EINVAL;
 			break;
 		}
 
 		rval = kvm_set_irq_routing(kvmp, route->entries,
 		    route->nr, route->flags);
-		kmem_free(route, sizeof (kvm_kirq_routing_t));
+		kmem_free(route, sizeof (kvm_irq_routing_t));
 		*rv = 0;
 		break;
 	}

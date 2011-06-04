@@ -17,6 +17,8 @@
 #include <asm/alternative.h>
 #endif /*XXX*/
 
+#include "kvm_impl.h"
+
 #define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
 #define BITS_TO_LONGS(nr)	DIV_ROUND_UP(nr, 8 * sizeof(long))
 

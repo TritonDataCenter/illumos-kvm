@@ -1,4 +1,7 @@
+#include <sys/sysmacros.h>
+
 #include "processor-flags.h"
+#include "bitops.h"
 #include "msr.h"
 #include "irqflags.h"
 #include "kvm_host.h"
@@ -1464,7 +1467,7 @@ kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages)
 	int used_pages;
 
 	used_pages = kvm->arch.n_alloc_mmu_pages - kvm->arch.n_free_mmu_pages;
-	used_pages = max(0, used_pages);
+	used_pages = MAX(0, used_pages);
 
 	/* for the time being, assume that address space will only grow */
 	/* larger.  The following code will be added later. */
@@ -2734,7 +2737,7 @@ kvm_mmu_unprotect_page_virt(struct kvm_vcpu *vcpu, gva_t gva)
 	return (r);
 }
 
-static void
+void
 __kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 {
 	while (vcpu->kvm->arch.n_free_mmu_pages < KVM_REFILL_PAGES &&
@@ -2990,7 +2993,7 @@ kvm_mmu_calculate_mmu_pages(struct kvm *kvm)
 		nr_pages += slots->memslots[i].npages;
 
 	nr_mmu_pages = nr_pages * KVM_PERMILLE_MMU_PAGES / 1000;
-	nr_mmu_pages = max(nr_mmu_pages, (unsigned int)KVM_MIN_ALLOC_MMU_PAGES);
+	nr_mmu_pages = MAX(nr_mmu_pages, (unsigned int)KVM_MIN_ALLOC_MMU_PAGES);
 
 	return (nr_mmu_pages);
 }

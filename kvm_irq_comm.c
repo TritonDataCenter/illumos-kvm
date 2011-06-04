@@ -19,11 +19,15 @@
  *
  */
 
+#include <sys/sysmacros.h>
+
 /*
  * XXX Need proper header files!
  */
+#include "bitops.h"
 #include "msr.h"
 #include "irqflags.h"
+#include "kvm_msidef.h"
 #include "kvm_host.h"
 #include "kvm_x86host.h"
 #include "kvm_iodev.h"
@@ -35,6 +39,7 @@
 
 extern long find_first_zero_bit(const unsigned long *, unsigned long);
 extern int kvm_pic_set_irq(void *, int, int);
+extern int irqchip_in_kernel(struct kvm *kvm);
 
 static int
 kvm_irq_line_state(unsigned long *irq_state, int irq_source_id, int level)
@@ -422,7 +427,7 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 	for (i = 0; i < nr; ++i) {
 		if (ue[i].gsi >= KVM_MAX_IRQ_ROUTES)
 			return (-EINVAL);
-		nr_rt_entries = max(nr_rt_entries, ue[i].gsi);
+		nr_rt_entries = MAX(nr_rt_entries, ue[i].gsi);
 	}
 
 	nr_rt_entries += 1;

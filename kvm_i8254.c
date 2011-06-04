@@ -46,6 +46,13 @@
 
 extern int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu);
 
+#define mod_64(x, y) ((x) % (y))
+
+#define RW_STATE_LSB 1
+#define RW_STATE_MSB 2
+#define RW_STATE_WORD0 3
+#define RW_STATE_WORD1 4
+
 static uint64_t
 muldiv64(uint64_t a, uint32_t b, uint32_t c)
 {

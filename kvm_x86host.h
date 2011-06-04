@@ -1,41 +1,21 @@
-/*
- * Kernel-based Virtual Machine driver for Linux
- *
- * This header defines architecture specific interfaces, x86 version
- *
- * This work is licensed under the terms of the GNU GPL, version 2.  See
- * the COPYING file in the top-level directory.
- *
- */
+#ifndef __KVM_X86_HOST_H
+#define __KVM_X86_HOST_H
 
-#ifndef _ASM_X86_KVM_HOST_H
-#define _ASM_X86_KVM_HOST_H
-
-#ifdef XXX
-#include <linux/types.h>
-#include <linux/mm.h>
-#include <linux/mmu_notifier.h>
-#include <linux/tracepoint.h>
-
-#include <linux/kvm.h>
-#include <linux/kvm_para.h>
-#include <linux/kvm_types.h>
-
-#include <asm/pvclock-abi.h>
-#include <asm/desc.h>
-#include <asm/mtrr.h>
-#include <asm/msr-index.h>
-
-#endif
-
-#include <sys/avl.h>
-#include <sys/ksynch.h>
+#include <sys/types.h>
 #include <sys/list.h>
+#include <sys/mutex.h>
+#include <sys/avl.h>
 #include <sys/bitmap.h>
 #include <vm/page.h>
 #include <sys/pte.h>
+
+#include "kvm.h"
 #include "kvm_types.h"
-#include "msr.h"
+
+#define	KVM_MAX_VCPUS	64
+#define	KVM_MEMORY_SLOTS	32
+/* memory slots that are not exposted to userspace */
+#define KVM_PRIVATE_MEM_SLOTS 4 /* XXX assumes x86 */
 
 #define	KVM_PIO_PAGE_OFFSET	1
 #define	KVM_COALESCED_MMIO_PAGE_OFFSET	2
@@ -89,24 +69,11 @@
 #define KVM_NR_FIXED_MTRR_REGION 88
 #define KVM_NR_VAR_MTRR 8
 
-#ifdef _KERNEL
 extern kmutex_t kvm_lock;
 extern list_t vm_list;
 
 struct kvm_vcpu;
 struct kvm;
-#endif /*_KERNEL*/
-
-enum {
-	VCPU_SREG_ES,
-	VCPU_SREG_CS,
-	VCPU_SREG_SS,
-	VCPU_SREG_DS,
-	VCPU_SREG_FS,
-	VCPU_SREG_GS,
-	VCPU_SREG_TR,
-	VCPU_SREG_LDTR,
-};
 
 enum kvm_reg {
 	VCPU_REGS_RAX = 0,
@@ -133,6 +100,17 @@ enum kvm_reg {
 
 enum kvm_reg_ex {
 	VCPU_EXREG_PDPTR = NR_VCPU_REGS,
+};
+
+enum {
+	VCPU_SREG_ES,
+	VCPU_SREG_CS,
+	VCPU_SREG_SS,
+	VCPU_SREG_DS,
+	VCPU_SREG_FS,
+	VCPU_SREG_GS,
+	VCPU_SREG_TR,
+	VCPU_SREG_LDTR,
 };
 
 #include "kvm_emulate.h"
@@ -163,7 +141,6 @@ typedef struct kvm_mmu_memory_cache {
 	void *objects[KVM_NR_MEM_OBJS];
 } kvm_mmu_memory_cache_t;
 
-#ifdef _KERNEL
 #define NR_PTE_CHAIN_ENTRIES 5
 
 typedef struct kvm_pte_chain {
@@ -231,8 +208,6 @@ typedef struct kvm_mmu_page {
 	unsigned long unsync_child_bitmap[BT_BITOUL(512)];
 } kvm_mmu_page_t;
 
-#endif /*_KERNEL*/
-
 typedef struct kvm_pv_mmu_op_buffer {
 	void *ptr;
 	unsigned len;
@@ -253,7 +228,6 @@ typedef struct kvm_pio_request {
 	int rep;
 } kvm_pio_request_t;
 
-#ifdef _KERNEL
 /*
  * x86 supports 3 paging modes (4-level 64-bit, 3-level 64-bit, and 2-level
  * 32-bit).  The kvm_mmu structure abstracts the details of the current mmu
@@ -279,92 +253,40 @@ typedef struct kvm_mmu {
 	uint64_t rsvd_bits_mask[2][4];
 } kvm_mmu_t;
 
-#endif /*_KERNEL*/
-
-typedef struct kvm_cpuid_entry2 {
-	uint32_t function;
-	uint32_t index;
-	uint32_t flags;
-	uint32_t eax;
-	uint32_t ebx;
-	uint32_t ecx;
-	uint32_t edx;
-	uint32_t padding[3];
-} kvm_cpuid_entry2_t;
-
-typedef struct kvm_segment {
-	uint64_t base;
-	uint32_t limit;
-	unsigned short selector;
-	unsigned char  type;
-	unsigned char  present, dpl, db, s, l, g, avl;
-	unsigned char  unusable;
-	unsigned char  padding;
-} kvm_segment_t;
-
-
-#ifdef _KERNEL
-
-struct x86_emulate_ctxt;
-
-/* In the Intel processor's MTRR interface, the MTRR type is always held in
-   an 8 bit field: */
-typedef unsigned char mtrr_type;
-
-#define MTRR_NUM_FIXED_RANGES 88
-#define MTRR_MAX_VAR_RANGES 256
-
-typedef struct mtrr_var_range {
-	uint32_t base_lo;
-	uint32_t base_hi;
-	uint32_t mask_lo;
-	uint32_t mask_hi;
-} mtrr_var_range_t;
-
-typedef struct mtrr_state_type {
-	struct mtrr_var_range var_ranges[MTRR_MAX_VAR_RANGES];
-	mtrr_type fixed_ranges[MTRR_NUM_FIXED_RANGES];
-	unsigned char enabled;
-	unsigned char have_fixed;
-	mtrr_type def_type;
-} mtrr_state_type_t;
-
 struct i387_fxsave_struct {
-	unsigned short			cwd; /* Control Word			*/
-	unsigned short			swd; /* Status Word			*/
-	unsigned short			twd; /* Tag Word			*/
-	unsigned short			fop; /* Last Instruction Opcode		*/
-	union {
-		struct {
-			uint64_t	rip; /* Instruction Pointer		*/
-			uint64_t	rdp; /* Data Pointer			*/
-		}v1;
-		struct {
-			uint32_t	fip; /* FPU IP Offset			*/
-			uint32_t	fcs; /* FPU IP Selector			*/
-			uint32_t	foo; /* FPU Operand Offset		*/
-			uint32_t	fos; /* FPU Operand Selector		*/
-		}v2;
-	}v12;
-	uint32_t			mxcsr;		/* MXCSR Register State */
-	uint32_t			mxcsr_mask;	/* MXCSR Mask		*/
+       unsigned short                  cwd; /* Control Word                    */
+       unsigned short                  swd; /* Status Word                     */
+       unsigned short                  twd; /* Tag Word                        */
+       unsigned short                  fop; /* Last Instruction Opcode         */
+       union {
+               struct {
+                       uint64_t        rip; /* Instruction Pointer             */
+                       uint64_t        rdp; /* Data Pointer                    */
+               }v1;
+               struct {
+                       uint32_t        fip; /* FPU IP Offset                   */
+                       uint32_t        fcs; /* FPU IP Selector                 */
+                       uint32_t        foo; /* FPU Operand Offset              */
+                       uint32_t        fos; /* FPU Operand Selector            */
+               }v2;
+       }v12;
+       uint32_t                        mxcsr;          /* MXCSR Register State */
+       uint32_t                        mxcsr_mask;     /* MXCSR Mask           */
 
-	/* 8*16 bytes for each FP-reg = 128 bytes:			*/
-	uint32_t			st_space[32];
+       /* 8*16 bytes for each FP-reg = 128 bytes:                      */
+       uint32_t                        st_space[32];
 
-	/* 16*16 bytes for each XMM-reg = 256 bytes:			*/
-	uint32_t			xmm_space[64];
+       /* 16*16 bytes for each XMM-reg = 256 bytes:                    */
+       uint32_t                        xmm_space[64];
 
-	uint32_t			padding[12];
+       uint32_t                        padding[12];
 
-	union {
-		uint32_t		padding1[12];
-		uint32_t		sw_reserved[12];
-	}v3;
+       union {
+               uint32_t                padding1[12];
+               uint32_t                sw_reserved[12];
+       }v3;
 
 } __attribute__((aligned(16)));
-
-typedef struct i387_fxsave_struct i387_fxsave_struct_t;
 
 /*
  * These structs MUST NOT be changed.
@@ -386,17 +308,53 @@ typedef struct i387_fxsave_struct i387_fxsave_struct_t;
  * and after reading them.
  */
 
-struct pvclock_vcpu_time_info {
+struct pvclock_wall_clock {
 	uint32_t   version;
-	uint32_t   pad0;
-	uint64_t   tsc_timestamp;
-	uint64_t   system_time;
-	uint32_t   tsc_to_system_mul;
-	char    tsc_shift;
-	unsigned char    pad[3];
+	uint32_t   sec;
+	uint32_t   nsec;
+} __attribute__((__packed__));
+
+typedef struct pvclock_wall_clock pvclock_wall_clock_t;
+
+struct pvclock_vcpu_time_info {
+       uint32_t   version;
+       uint32_t   pad0;
+       uint64_t   tsc_timestamp;
+       uint64_t   system_time;
+       uint32_t   tsc_to_system_mul;
+       char    tsc_shift;
+       unsigned char    pad[3];
 } __attribute__((__packed__)); /* 32 bytes */
 
 typedef struct pvclock_vcpu_time_info pvclock_vcpu_time_info_t;
+
+typedef struct msi_msg {
+	uint32_t	address_lo;	/* low 32 bits of msi message address */
+	uint32_t	address_hi;	/* high 32 bits of msi message address */
+	uint32_t	data;		/* 16 bits of msi message data */
+} msi_msg_t;
+
+/* In the Intel processor's MTRR interface, the MTRR type is always held in
+   an 8 bit field: */
+typedef unsigned char mtrr_type;
+
+#define MTRR_NUM_FIXED_RANGES 88
+#define MTRR_MAX_VAR_RANGES 256
+
+typedef struct mtrr_var_range {
+       uint32_t base_lo;
+       uint32_t base_hi;
+       uint32_t mask_lo;
+       uint32_t mask_hi;
+} mtrr_var_range_t;
+
+typedef struct mtrr_state_type {
+       struct mtrr_var_range var_ranges[MTRR_MAX_VAR_RANGES];
+       mtrr_type fixed_ranges[MTRR_NUM_FIXED_RANGES];
+       unsigned char enabled;
+       unsigned char have_fixed;
+       mtrr_type def_type;
+} mtrr_state_type_t;
 
 typedef struct kvm_vcpu_arch {
 	uint64_t host_tsc;
@@ -529,16 +487,14 @@ typedef struct kvm_mem_aliases {
 } kvm_mem_aliases_t;
 
 typedef struct kvm_xen_hvm_config {
-	uint32_t flags;
-	uint32_t msr;
-	uint64_t blob_addr_32;
-	uint64_t blob_addr_64;
-	unsigned char blob_size_32;
-	unsigned char blob_size_64;
-	unsigned char pad2[30];
+       uint32_t flags;
+       uint32_t msr;
+       uint64_t blob_addr_32;
+       uint64_t blob_addr_64;
+       unsigned char blob_size_32;
+       unsigned char blob_size_64;
+       unsigned char pad2[30];
 } kvm_xen_hvm_config_t;
-
-
 
 typedef struct kvm_arch {
 	struct kvm_mem_aliases *aliases;
@@ -618,35 +574,12 @@ typedef struct kvm_vcpu_stat {
 	uint32_t nmi_injections;
 } kvm_vcpu_stat_t;
 
-#define KVM_GUESTDBG_USE_SW_BP		0x00010000
-#define KVM_GUESTDBG_USE_HW_BP		0x00020000
-#define KVM_GUESTDBG_INJECT_DB		0x00040000
-#define KVM_GUESTDBG_INJECT_BP		0x00080000
-
-/* for KVM_SET_GUEST_DEBUG */
-typedef struct kvm_guest_debug_arch {
-	uint64_t debugreg[8];
-} kvm_guest_debug_arch_t;
-
-/* for KVM_SET_GUEST_DEBUG */
-
-#define KVM_GUESTDBG_ENABLE		0x00000001
-#define KVM_GUESTDBG_SINGLESTEP		0x00000002
-
-typedef struct kvm_guest_debug {
-	uint32_t control;
-	uint32_t pad;
-	struct kvm_guest_debug_arch arch;
-} kvm_guest_debug_t;
-
 struct descriptor_table {
 	unsigned short limit;
 	unsigned long base;
 } __attribute__((packed));
 
 typedef struct descriptor_table descriptor_table_t;
-
-struct kvm_vcpu_ioc;
 
 typedef struct kvm_x86_ops {
 	int (*cpu_has_kvm_support)(void);          /* __init */
@@ -743,8 +676,9 @@ void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot);
 void kvm_mmu_zap_all(struct kvm *kvm);
 unsigned int kvm_mmu_calculate_mmu_pages(struct kvm *kvm);
 void kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages);
+
 int load_pdptrs(struct kvm_vcpu *vcpu, unsigned long cr3);
-#ifdef XXX
+
 int emulator_write_phys(struct kvm_vcpu *vcpu, gpa_t gpa,
 			  const void *val, int bytes);
 int kvm_pv_mmu_op(struct kvm_vcpu *vcpu, unsigned long bytes,
@@ -752,7 +686,6 @@ int kvm_pv_mmu_op(struct kvm_vcpu *vcpu, unsigned long bytes,
 uint8_t kvm_get_guest_memory_type(struct kvm_vcpu *vcpu, gfn_t gfn);
 
 extern int tdp_enabled;
-#endif /*XXX*/
 
 enum emulation_result {
 	EMULATE_DONE,       /* no further processing */
@@ -764,7 +697,6 @@ enum emulation_result {
 #define EMULTYPE_TRAP_UD	    (1 << 1)
 #define EMULTYPE_SKIP		    (1 << 2)
 
-#ifdef XXX
 int emulate_instruction(struct kvm_vcpu *vcpu,
 			unsigned long cr2, uint16_t error_code, int emulation_type);
 void kvm_report_emulation_failure(struct kvm_vcpu *cvpu, const char *context);
@@ -779,7 +711,6 @@ void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long value,
 void kvm_enable_efer_bits(uint64_t);
 int kvm_get_msr(struct kvm_vcpu *vcpu, uint32_t msr_index, uint64_t *data);
 int kvm_set_msr(struct kvm_vcpu *vcpu, uint32_t msr_index, uint64_t data);
-
 
 int kvm_emulate_pio(struct kvm_vcpu *vcpu, int in,
 		     int size, unsigned port);
@@ -815,9 +746,7 @@ unsigned long kvm_get_rflags(struct kvm_vcpu *vcpu);
 void kvm_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags);
 
 void kvm_queue_exception(struct kvm_vcpu *vcpu, unsigned nr);
-#endif /*XXX*/
 extern void kvm_queue_exception_e(struct kvm_vcpu *vcpu, unsigned nr, uint32_t error_code);
-#ifdef XXX
 void kvm_inject_page_fault(struct kvm_vcpu *vcpu, unsigned long cr2,
 			   uint32_t error_code);
 int kvm_require_cpl(struct kvm_vcpu *vcpu, int required_cpl);
@@ -833,6 +762,30 @@ int emulator_write_emulated(unsigned long addr,
 			    unsigned int bytes,
 			    struct kvm_vcpu *vcpu);
 
+/*
+ * FIXME: Accessing the desc_struct through its fields is more elegant,
+ * and should be the one valid thing to do. However, a lot of open code
+ * still touches the a and b accessors, and doing this allow us to do it
+ * incrementally. We keep the signature as a struct, rather than an union,
+ * so we can get rid of it transparently in the future -- glommer
+ */
+/* 8 byte segment descriptor */
+struct desc_struct {
+       union {
+               struct {
+                       unsigned int a;
+                       unsigned int b;
+               }a;
+               struct {
+                       unsigned short limit0;
+                       unsigned short base0;
+                       unsigned base1: 8, type: 4, s: 1, dpl: 2, p: 1;
+                       unsigned limit: 4, avl: 1, l: 1, d: 1, g: 1, base2: 8;
+               }b;
+       }c;
+} __attribute__((packed));
+
+extern unsigned long segment_base(uint16_t selector);
 
 void kvm_mmu_flush_tlb(struct kvm_vcpu *vcpu);
 void kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
@@ -864,96 +817,43 @@ int kvm_check_iopl(struct kvm_vcpu *vcpu);
 
 struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn);
 
+struct kvm_mmu_page *page_header(struct kvm *, hpa_t shadow_page);
 
-#endif /*XXX*/
+/* XXX Fold into kvm_subr.c */
+unsigned short kvm_read_fs(void);
+unsigned short kvm_read_gs(void);
+unsigned short kvm_read_ldt(void);
+void kvm_load_fs(unsigned short sel);
+void kvm_load_gs(unsigned short sel);
+void kvm_load_ldt(unsigned short sel);
+void kvm_get_idt(struct descriptor_table *table);
+void kvm_get_gdt(struct descriptor_table *table);
 
-static unsigned short kvm_read_fs(void)
-{
-	unsigned short seg;
-	__asm__("mov %%fs, %0" : "=g"(seg));
-	return seg;
-}
-
-static unsigned short kvm_read_gs(void)
-{
-	unsigned short seg;
-	__asm__("mov %%gs, %0" : "=g"(seg));
-	return seg;
-}
-
-static unsigned short kvm_read_ldt(void)
-{
-	unsigned short ldt;
-	__asm__("sldt %0" : "=g"(ldt));
-	return ldt;
-}
-
-static void kvm_load_fs(unsigned short sel)
-{
-	__asm__("mov %0, %%fs" : : "rm"(sel));
-}
-
-static void kvm_load_gs(unsigned short sel)
-{
-	__asm__("mov %0, %%gs" : : "rm"(sel));
-}
-
-static void kvm_load_ldt(unsigned short sel)
-{
-	__asm__("lldt %0" : : "rm"(sel));
-}
-
-
-static void kvm_get_idt(struct descriptor_table *table)
-{
-	__asm__("sidt %0" : "=m"(*table));
-}
-
-static void kvm_get_gdt(struct descriptor_table *table)
-{
-	__asm__("sgdt %0" : "=m"(*table));
-}
-
-/*
- * FIXME: Accessing the desc_struct through its fields is more elegant,
- * and should be the one valid thing to do. However, a lot of open code
- * still touches the a and b accessors, and doing this allow us to do it
- * incrementally. We keep the signature as a struct, rather than an union,
- * so we can get rid of it transparently in the future -- glommer
- */
-/* 8 byte segment descriptor */
-struct desc_struct {
-	union {
-		struct {
-			unsigned int a;
-			unsigned int b;
-		}a;
-		struct {
-			unsigned short limit0;
-			unsigned short base0;
-			unsigned base1: 8, type: 4, s: 1, dpl: 2, p: 1;
-			unsigned limit: 4, avl: 1, l: 1, d: 1, g: 1, base2: 8;
-		}b;
-	}c;
-} __attribute__((packed));
-
-typedef struct desc_struct desc_struct_t;
-
-static unsigned long get_desc_base(const struct desc_struct *desc)
-{
-	return (unsigned)(desc->c.b.base0 | ((desc->c.b.base1) << 16) | ((desc->c.b.base2) << 24));
-}
-
-extern unsigned long segment_base(uint16_t selector);
 extern unsigned long kvm_read_tr_base(void);
 
-extern unsigned long read_msr(unsigned long msr);
+extern unsigned long read_msr(unsigned long);
 
-extern void kvm_fx_save(struct i387_fxsave_struct *image);
-extern void kvm_fx_restore(struct i387_fxsave_struct *image);
-extern void kvm_fx_finit(void);
-extern uint32_t get_rdx_init_val(void);
-extern void kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code);
+void kvm_fx_save(struct i387_fxsave_struct *image);
+
+void kvm_fx_restore(struct i387_fxsave_struct *image);
+
+void kvm_fx_finit(void);
+
+uint32_t get_rdx_init_val(void);
+
+void kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code);
+
+#define	__kvm_handle_fault_on_reboot(insn) \
+	"666: " insn "\n\t" \
+	".pushsection .fixup, \"ax\" \n" \
+	"667: \n\t" \
+	__ASM_SIZE(push) " $666b \n\t"	      \
+	".popsection \n\t" \
+	".pushsection __ex_table, \"a\" \n\t" \
+	_ASM_PTR " 666b, 667b \n\t" \
+	".popsection \n\t"
+
+
 
 #define TSS_IOPB_BASE_OFFSET 0x66
 #define TSS_BASE_SIZE 0x68
@@ -981,13 +881,15 @@ enum {
  * Trap the fault and ignore the instruction if that happens.
  */
 
-#include "linkage.h"
-
-#include <ia32/sys/asm_linkage.h>
-
-/*asmlinkage*/ void kvm_handle_fault_on_reboot(void);
-
-
+#define	__kvm_handle_fault_on_reboot(insn) \
+	"666: " insn "\n\t" \
+	".pushsection .fixup, \"ax\" \n" \
+	"667: \n\t" \
+	__ASM_SIZE(push) " $666b \n\t"	      \
+	".popsection \n\t" \
+	".pushsection __ex_table, \"a\" \n\t" \
+	_ASM_PTR " 666b, 667b \n\t" \
+	".popsection \n\t"
 
 #define KVM_ARCH_WANT_MMU_NOTIFIER
 
@@ -1002,5 +904,7 @@ int kvm_cpu_get_interrupt(struct kvm_vcpu *v);
 void kvm_define_shared_msr(unsigned index, uint32_t msr);
 void kvm_set_shared_msr(struct kvm_vcpu *, unsigned index, uint64_t val,
     uint64_t mask);
-#endif /*_KERNEL*/
-#endif /* _ASM_X86_KVM_HOST_H */
+
+#define NMI_VECTOR 0x02
+
+#endif

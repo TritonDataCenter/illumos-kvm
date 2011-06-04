@@ -5,6 +5,7 @@
 /*
  * XXX Need proper header files!
  */
+#include "bitops.h"
 #include "msr.h"
 #include "irqflags.h"
 #include "kvm_host.h"

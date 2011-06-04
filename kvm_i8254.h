@@ -2,6 +2,7 @@
 #define __KVM_I8254_H
 
 #include "kvm_iodev.h"
+#include "kvm_timer.h"
 
 typedef struct kvm_kpit_channel_state {
 	uint32_t count; /* can be 65536 */

@@ -24,6 +24,7 @@
 #include <sys/int_limits.h>
 #include <sys/x_call.h>
 
+#include "bitops.h"
 #include "msr-index.h"
 #include "msr.h"
 #include "vmx.h"
@@ -31,7 +32,6 @@
 #include "apicdef.h"
 #include "kvm_types.h"
 #include "kvm_host.h"
-#include "kvm_x86host.h"
 #include "kvm_iodev.h"
 
 #define	PER_CPU_ATTRIBUTES
@@ -63,6 +63,7 @@ extern int is_long_mode(struct kvm_vcpu *vcpu);
 extern void kvm_mmu_unload(struct kvm_vcpu *);
 extern void kvm_free_physmem_slot(struct kvm_memory_slot *,
     struct kvm_memory_slot *);
+extern unsigned long get_desc_base(const struct desc_struct *desc);
 
 unsigned long
 segment_base(uint16_t selector)

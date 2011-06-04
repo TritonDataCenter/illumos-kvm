@@ -23,8 +23,10 @@
 /*
  * XXX Need proper header files!
  */
+#include "bitops.h"
 #include "processor-flags.h"
 #include "msr.h"
+#include "kvm_cpuid.h"
 #include "irqflags.h"
 #include "kvm_host.h"
 #include "kvm_x86host.h"
@@ -100,6 +102,11 @@ extern int kvm_mmu_get_spte_hierarchy(struct kvm_vcpu *,
     uint64_t, uint64_t sptes[4]);
 extern void kvm_queue_interrupt(struct kvm_vcpu *, uint8_t, int);
 extern int kvm_vcpu_init(struct kvm_vcpu *, struct kvm *, unsigned);
+extern int irqchip_in_kernel(struct kvm *kvm);
+extern unsigned long kvm_rip_read(struct kvm_vcpu *);
+extern struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
+    uint32_t function, uint32_t index);
+
 
 /*  These are the region types  */
 #define	MTRR_TYPE_UNCACHABLE	0
@@ -159,16 +166,6 @@ uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
 #define	KVM_RMODE_VM_CR4_ALWAYS_ON (X86_CR4_VME | X86_CR4_PAE | X86_CR4_VMXE)
 
 #define	RMODE_GUEST_OWNED_EFLAGS_BITS (~(X86_EFLAGS_IOPL | X86_EFLAGS_VM))
-
-#define	__kvm_handle_fault_on_reboot(insn) \
-	"666: " insn "\n\t" \
-	".pushsection .fixup, \"ax\" \n" \
-	"667: \n\t" \
-	__ASM_SIZE(push) " $666b \n\t"	      \
-	".popsection \n\t" \
-	".pushsection __ex_table, \"a\" \n\t" \
-	_ASM_PTR " 666b, 667b \n\t" \
-	".popsection \n\t"
 
 #define	__ex(x) __kvm_handle_fault_on_reboot(x)
 
@@ -294,6 +291,14 @@ typedef struct vmx_capability {
 		.ar_bytes = GUEST_##seg##_AR_BYTES,	   	\
 	}
 
+typedef struct kvm_vmx_segment_field {
+	unsigned selector;
+	unsigned base;
+	unsigned limit;
+	unsigned ar_bytes;
+} kvm_vmx_segment_field_t;
+
+
 struct kvm_vmx_segment_field kvm_vmx_segment_fields[] = {
 	VMX_SEGMENT_FIELD(CS),
 	VMX_SEGMENT_FIELD(DS),
@@ -323,6 +328,14 @@ static const uint32_t vmx_msr_index[] = {
 };
 
 #define	NR_VMX_MSR ARRAY_SIZE(vmx_msr_index)
+
+static void native_load_tr_desc(void)
+{
+	__asm__ volatile("ltr %w0"::"q" (KTSS_SEL));
+}
+
+#define load_TR_desc() native_load_tr_desc()
+
 
 static int
 is_page_fault(uint32_t intr_info)

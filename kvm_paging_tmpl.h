@@ -16,6 +16,7 @@
  * the COPYING file in the top-level directory.
  *
  */
+#include <sys/sysmacros.h>
 
 /*
  * We need the mmu code to access both 32-bit and 64-bit guest ptes,
@@ -470,7 +471,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	}
 
 	if (walker.level >= PT_DIRECTORY_LEVEL) {
-		level = min(walker.level, mapping_level(vcpu, walker.gfn));
+		level = MIN(walker.level, mapping_level(vcpu, walker.gfn));
 		walker.gfn = walker.gfn & ~(KVM_PAGES_PER_HPAGE(level) - 1);
 	}
 #ifdef XXX

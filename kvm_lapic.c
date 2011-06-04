@@ -24,6 +24,8 @@
 /*
  * XXX Need proper header files!
  */
+#include "bitops.h"
+#include "kvm_cpuid.h"
 #include "msr.h"
 #include "irqflags.h"
 #include "kvm_host.h"
@@ -36,7 +38,26 @@
 #include "irq.h"
 
 int __apic_accept_irq(struct kvm_lapic *, int, int, int, int);
+/* XXX */
 extern caddr_t page_address(page_t *);
+extern int irqchip_in_kernel(struct kvm *kvm);
+extern unsigned long kvm_rip_read(struct kvm_vcpu *);
+extern struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
+    uint32_t function, uint32_t index);
+
+#define APIC_BUS_CYCLE_NS 1
+#define	APIC_LDR	0xD0
+
+#define APIC_LVT_NUM			6
+/* 14 is the version for Xeon and Pentium 8.4.8*/
+#define APIC_VERSION			(0x14UL | ((APIC_LVT_NUM - 1) << 16))
+#define LAPIC_MMIO_LENGTH		(1 << 12)
+/* followed define is not in apicdef.h */
+#define APIC_SHORT_MASK			0xc0000
+#define APIC_DEST_NOSHORT		0x0
+#define APIC_DEST_MASK			0x800
+#define MAX_APIC_VECTOR			256
+
 
 #define	LVT_MASK	\
 	(APIC_LVT_MASKED | APIC_SEND_PENDING | APIC_VECTOR_MASK)

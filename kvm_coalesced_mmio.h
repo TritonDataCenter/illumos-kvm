@@ -10,19 +10,6 @@
  *
  */
 
-/* XXX Linux doesn't define these structures here so why do we? */
-
-typedef struct kvm_coalesced_mmio_zone {
-	uint64_t addr;
-	uint32_t size;
-	uint32_t pad;
-} kvm_coalesced_mmio_zone_t;
-
-typedef struct kvm_coalesced_mmio_zone_ioc {
-	struct kvm_coalesced_mmio_zone zone;
-	int kvmid;
-} kvm_coalesced_mmio_zone_ioc_t;
-
 #ifdef CONFIG_KVM_MMIO
 
 #define KVM_COALESCED_MMIO_ZONE_MAX 100
