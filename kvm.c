@@ -7219,25 +7219,27 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		struct kvm *kvmp;
 		struct kvm_irq_routing_entry *entries;
 		uint32_t nroutes;
+		size_t sz = sizeof (kvm_irq_routing_t) + KVM_MAX_IRQ_ROUTES *
+		    sizeof (struct kvm_irq_routing_entry);
 
 		/*
 		 * Note the route must be allocated on the heap. The sizeof
 		 * (kvm_kirq_routing) is approximately 0xc038 currently.
 		 */
-		route = kmem_zalloc(sizeof (kvm_irq_routing_t), KM_SLEEP);
+		route = kmem_zalloc(sz, KM_SLEEP);
 
 		/*
 		 * copyin the number of routes, then copyin the routes
 		 * themselves.
 		 */
 		if (copyin(argp, &nroutes, sizeof (nroutes)) != 0) {
-			kmem_free(route, sizeof (kvm_irq_routing_t));
+			kmem_free(route, sz);
 			rval = EFAULT;
 			break;
 		}
 
 		if (nroutes <= 0) {
-			kmem_free(route, sizeof (kvm_irq_routing_t));
+			kmem_free(route, sz);
 			rval = EINVAL;
 			break;
 		}
@@ -7245,26 +7247,26 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		if (copyin(argp, route,
 		    sizeof (struct kvm_irq_routing) + (nroutes - 1) *
 		    sizeof (struct kvm_irq_routing_entry)) != 0) {
-			kmem_free(route, sizeof (kvm_irq_routing_t));
+			kmem_free(route, sz);
 			rval = EFAULT;
 			break;
 		}
 
 		if ((kvmp = ksp->kds_kvmp) == NULL) {
-			kmem_free(route, sizeof (kvm_irq_routing_t));
+			kmem_free(route, sz);
 			rval = EINVAL;
 			break;
 		}
 
 		if (route->nr >= KVM_MAX_IRQ_ROUTES || route->flags) {
-			kmem_free(route, sizeof (kvm_irq_routing_t));
+			kmem_free(route, sz);
 			rval = EINVAL;
 			break;
 		}
 
 		rval = kvm_set_irq_routing(kvmp, route->entries,
 		    route->nr, route->flags);
-		kmem_free(route, sizeof (kvm_irq_routing_t));
+		kmem_free(route, sz);
 		*rv = 0;
 		break;
 	}
