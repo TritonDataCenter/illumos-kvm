@@ -329,12 +329,13 @@ static const uint32_t vmx_msr_index[] = {
 
 #define	NR_VMX_MSR ARRAY_SIZE(vmx_msr_index)
 
-static void native_load_tr_desc(void)
+static void
+native_load_tr_desc(void)
 {
 	__asm__ volatile("ltr %w0"::"q" (KTSS_SEL));
 }
 
-#define load_TR_desc() native_load_tr_desc()
+#define	load_TR_desc() native_load_tr_desc()
 
 
 static int

@@ -45,18 +45,18 @@ extern unsigned long kvm_rip_read(struct kvm_vcpu *);
 extern struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
     uint32_t function, uint32_t index);
 
-#define APIC_BUS_CYCLE_NS 1
+#define	APIC_BUS_CYCLE_NS 1
 #define	APIC_LDR	0xD0
 
-#define APIC_LVT_NUM			6
-/* 14 is the version for Xeon and Pentium 8.4.8*/
-#define APIC_VERSION			(0x14UL | ((APIC_LVT_NUM - 1) << 16))
-#define LAPIC_MMIO_LENGTH		(1 << 12)
+#define	APIC_LVT_NUM			6
+/* 14 is the version for Xeon and Pentium 8.4.8 */
+#define	APIC_VERSION			(0x14UL | ((APIC_LVT_NUM - 1) << 16))
+#define	LAPIC_MMIO_LENGTH		(1 << 12)
 /* followed define is not in apicdef.h */
-#define APIC_SHORT_MASK			0xc0000
-#define APIC_DEST_NOSHORT		0x0
-#define APIC_DEST_MASK			0x800
-#define MAX_APIC_VECTOR			256
+#define	APIC_SHORT_MASK			0xc0000
+#define	APIC_DEST_NOSHORT		0x0
+#define	APIC_DEST_MASK			0x800
+#define	MAX_APIC_VECTOR			256
 
 
 #define	LVT_MASK	\

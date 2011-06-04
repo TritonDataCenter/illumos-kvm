@@ -4970,9 +4970,11 @@ get_desc_limit(const struct desc_struct *desc)
 	return (desc->c.b.limit0 | (desc->c.b.limit << 16));
 }
 
-unsigned long get_desc_base(const struct desc_struct *desc)
+unsigned long
+get_desc_base(const struct desc_struct *desc)
 {
-       return (unsigned)(desc->c.b.base0 | ((desc->c.b.base1) << 16) | ((desc->c.b.base2) << 24));
+	return (unsigned)(desc->c.b.base0 | ((desc->c.b.base1) << 16) |
+	    ((desc->c.b.base2) << 24));
 }
 
 

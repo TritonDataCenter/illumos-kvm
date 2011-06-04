@@ -223,50 +223,57 @@ is_long_mode(struct kvm_vcpu *vcpu)
 #endif
 }
 
-unsigned short kvm_read_fs(void)
+unsigned short
+kvm_read_fs(void)
 {
 	unsigned short seg;
 	__asm__("mov %%fs, %0" : "=g"(seg));
-	return seg;
+	return (seg);
 }
 
-unsigned short kvm_read_gs(void)
+unsigned short
+kvm_read_gs(void)
 {
 	unsigned short seg;
 	__asm__("mov %%gs, %0" : "=g"(seg));
-	return seg;
+	return (seg);
 }
 
-unsigned short kvm_read_ldt(void)
+unsigned short
+kvm_read_ldt(void)
 {
 	unsigned short ldt;
 	__asm__("sldt %0" : "=g"(ldt));
-	return ldt;
+	return (ldt);
 }
 
-void kvm_load_fs(unsigned short sel)
+void
+kvm_load_fs(unsigned short sel)
 {
 	__asm__("mov %0, %%fs" : : "rm"(sel));
 }
 
-void kvm_load_gs(unsigned short sel)
+void
+kvm_load_gs(unsigned short sel)
 {
 	__asm__("mov %0, %%gs" : : "rm"(sel));
 }
 
-void kvm_load_ldt(unsigned short sel)
+void
+kvm_load_ldt(unsigned short sel)
 {
 	__asm__("lldt %0" : : "rm"(sel));
 }
 
 
-void kvm_get_idt(struct descriptor_table *table)
+void
+kvm_get_idt(struct descriptor_table *table)
 {
 	__asm__("sidt %0" : "=m"(*table));
 }
 
-void kvm_get_gdt(struct descriptor_table *table)
+void
+kvm_get_gdt(struct descriptor_table *table)
 {
 	__asm__("sgdt %0" : "=m"(*table));
 }
-
