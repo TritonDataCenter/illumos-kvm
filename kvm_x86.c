@@ -1083,17 +1083,13 @@ make_all_cpus_request(struct kvm *kvm, unsigned int req)
 	int i;
 	cpuset_t set;
 	processorid_t me, cpu;
-#ifdef XXX_KVM_DECLARATION
-	cpumask_var_t cpus;
-#endif
-	int called = 0;
 	struct kvm_vcpu *vcpu;
 
 	CPUSET_ZERO(set);
 
 	mutex_enter(&kvm->requests_lock);
 	me = curthread->t_cpu->cpu_id;
-	for (i = 0; i < 1; i++) {
+	for (i = 0; i < kvm->online_vcpus; i++) {
 		vcpu = kvm->vcpus[i];
 		if (!vcpu)
 			break;
@@ -1112,9 +1108,8 @@ make_all_cpus_request(struct kvm *kvm, unsigned int req)
 		kpreempt_enable();
 	}
 	mutex_exit(&kvm->requests_lock);
-	called = 1;
 
-	return (called);
+	return (1);
 }
 
 void
@@ -1123,9 +1118,6 @@ kvm_flush_remote_tlbs(struct kvm *kvm)
 	if (make_all_cpus_request(kvm, KVM_REQ_TLB_FLUSH))
 		KVM_KSTAT_INC(kvm, kvmks_remote_tlb_flush);
 }
-
-
-
 
 gfn_t
 unalias_gfn(struct kvm *kvm, gfn_t gfn)
