@@ -1,51 +1,11 @@
 #include <sys/sysmacros.h>
 
-#include "processor-flags.h"
 #include "kvm_bitops.h"
-#include "msr.h"
-#include "irqflags.h"
+#include "kvm_cache_regs.h"
+#include "kvm_x86impl.h"
 #include "kvm_host.h"
-#include "kvm_x86host.h"
-#include "kvm_iodev.h"
-#include "kvm.h"
-#include "kvm_irq.h"
 #include "kvm_mmu.h"
-
-/*
- * XXX
- * We're missing system headers. I'm not usre why it compiles...
- */
-
-/*
- * XXX
- * Yet another set of stupid externs. I look forward to the day that I can just
- * simply get rid of them all!
- */
-extern ulong kvm_read_cr0_bits(struct kvm_vcpu *, ulong);
-extern page_t *alloc_page(size_t, int);
-extern caddr_t page_address(page_t *);
-extern struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *,
-    gfn_t);
-extern struct kvm_mmu_page *page_header(kvm_t *, hpa_t);
-extern uint64_t kvm_va2pa(caddr_t va);
-extern void kvm_set_pfn_accessed(struct kvm *, pfn_t);
-extern void kvm_set_pfn_dirty(pfn_t pfn);
-#define	virt_to_page(addr) pfn_to_page(hat_getpfnum(kas.a_hat, addr))
-extern void bitmap_zero(unsigned long *, int);
-extern page_t *pfn_to_page(pfn_t);
-void kvm_mmu_flush_tlb(struct kvm_vcpu *);
-extern int kvm_is_mmio_pfn(pfn_t pfn);
-extern void kvm_release_pfn_clean(pfn_t);
-extern void kvm_release_pfn_dirty(pfn_t);
-extern int is_paging(struct kvm_vcpu *vcpu);
-extern uint64_t kvm_pdptr_read(struct kvm_vcpu *, int);
-extern void kvm_inject_page_fault(struct kvm_vcpu *, unsigned long, uint32_t);
-extern int is_long_mode(struct kvm_vcpu *);
-extern int is_pae(struct kvm_vcpu *);
-extern int is_pse(struct kvm_vcpu *vcpu);
-extern gpa_t kvm_mmu_gva_to_gpa_read(struct kvm_vcpu *, gva_t, uint32_t *);
-extern int emulate_instruction(struct kvm_vcpu *, unsigned long, uint16_t, int);
-extern int zero_constructor(void *, void *, int);
+#include "msr-index.h"
 
 /*
  * When setting this variable to true it enables Two-Dimensional-Paging
@@ -57,6 +17,8 @@ extern int zero_constructor(void *, void *, int);
 int tdp_enabled = 0;
 
 static int oos_shadow = 1;
+
+#define	virt_to_page(addr) pfn_to_page(hat_getpfnum(kas.a_hat, addr))
 
 #define	PT_FIRST_AVAIL_BITS_SHIFT 9
 #define	PT64_SECOND_AVAIL_BITS_SHIFT 52

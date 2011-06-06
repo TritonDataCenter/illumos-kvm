@@ -304,3 +304,10 @@ find_first_zero_bit(const unsigned long *addr, unsigned long size)
 found:
 	return (result + ffz(tmp));
 }
+
+int
+zero_constructor(void *buf, void *arg, int tags)
+{
+	bzero(buf, (size_t)arg);
+	return (0);
+}

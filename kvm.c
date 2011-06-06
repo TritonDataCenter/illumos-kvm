@@ -223,6 +223,7 @@ static void hardware_disable_all(void);
 extern int sigprocmask(int, const sigset_t *, sigset_t *);
 extern void cli(void);
 extern void sti(void);
+extern int zero_constructor(void *, void *, int);
 static void kvm_destroy_vm(struct kvm *);
 static int kvm_avlmmucmp(const void *, const void *);
 
@@ -410,16 +411,6 @@ kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn)
 
 	return (0);
 }
-
-
-
-int
-zero_constructor(void *buf, void *arg, int tags)
-{
-	bzero(buf, (size_t)arg);
-	return (0);
-}
-
 
 /*
  * List of msr numbers which we expose to userspace through KVM_GET_MSRS

@@ -3,9 +3,8 @@
 
 #include <sys/types.h>
 
+#include "kvm_host.h"
 #include "processor-flags.h"
-
-enum kvm_reg;
 
 #define KVM_POSSIBLE_CR0_GUEST_BITS X86_CR0_TS
 #define KVM_POSSIBLE_CR4_GUEST_BITS				  \
