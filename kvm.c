@@ -34,7 +34,7 @@
 #include <sys/strsubr.h>
 #include <sys/stream.h>
 
-#include "bitops.h"
+#include "kvm_bitops.h"
 #include "vmx.h"
 #include "msr-index.h"
 #include "msr.h"

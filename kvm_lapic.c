@@ -24,7 +24,7 @@
 /*
  * XXX Need proper header files!
  */
-#include "bitops.h"
+#include "kvm_bitops.h"
 #include "kvm_cpuid.h"
 #include "msr.h"
 #include "irqflags.h"

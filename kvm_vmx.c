@@ -23,7 +23,7 @@
 /*
  * XXX Need proper header files!
  */
-#include "bitops.h"
+#include "kvm_bitops.h"
 #include "processor-flags.h"
 #include "msr.h"
 #include "kvm_cpuid.h"

@@ -24,7 +24,7 @@
 #include <sys/int_limits.h>
 #include <sys/x_call.h>
 
-#include "bitops.h"
+#include "kvm_bitops.h"
 #include "msr-index.h"
 #include "msr.h"
 #include "vmx.h"
