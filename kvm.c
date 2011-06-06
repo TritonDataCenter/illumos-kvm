@@ -48,7 +48,7 @@
 #include "kvm_iodev.h"
 #include "kvm.h"
 #include "kvm_irq.h"
-#include "tss.h"
+#include "kvm_tss.h"
 #include "kvm_ioapic.h"
 #include "kvm_coalesced_mmio.h"
 #include "kvm_i8254.h"
