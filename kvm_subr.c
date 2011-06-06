@@ -22,6 +22,7 @@
 #include "kvm_vmx.h"
 #include "irqflags.h"
 #include "kvm_iodev.h"
+#include "kvm_x86impl.h"
 #include "kvm_host.h"
 #include "kvm_x86host.h"
 #include "kvm.h"
@@ -147,20 +148,6 @@ rdmsrl_safe(unsigned msr, unsigned long long *p)
 
 	*p = native_read_msr_safe(msr, &err);
 	return (err);
-}
-
-int
-rdmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t *l, uint32_t *h)
-{
-	rdmsr(msr_no, *l, *h);
-	return (0);
-}
-
-int
-wrmsr_on_cpu(unsigned int cpu, uint32_t msr_no, uint32_t l, uint32_t h)
-{
-	wrmsr(msr_no, l, h);
-	return (0);
 }
 
 unsigned long
@@ -310,4 +297,37 @@ zero_constructor(void *buf, void *arg, int tags)
 {
 	bzero(buf, (size_t)arg);
 	return (0);
+}
+
+/*
+ * Volatile isn't enough to prevent the compiler from reordering the
+ * read/write functions for the control registers and messing everything up.
+ * A memory clobber would solve the problem, but would prevent reordering of
+ * all loads stores around it, which can hurt performance. Solution is to
+ * use a variable and mimic reads and writes to it to enforce serialization
+ */
+static unsigned long __force_order;
+
+unsigned long
+native_read_cr0(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr0,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return (val);
+}
+
+unsigned long
+native_read_cr4(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr4,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return (val);
+}
+
+unsigned long
+native_read_cr3(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr3,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return (val);
 }

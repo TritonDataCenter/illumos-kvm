@@ -40,10 +40,9 @@
 #include "kvm_i8254.h"
 #include "kvm_lapic.h"
 #include "kvm_cache_regs.h"
+#include "kvm_x86impl.h"
 
 #undef DEBUG
-
-extern struct vmcs **vmxarea;
 
 static int vcpuid;
 extern uint64_t native_read_msr_safe(unsigned int msr, int *err);
@@ -315,9 +314,6 @@ extern uint64_t shadow_dirty_mask;
 
 extern pfn_t hat_getpfnum(hat_t *hat, caddr_t addr);
 extern inline void ept_sync_global(void);
-extern uint64_t *vmxarea_pa;
-extern list_t **vcpus_on_cpu;
-
 
 extern struct vcpu_vmx *to_vmx(struct kvm_vcpu *vcpu);
 extern void vmcs_writel(unsigned long field, unsigned long value);

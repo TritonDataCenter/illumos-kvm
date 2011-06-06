@@ -94,8 +94,6 @@ do {								\
 	(val2) = (uint32_t)(__val >> 32);				\
 } while (0)
 
-extern void wrmsr(unsigned msr, unsigned low, unsigned high);
-
 #define rdmsrl(msr, val)			\
 	((val) = native_read_msr((msr)))
 
@@ -155,11 +153,6 @@ do {                                                            \
 
 struct msr *msrs_alloc(void);
 void msrs_free(struct msr *msrs);
-
-extern int rdmsr_on_cpu(unsigned int cpu,
-    uint32_t msr_no, uint32_t *l, uint32_t *h);
-extern int wrmsr_on_cpu(unsigned int cpu,
-    uint32_t msr_no, uint32_t l, uint32_t h);
 
 #endif /* _KERNEL */
 #endif /* __ASSEMBLY__ */

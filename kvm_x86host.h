@@ -12,6 +12,10 @@
 #include "kvm.h"
 #include "kvm_types.h"
 
+#ifndef offsetof
+#define offsetof(s, m) ((size_t)(&((s *)0)->m))
+#endif
+
 #define	KVM_MAX_VCPUS	64
 #define	KVM_MEMORY_SLOTS	32
 /* memory slots that are not exposted to userspace */

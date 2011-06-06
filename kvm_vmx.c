@@ -19,113 +19,25 @@
 
 #include <sys/types.h>
 #include <sys/mach_mmu.h>
+#include <asm/cpu.h>
+#include <sys/x86_archext.h>
 
-/*
- * XXX Need proper header files!
- */
 #include "kvm_bitops.h"
-#include "processor-flags.h"
 #include "msr.h"
 #include "kvm_cpuid.h"
-#include "irqflags.h"
+#include "kvm_impl.h"
+#include "kvm_x86impl.h"
+#include "kvm_cache_regs.h"
 #include "kvm_host.h"
-#include "kvm_x86host.h"
 #include "kvm_iodev.h"
-#include "kvm.h"
-#include "kvm_apicdef.h"
-#include "kvm_ioapic.h"
-#include "kvm_lapic.h"
 #include "kvm_irq.h"
 #include "kvm_mmu.h"
 #include "kvm_vmx.h"
 
-/*
- * XXX
- * The fact that I'm externing these is a sign of failure
- */
-extern void kvm_xcall(processorid_t, kvm_xcall_t, void *);
-extern int is_long_mode(struct kvm_vcpu *vcpu);
-extern void kvm_migrate_timers(struct kvm_vcpu *vcpu);
-extern ulong kvm_read_cr0_bits(struct kvm_vcpu *vcpu, ulong mask);
-extern void kvm_rip_write(struct kvm_vcpu *, unsigned long);
-extern int kvm_exception_is_soft(unsigned int);
-extern uint64_t kvm_va2pa(caddr_t va);
-extern int kvm_get_msr_common(struct kvm_vcpu *, uint32_t, uint64_t *);
-extern int kvm_set_msr_common(struct kvm_vcpu *, uint32_t, uint64_t);
-extern int getcr4(void);
-extern void setcr4(ulong_t val);
-extern void kvm_enable_efer_bits(uint64_t);
-extern int is_paging(struct kvm_vcpu *);
-extern int is_pae(struct kvm_vcpu *vcpu);
-extern ulong kvm_read_cr4(struct kvm_vcpu *);
-extern int is_protmode(struct kvm_vcpu *vcpu);
+/* XXX These shouldn't need to be static */
 extern kmutex_t vmx_vpid_lock;
 extern ulong_t *vmx_vpid_bitmap;
 extern size_t vpid_bitmap_words;
-extern unsigned long native_read_cr0(void);
-#define	read_cr0()	(native_read_cr0())
-extern unsigned long native_read_cr4(void);
-#define	read_cr4()	(native_read_cr4())
-extern unsigned long native_read_cr3(void);
-#define	read_cr3()	(native_read_cr3())
-extern void kvm_set_cr8(struct kvm_vcpu *, unsigned long);
-extern void kvm_set_apic_base(struct kvm_vcpu *, uint64_t);
-extern void fx_init(struct kvm_vcpu *);
-extern void kvm_register_write(struct kvm_vcpu *vcpu,
-    enum kvm_reg reg, unsigned long val);
-extern ulong kvm_read_cr0(struct kvm_vcpu *vcpu);
-extern int emulate_instruction(struct kvm_vcpu *, unsigned long,
-    uint16_t, int);
-extern void kvm_queue_exception(struct kvm_vcpu *vcpu, unsigned nr);
-extern int kvm_event_needs_reinjection(struct kvm_vcpu *);
-extern int kvm_mmu_unprotect_page_virt(struct kvm_vcpu *, gva_t);
-extern int kvm_mmu_page_fault(struct kvm_vcpu *, gva_t, uint32_t);
-extern int kvm_emulate_halt(struct kvm_vcpu *);
-extern int kvm_emulate_pio(struct kvm_vcpu *, int, int, unsigned);
-extern unsigned long kvm_register_read(struct kvm_vcpu *, enum kvm_reg);
-extern void kvm_set_cr0(struct kvm_vcpu *, unsigned long);
-extern void kvm_set_cr3(struct kvm_vcpu *, unsigned long);
-extern void kvm_set_cr4(struct kvm_vcpu *, unsigned long);
-extern void kvm_set_cr8(struct kvm_vcpu *, unsigned long);
-extern unsigned long kvm_get_cr8(struct kvm_vcpu *);
-extern void kvm_lmsw(struct kvm_vcpu *, unsigned long);
-extern ulong kvm_read_cr4_bits(struct kvm_vcpu *, ulong);
-extern int kvm_require_cpl(struct kvm_vcpu *, int);
-extern void kvm_emulate_cpuid(struct kvm_vcpu *);
-extern int kvm_emulate_hypercall(struct kvm_vcpu *);
-extern void kvm_mmu_invlpg(struct kvm_vcpu *, gva_t);
-extern void kvm_clear_interrupt_queue(struct kvm_vcpu *);
-extern void kvm_clear_exception_queue(struct kvm_vcpu *);
-extern int kvm_task_switch(struct kvm_vcpu *, uint16_t, int);
-extern int kvm_mmu_get_spte_hierarchy(struct kvm_vcpu *,
-    uint64_t, uint64_t sptes[4]);
-extern void kvm_queue_interrupt(struct kvm_vcpu *, uint8_t, int);
-extern int kvm_vcpu_init(struct kvm_vcpu *, struct kvm *, unsigned);
-extern int irqchip_in_kernel(struct kvm *kvm);
-extern unsigned long kvm_rip_read(struct kvm_vcpu *);
-extern struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
-    uint32_t function, uint32_t index);
-
-
-/*  These are the region types  */
-#define	MTRR_TYPE_UNCACHABLE	0
-#define	MTRR_TYPE_WRCOMB	1
-#define	MTRR_TYPE_WRTHROUGH	4
-#define	MTRR_TYPE_WRPROT	5
-#define	MTRR_TYPE_WRBACK	6
-#define	MTRR_NUM_TYPES		7
-
-extern uint8_t kvm_get_guest_memory_type(struct kvm_vcpu *, gfn_t);
-extern uint32_t bit(int);
-extern int kvm_init(void *, unsigned int);
-extern void kvm_enable_tdp(void);
-extern void kvm_disable_tdp(void);
-
-/*
- * XXX These should be from <asm/cpu.h>
- */
-extern void cli(void);
-extern void sti(void);
 
 static int bypass_guest_pf = 1;
 /* XXX This should be static */
@@ -143,11 +55,12 @@ static int emulate_invalid_guest_state = 0;
  * is loaded on linux.
  */
 
-struct vmcs **vmxarea;  /* 1 per cpu */
-struct vmcs **current_vmcs;
+static struct vmcs **vmxarea;  /* 1 per cpu */
+static struct vmcs **current_vmcs;
+/* XXX Should shared_msrs be static? */
 struct kvm_shared_msrs **shared_msrs;
-list_t **vcpus_on_cpu;
-uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
+static list_t **vcpus_on_cpu;
+static uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
 
 #define	KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
 	(X86_CR0_WP | X86_CR0_NE | X86_CR0_NW | X86_CR0_CD)

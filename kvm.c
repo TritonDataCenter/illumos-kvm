@@ -54,6 +54,7 @@
 #include "kvm_i8254.h"
 #include "kvm_mmu.h"
 #include "kvm_cache_regs.h"
+#include "kvm_x86impl.h"
 
 #undef DEBUG
 
@@ -572,8 +573,6 @@ kvm_arch_check_processor_compat(void *rtn)
 {
 	kvm_x86_ops->check_processor_compatibility(rtn);
 }
-
-extern void kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg);
 
 int
 kvm_init(void *opaque, unsigned int vcpu_size)
@@ -2000,45 +1999,6 @@ __vmwrite(unsigned long field, unsigned long value)
 #endif
 	}
 }
-
-/*
- * Volatile isn't enough to prevent the compiler from reordering the
- * read/write functions for the control registers and messing everything up.
- * A memory clobber would solve the problem, but would prevent reordering of
- * all loads stores around it, which can hurt performance. Solution is to
- * use a variable and mimic reads and writes to it to enforce serialization
- */
-static unsigned long __force_order;
-
-unsigned long
-native_read_cr0(void)
-{
-	unsigned long val;
-	__asm__ volatile("mov %%cr0,%0\n\t" : "=r" (val), "=m" (__force_order));
-	return (val);
-}
-
-#define	read_cr0()	(native_read_cr0())
-
-unsigned long
-native_read_cr4(void)
-{
-	unsigned long val;
-	__asm__ volatile("mov %%cr4,%0\n\t" : "=r" (val), "=m" (__force_order));
-	return (val);
-}
-
-#define	read_cr4()	(native_read_cr4())
-
-unsigned long
-native_read_cr3(void)
-{
-	unsigned long val;
-	__asm__ volatile("mov %%cr3,%0\n\t" : "=r" (val), "=m" (__force_order));
-	return (val);
-}
-
-#define	read_cr3()	(native_read_cr3())
 
 inline ulong kvm_read_cr4(struct kvm_vcpu *vcpu);
 
