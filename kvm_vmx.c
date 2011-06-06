@@ -62,7 +62,6 @@ extern int is_protmode(struct kvm_vcpu *vcpu);
 extern kmutex_t vmx_vpid_lock;
 extern ulong_t *vmx_vpid_bitmap;
 extern size_t vpid_bitmap_words;
-extern long find_first_zero_bit(const unsigned long *, unsigned long);
 extern unsigned long native_read_cr0(void);
 #define	read_cr0()	(native_read_cr0())
 extern unsigned long native_read_cr4(void);

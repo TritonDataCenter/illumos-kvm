@@ -19,27 +19,15 @@
  *
  */
 
+#include <sys/mutex.h>
 #include <sys/sysmacros.h>
 
-/*
- * XXX Need proper header files!
- */
 #include "kvm_bitops.h"
-#include "msr.h"
-#include "irqflags.h"
+#include "kvm_apicdef.h"
 #include "kvm_msidef.h"
 #include "kvm_host.h"
-#include "kvm_x86host.h"
-#include "kvm_iodev.h"
-#include "kvm.h"
-#include "kvm_apicdef.h"
-#include "kvm_lapic.h"
-#include "kvm_ioapic.h"
 #include "kvm_irq.h"
-
-extern long find_first_zero_bit(const unsigned long *, unsigned long);
-extern int kvm_pic_set_irq(void *, int, int);
-extern int irqchip_in_kernel(struct kvm *kvm);
+#include "kvm_ioapic.h"
 
 static int
 kvm_irq_line_state(unsigned long *irq_state, int irq_source_id, int level)

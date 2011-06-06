@@ -248,32 +248,6 @@ extern void kvm_mmu_flush_tlb(struct kvm_vcpu *);
 extern void kvm_mmu_unload(struct kvm_vcpu *vcpu);
 extern int kvm_pic_set_irq(void *, int, int);
 
-/*
- * Find the first cleared bit in a memory region.
- */
-unsigned long
-find_first_zero_bit(const unsigned long *addr, unsigned long size)
-{
-	const unsigned long *p = addr;
-	unsigned long result = 0;
-	unsigned long tmp;
-
-	while (size & ~(64-1)) {
-		if (~(tmp = *(p++)))
-			goto found;
-		result += 64;
-		size -= 64;
-	}
-	if (!size)
-		return (result);
-
-	tmp = (*p) | (~0UL << size);
-	if (tmp == ~0UL)	/* Are any bits zero? */
-		return (result + size);	/* Nope. */
-found:
-	return (result + ffz(tmp));
-}
-
 
 static void vmx_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l);
 extern void update_exception_bitmap(struct kvm_vcpu *vcpu);
@@ -284,12 +258,6 @@ static int setup_vmcs_config(struct vmcs_config *vmcs_conf);
 
 
 struct kvm_x86_ops *kvm_x86_ops;
-
-
-
-
-
-
 
 inline int
 kvm_exception_is_soft(unsigned int nr)

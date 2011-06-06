@@ -17,6 +17,7 @@
 #include <sys/cpuvar.h>
 #include <sys/segments.h>
 
+#include "kvm_bitops.h"
 #include "msr.h"
 #include "kvm_vmx.h"
 #include "irqflags.h"
@@ -277,3 +278,31 @@ kvm_get_gdt(struct descriptor_table *table)
 {
 	__asm__("sgdt %0" : "=m"(*table));
 }
+
+/*
+ * Find the first cleared bit in a memory region.
+ */
+unsigned long
+find_first_zero_bit(const unsigned long *addr, unsigned long size)
+{
+	const unsigned long *p = addr;
+	unsigned long result = 0;
+	unsigned long tmp;
+
+	while (size & ~(64-1)) {
+		if (~(tmp = *(p++)))
+			goto found;
+		result += 64;
+		size -= 64;
+	}
+	if (!size)
+		return (result);
+
+	tmp = (*p) | (~0UL << size);
+	if (tmp == ~0UL)	/* Are any bits zero? */
+		return (result + size);	/* Nope. */
+found:
+	return (result + ffz(tmp));
+}
+
+

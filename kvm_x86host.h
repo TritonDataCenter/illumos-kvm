@@ -828,6 +828,7 @@ void kvm_load_gs(unsigned short sel);
 void kvm_load_ldt(unsigned short sel);
 void kvm_get_idt(struct descriptor_table *table);
 void kvm_get_gdt(struct descriptor_table *table);
+unsigned long find_first_zero_bit(const unsigned long *, unsigned long);
 
 extern unsigned long kvm_read_tr_base(void);
 
