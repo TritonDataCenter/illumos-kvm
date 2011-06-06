@@ -34,10 +34,6 @@
 #include "kvm_host.h"
 #include "kvm_iodev.h"
 
-#define	PER_CPU_ATTRIBUTES
-#define	PER_CPU_DEF_ATTRIBUTES
-#define	PER_CPU_BASE_SECTION ".data"
-#include "percpu-defs.h"
 #include "kvm_coalesced_mmio.h"
 #include "kvm.h"
 #include "kvm_irq.h"
