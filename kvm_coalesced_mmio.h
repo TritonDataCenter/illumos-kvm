@@ -9,6 +9,7 @@
  *  Author: Laurent Vivier <Laurent.Vivier@bull.net>
  *
  */
+#include "kvm_iodev.h"
 
 #ifdef CONFIG_KVM_MMIO
 

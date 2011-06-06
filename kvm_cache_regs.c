@@ -2,22 +2,10 @@
  * Ported from Linux by Joyent.
  * Copyright 2011 Joyent, Inc.
  */
-/*
- * XXX Need proper header files!
- */
-#include "kvm_bitops.h"
-#include "msr.h"
-#include "irqflags.h"
-#include "kvm_host.h"
-#include "kvm_x86host.h"
-#include "kvm_iodev.h"
-#include "kvm.h"
-#include "kvm_apicdef.h"
-#include "kvm_ioapic.h"
-#include "kvm_lapic.h"
-#include "kvm_irq.h"
-#include "kvm_cache_regs.h"
 
+#include "kvm_bitops.h"
+#include "kvm_host.h"
+#include "kvm_cache_regs.h"
 
 unsigned long
 kvm_register_read(struct kvm_vcpu *vcpu, enum kvm_reg reg)
