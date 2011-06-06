@@ -35,7 +35,7 @@
 #include "apicdef.h"
 #include "kvm_ioapic.h"
 #include "kvm_lapic.h"
-#include "irq.h"
+#include "kvm_irq.h"
 #include "kvm_mmu.h"
 #include "vmx.h"
 

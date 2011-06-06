@@ -35,7 +35,7 @@
 #include "apicdef.h"
 #include "kvm_lapic.h"
 #include "kvm_ioapic.h"
-#include "irq.h"
+#include "kvm_irq.h"
 
 extern long find_first_zero_bit(const unsigned long *, unsigned long);
 extern int kvm_pic_set_irq(void *, int, int);

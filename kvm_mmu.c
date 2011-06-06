@@ -8,7 +8,7 @@
 #include "kvm_x86host.h"
 #include "kvm_iodev.h"
 #include "kvm.h"
-#include "irq.h"
+#include "kvm_irq.h"
 #include "kvm_mmu.h"
 
 /*

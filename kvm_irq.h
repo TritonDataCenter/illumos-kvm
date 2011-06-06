@@ -1,5 +1,5 @@
 /*
- * irq.h: in kernel interrupt controller related definitions
+ * kvm_irq.h: in kernel interrupt controller related definitions
  * Copyright (c) 2007, Intel Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -22,16 +22,12 @@
 #ifndef __IRQ_H
 #define __IRQ_H
 
-#ifdef XXX
-#include <linux/mm_types.h>
-#include <linux/hrtimer.h>
-#include <linux/kvm_host.h>
-#include <linux/spinlock.h>
+#include <sys/mutex.h>
+#include "kvm_host.h"
 
 #include "kvm_iodev.h"
 #include "kvm_ioapic.h"
 #include "kvm_lapic.h"
-#endif /*XXX*/
 
 #define PIC_NUM_PINS 16
 #define SELECT_PIC(irq) \
@@ -82,11 +78,8 @@ int kvm_pic_read_irq(struct kvm *kvm);
 void kvm_pic_update_irq(struct kvm_pic *s);
 void kvm_pic_clear_isr_ack(struct kvm *kvm);
 
-static struct kvm_pic *pic_irqchip(struct kvm *kvm)
-{
-	return kvm->arch.vpic;
-}
-
+struct kvm_pic *pic_irqchip(struct kvm *kvm);
+int irqchip_in_kernel(struct kvm *kvm);
 
 void kvm_pic_reset(struct kvm_kpic_state *s);
 void kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu);

@@ -20,7 +20,7 @@
 #include "kvm.h"
 #include "apicdef.h"
 #include "kvm_ioapic.h"
-#include "irq.h"
+#include "kvm_irq.h"
 #include "kvm_iodev.h"
 #include "kvm_coalesced_mmio.h"
 

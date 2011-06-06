@@ -35,7 +35,7 @@
 #include "apicdef.h"
 #include "kvm_ioapic.h"
 #include "kvm_lapic.h"
-#include "irq.h"
+#include "kvm_irq.h"
 
 int __apic_accept_irq(struct kvm_lapic *, int, int, int, int);
 /* XXX */

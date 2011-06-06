@@ -40,7 +40,7 @@
 #include "kvm.h"
 #include "apicdef.h"
 #include "kvm_ioapic.h"
-#include "irq.h"
+#include "kvm_irq.h"
 
 static int ioapic_deliver(struct kvm_ioapic *, int);
 

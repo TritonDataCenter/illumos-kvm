@@ -21,21 +21,29 @@
  * Copyright 2011 Joyent, Inc. All rights reserved.
  */
 
-/*
- * XXX These header includes are really broken
- */
-#include "msr.h"
-#include "irqflags.h"
 #include "kvm_host.h"
-#include "kvm_x86host.h"
-#include "kvm_iodev.h"
-#include "kvm.h"
-#include "irq.h"
-#include "kvm_lapic.h"
-#include "kvm_ioapic.h"
+#include "kvm_i8254.h"
+#include "kvm_irq.h"
 
-/* XXX This should never exist */
-extern int irqchip_in_kernel(struct kvm *);
+struct kvm_pic *
+pic_irqchip(struct kvm *kvm)
+{
+	return (kvm->arch.vpic);
+}
+
+int
+irqchip_in_kernel(struct kvm *kvm)
+{
+	int ret;
+
+	ret = (pic_irqchip(kvm) != NULL);
+#ifdef XXX
+	smp_rmb();
+#else
+	XXX_KVM_SYNC_PROBE;
+#endif
+	return (ret);
+}
 
 /*
  * check if there are pending timer events

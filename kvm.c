@@ -47,7 +47,7 @@
 #include "apicdef.h"
 #include "kvm_iodev.h"
 #include "kvm.h"
-#include "irq.h"
+#include "kvm_irq.h"
 #include "tss.h"
 #include "kvm_ioapic.h"
 #include "kvm_coalesced_mmio.h"

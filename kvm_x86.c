@@ -40,7 +40,7 @@
 #include "percpu-defs.h"
 #include "kvm_coalesced_mmio.h"
 #include "kvm.h"
-#include "irq.h"
+#include "kvm_irq.h"
 #include "kvm_i8254.h"
 #include "kvm_lapic.h"
 #include "kvm_cache_regs.h"
@@ -438,20 +438,6 @@ kvm_dev_ioctl_check_extension(long ext, int *rval_p)
 	}
 
 	return (r);
-}
-
-int
-irqchip_in_kernel(struct kvm *kvm)
-{
-	int ret;
-
-	ret = (pic_irqchip(kvm) != NULL);
-#ifdef XXX
-	smp_rmb();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
-	return (ret);
 }
 
 extern page_t *alloc_page(size_t size, int flag);

@@ -41,7 +41,7 @@
 #include "apicdef.h"
 #include "kvm_ioapic.h"
 #include "kvm_lapic.h"
-#include "irq.h"
+#include "kvm_irq.h"
 
 static void
 pic_clear_isr(struct kvm_kpic_state *s, int irq)
