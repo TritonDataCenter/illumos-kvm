@@ -18,32 +18,19 @@
  * Ported to illumos by Joyent.
  * Copyright 2011 Joyent, Inc. All rights reserved.
  */
+#include <sys/types.h>
 
-#include <sys/atomic.h>
-
-/*
- * XXX Need proper header files!
- */
 #include "kvm_bitops.h"
-#include "kvm_cpuid.h"
 #include "msr.h"
-#include "irqflags.h"
-#include "kvm_host.h"
-#include "kvm_x86host.h"
-#include "kvm_iodev.h"
-#include "kvm.h"
 #include "kvm_apicdef.h"
-#include "kvm_ioapic.h"
+#include "kvm_cpuid.h"
+#include "kvm_x86host.h"
+#include "kvm_x86impl.h"
 #include "kvm_lapic.h"
+#include "kvm_ioapic.h"
 #include "kvm_irq.h"
 
-int __apic_accept_irq(struct kvm_lapic *, int, int, int, int);
-/* XXX */
-extern caddr_t page_address(page_t *);
-extern int irqchip_in_kernel(struct kvm *kvm);
-extern unsigned long kvm_rip_read(struct kvm_vcpu *);
-extern struct kvm_cpuid_entry2 *kvm_find_cpuid_entry(struct kvm_vcpu *vcpu,
-    uint32_t function, uint32_t index);
+static int __apic_accept_irq(struct kvm_lapic *, int, int, int, int);
 
 #define	APIC_BUS_CYCLE_NS 1
 #define	APIC_LDR	0xD0
@@ -406,7 +393,7 @@ kvm_apic_match_dest(struct kvm_vcpu *vcpu, struct kvm_lapic *source,
  * Add a pending IRQ into lapic.
  * Return 1 if successfully added and 0 if discarded.
  */
-int
+static int
 __apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
     int vector, int level, int trig_mode)
 {
