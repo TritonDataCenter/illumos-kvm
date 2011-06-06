@@ -23,7 +23,7 @@
 #include <sys/mdb_modapi.h>
 
 #include "msr.h"
-#include "vmx.h"
+#include "kvm_vmx.h"
 #include "irqflags.h"
 #include "kvm_iodev.h"
 #include "kvm_host.h"

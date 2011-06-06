@@ -35,7 +35,7 @@
 #include <sys/stream.h>
 
 #include "kvm_bitops.h"
-#include "vmx.h"
+#include "kvm_vmx.h"
 #include "msr-index.h"
 #include "msr.h"
 #include "irqflags.h"
@@ -44,7 +44,7 @@
 #include "processor-flags.h"
 #include "kvm_cpuid.h"
 #include "hyperv.h"
-#include "apicdef.h"
+#include "kvm_apicdef.h"
 #include "kvm_iodev.h"
 #include "kvm.h"
 #include "kvm_irq.h"

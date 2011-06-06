@@ -32,7 +32,7 @@
 #include "kvm_x86host.h"
 #include "kvm_iodev.h"
 #include "kvm.h"
-#include "apicdef.h"
+#include "kvm_apicdef.h"
 #include "kvm_lapic.h"
 #include "kvm_ioapic.h"
 #include "kvm_irq.h"
