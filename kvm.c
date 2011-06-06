@@ -719,9 +719,7 @@ out_fail:
 	return (r);
 }
 
-
-
-static struct kvm_shared_msrs_global shared_msrs_global;
+struct kvm_shared_msrs_global shared_msrs_global;
 
 void
 kvm_define_shared_msr(unsigned slot, uint32_t msr)
@@ -1494,6 +1492,18 @@ kvm_free_physmem_slot(struct kvm_memory_slot *free,
 #else
 	XXX_KVM_PROBE;
 #endif
+}
+
+void
+kvm_free_physmem(struct kvm *kvm)
+{
+	int ii;
+	struct kvm_memslots *slots = kvm->memslots;
+
+	for (ii = 0; ii < slots->nmemslots; ii++)
+		kvm_free_physmem_slot(&slots->memslots[ii], NULL);
+
+	kmem_free(kvm->memslots, sizeof (struct kvm_memslots));
 }
 
 extern int
@@ -3183,18 +3193,6 @@ kvm_hv_msr_partition_wide(uint32_t msr)
 	return (r);
 }
 
-inline page_t *
-compound_head(page_t *page)
-{
-	/* XXX - linux links page_t together. */
-	return (page);
-}
-
-inline void
-get_page(page_t *page)
-{
-	page = compound_head(page);
-}
 
 extern pfn_t physmax;
 
@@ -3770,7 +3768,7 @@ kvm_clear_interrupt_queue(struct kvm_vcpu *vcpu)
 static void kvm_on_user_return(struct kvm_vcpu *,
     struct kvm_user_return_notifier *);
 
-static void
+void
 shared_msr_update(unsigned slot, uint32_t msr)
 {
 	struct kvm_shared_msrs *smsr;
@@ -3789,15 +3787,6 @@ shared_msr_update(unsigned slot, uint32_t msr)
 	rdmsrl_safe(msr, (unsigned long long *)&value);
 	smsr->values[slot].host = value;
 	smsr->values[slot].curr = value;
-}
-
-void
-kvm_shared_msr_cpu_online(void)
-{
-	unsigned i;
-
-	for (i = 0; i < shared_msrs_global.nr; i++)
-		shared_msr_update(i, shared_msrs_global.msrs[i]);
 }
 
 void
@@ -4872,30 +4861,12 @@ out:
 	return (r);
 }
 
-
-
-
-
 static int
 is_vm86_segment(struct kvm_vcpu *vcpu, int seg)
 {
 	return (seg != VCPU_SREG_LDTR) && (seg != VCPU_SREG_TR) &&
 	    (kvm_get_rflags(vcpu) & X86_EFLAGS_VM);
 }
-
-static inline unsigned long
-get_desc_limit(const struct desc_struct *desc)
-{
-	return (desc->c.b.limit0 | (desc->c.b.limit << 16));
-}
-
-unsigned long
-get_desc_base(const struct desc_struct *desc)
-{
-	return (unsigned)(desc->c.b.base0 | ((desc->c.b.base1) << 16) |
-	    ((desc->c.b.base2) << 24));
-}
-
 
 static void
 seg_desct_to_kvm_desct(struct desc_struct *seg_desc, uint16_t selector,

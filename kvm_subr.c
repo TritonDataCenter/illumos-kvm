@@ -331,3 +331,29 @@ native_read_cr3(void)
 	__asm__ volatile("mov %%cr3,%0\n\t" : "=r" (val), "=m" (__force_order));
 	return (val);
 }
+
+inline unsigned long
+get_desc_limit(const struct desc_struct *desc)
+{
+	return (desc->c.b.limit0 | (desc->c.b.limit << 16));
+}
+
+unsigned long
+get_desc_base(const struct desc_struct *desc)
+{
+	return (unsigned)(desc->c.b.base0 | ((desc->c.b.base1) << 16) |
+	    ((desc->c.b.base2) << 24));
+}
+
+inline page_t *
+compound_head(page_t *page)
+{
+	/* XXX - linux links page_t together. */
+	return (page);
+}
+
+inline void
+get_page(page_t *page)
+{
+	page = compound_head(page);
+}

@@ -6,6 +6,7 @@
 #define	__KVM_X86_IMPL_H
 
 #include <sys/types.h>
+#include <vm/page.h>
 
 #include "kvm_host.h"
 #include "kvm_x86.h"
@@ -36,6 +37,7 @@ extern int zero_constructor(void *, void *, int);
 
 typedef void (*kvm_xcall_t)(void *);
 extern void kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg);
+extern int kvm_xcall_func(kvm_xcall_t func, void *arg);
 
 /*
  * All the follwoing definitions are ones that are expected to just be in
@@ -95,4 +97,10 @@ unsigned long native_read_cr3(void);
 #define	read_cr3()	(native_read_cr3())
 
 uint32_t bit(int bitno);
+inline unsigned long get_desc_limit(const struct desc_struct *desc);
+unsigned long get_desc_base(const struct desc_struct *desc);
+
+inline page_t *compound_head(page_t *page);
+inline void get_page(page_t *page);
+
 #endif

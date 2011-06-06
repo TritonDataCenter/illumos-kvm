@@ -1,21 +1,13 @@
-
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/errno.h>
-#include <sys/uio.h>
-#include <sys/buf.h>
 #include <sys/modctl.h>
-#include <sys/open.h>
 #include <sys/kmem.h>
-#include <sys/poll.h>
 #include <sys/conf.h>
 #include <sys/cmn_err.h>
 #include <sys/stat.h>
 #include <sys/ddi.h>
 #include <sys/sunddi.h>
-#include <sys/atomic.h>
-#include <sys/spl.h>
-#include <sys/thread.h>
 #include <sys/cpuvar.h>
 #include <vm/hat_i86.h>
 #include <sys/segments.h>
@@ -25,40 +17,21 @@
 #include <sys/x_call.h>
 
 #include "kvm_bitops.h"
-#include "msr-index.h"
-#include "msr.h"
-#include "kvm_vmx.h"
-#include "processor-flags.h"
 #include "kvm_apicdef.h"
 #include "kvm_types.h"
 #include "kvm_host.h"
-#include "kvm_iodev.h"
 
 #include "kvm_coalesced_mmio.h"
-#include "kvm.h"
 #include "kvm_irq.h"
 #include "kvm_i8254.h"
-#include "kvm_lapic.h"
-#include "kvm_cache_regs.h"
 #include "kvm_x86impl.h"
 
 #undef DEBUG
 
-static int vcpuid;
-extern uint64_t native_read_msr_safe(unsigned int msr, int *err);
-extern int native_write_msr_safe(unsigned int msr, unsigned low, unsigned high);
-
-extern unsigned long find_first_zero_bit(const unsigned long *addr,
-    unsigned long size);
-extern uint32_t vmcs_read32(unsigned long field);
-extern uint16_t vmcs_read16(unsigned long field);
-extern void kvm_rip_write(struct kvm_vcpu *vcpu, unsigned long val);
-extern int kvm_is_mmio_pfn(pfn_t pfn);
-extern int is_long_mode(struct kvm_vcpu *vcpu);
-extern void kvm_mmu_unload(struct kvm_vcpu *);
-extern void kvm_free_physmem_slot(struct kvm_memory_slot *,
-    struct kvm_memory_slot *);
-extern unsigned long get_desc_base(const struct desc_struct *desc);
+extern struct kvm_shared_msrs_global shared_msrs_global;
+extern void shared_msr_update(unsigned slot, uint32_t msr);
+extern caddr_t smmap64(caddr_t addr, size_t len, int prot, int flags,
+    int fd, off_t pos);
 
 unsigned long
 segment_base(uint16_t selector)
@@ -289,12 +262,6 @@ kvm_arch_destroy_vm(struct kvm *kvmp)
 	kmem_free(kvmp, sizeof (struct kvm));
 }
 
-extern int getcr4(void);
-extern void setcr4(ulong_t val);
-extern int getcr0(void);
-extern ulong_t getcr3(void);
-extern pfn_t hat_getpfnum(struct hat *hat, caddr_t);
-
 #define	X86_CR4_VMXE	0x00002000 /* enable VMX virtualization */
 #define	MSR_IA32_FEATURE_CONTROL	0x0000003a
 
@@ -303,24 +270,14 @@ extern pfn_t hat_getpfnum(struct hat *hat, caddr_t);
 
 #define	ASM_VMX_VMXON_RAX		".byte 0xf3, 0x0f, 0xc7, 0x30"
 
-extern uint64_t shadow_trap_nonpresent_pte;
-extern uint64_t shadow_notrap_nonpresent_pte;
-extern uint64_t shadow_base_present_pte;
-extern uint64_t shadow_nx_mask;
-extern uint64_t shadow_x_mask;	/* mutual exclusive with nx_mask */
-extern uint64_t shadow_user_mask;
-extern uint64_t shadow_accessed_mask;
-extern uint64_t shadow_dirty_mask;
+void
+kvm_shared_msr_cpu_online(void)
+{
+	unsigned i;
 
-extern pfn_t hat_getpfnum(hat_t *hat, caddr_t addr);
-extern inline void ept_sync_global(void);
-
-extern struct vcpu_vmx *to_vmx(struct kvm_vcpu *vcpu);
-extern void vmcs_writel(unsigned long field, unsigned long value);
-extern unsigned long vmcs_readl(unsigned long field);
-
-
-extern void kvm_shared_msr_cpu_online(void);
+	for (i = 0; i < shared_msrs_global.nr; i++)
+		shared_msr_update(i, shared_msrs_global.msrs[i]);
+}
 
 int
 kvm_arch_hardware_enable(void *garbage)
@@ -432,29 +389,17 @@ kvm_dev_ioctl_check_extension(long ext, int *rval_p)
 	return (r);
 }
 
-extern page_t *alloc_page(size_t size, int flag);
-extern caddr_t page_address(page_t *page);
-
-
-
 static inline int
 apic_x2apic_mode(struct kvm_lapic *apic)
 {
 	return (apic->vcpu->arch.apic_base & X2APIC_ENABLE);
 }
 
-extern unsigned long kvm_rip_read(struct kvm_vcpu *vcpu);
-
-
 void
 kvm_inject_nmi(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.nmi_pending = 1;
 }
-
-extern void kvm_timer_fire(void *);
-
-extern int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu);
 
 int
 kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
@@ -589,45 +534,6 @@ __attribute__((__aligned__(PAGESIZE)))unsigned long
     vmx_msr_bitmap_longmode[PAGESIZE / sizeof (unsigned long)];
 #endif
 
-static void
-vmcs_write16(unsigned long field, uint16_t value)
-{
-	vmcs_writel(field, value);
-}
-
-static void
-vmcs_write32(unsigned long field, uint32_t value)
-{
-	vmcs_writel(field, value);
-}
-
-static void
-vmcs_write64(unsigned long field, uint64_t value)
-{
-	vmcs_writel(field, value);
-#ifndef CONFIG_X86_64
-	/*CSTYLED*/
-	__asm__ volatile ("");
-	vmcs_writel(field+1, value >> 32);
-#endif
-}
-
-extern int enable_ept;
-extern int enable_unrestricted_guest;
-extern int emulate_invalid_guest_state;
-
-extern void vmcs_clear(uint64_t vmcs_pa);
-extern void vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
-extern void vmx_vcpu_put(struct kvm_vcpu *vcpu);
-
-extern int vmx_vcpu_setup(struct vcpu_vmx *vmx);
-extern int enable_vpid;
-
-extern ulong_t *vmx_vpid_bitmap;
-extern kmutex_t vmx_vpid_lock;
-
-extern page_t *gfn_to_page(struct kvm *kvm, gfn_t gfn);
-
 struct kvm_vcpu *
 kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 {
@@ -741,13 +647,6 @@ is_paging(struct kvm_vcpu *vcpu)
 	return (kvm_read_cr0_bits(vcpu, X86_CR0_PG));
 }
 
-
-extern void vmx_set_efer(struct kvm_vcpu *vcpu, uint64_t efer);
-
-
-extern int kvm_write_guest_page(struct kvm *kvm,
-    gfn_t gfn, const void *data, int offset, int len);
-
 unsigned long empty_zero_page[PAGESIZE / sizeof (unsigned long)];
 
 int
@@ -755,11 +654,6 @@ kvm_clear_guest_page(struct kvm *kvm, gfn_t gfn, int offset, int len)
 {
 	return (kvm_write_guest_page(kvm, gfn, empty_zero_page, offset, len));
 }
-
-extern void kvm_register_write(struct kvm_vcpu *vcpu,
-    enum kvm_reg reg, unsigned long val);
-extern ulong kvm_read_cr0(struct kvm_vcpu *vcpu);
-extern void setup_msrs(struct vcpu_vmx *vmx);
 
 void
 fx_init(struct kvm_vcpu *vcpu)
@@ -794,13 +688,6 @@ fx_init(struct kvm_vcpu *vcpu)
 	    after_mxcsr_mask);
 }
 
-extern inline void vpid_sync_vcpu_all(struct vcpu_vmx *vmx);
-extern void vmx_fpu_activate(struct kvm_vcpu *vcpu);
-extern inline int vm_need_tpr_shadow(struct kvm *kvm);
-extern inline int cpu_has_vmx_tpr_shadow(void);
-
-
-
 int
 kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu)
 {
@@ -814,17 +701,6 @@ kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu)
 
 	return (kvm_x86_ops->vcpu_reset(vcpu));
 }
-
-extern void vcpu_load(struct kvm_vcpu *vcpu);
-
-
-
-
-
-
-gfn_t unalias_gfn(struct kvm *kvm, gfn_t gfn);
-extern struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *kvm,
-    gfn_t gfn);
 
 struct kvm_memory_slot *
 gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
@@ -861,10 +737,6 @@ out:
 	return (PAGESIZE);
 #endif
 }
-
-
-extern page_t *bad_page;
-extern inline void get_page(page_t *page);
 
 static pfn_t
 hva_to_pfn(struct kvm *kvm, unsigned long addr)
@@ -925,22 +797,12 @@ gfn_to_pfn(struct kvm *kvm, gfn_t gfn)
 	return (pfn);
 }
 
-extern pfn_t bad_pfn;
 
 int
 is_error_pfn(pfn_t pfn)
 {
 	return (pfn == bad_pfn);
 }
-
-
-
-extern struct kvm_mmu_page *page_header(kvm_t *, hpa_t);
-
-
-
-extern inline unsigned long bad_hva(void);
-extern page_t *page_numtopp_nolock(pfn_t pfn);
 
 page_t *
 pfn_to_page(pfn_t pfn)
@@ -973,9 +835,6 @@ kvm_set_pfn_dirty(pfn_t pfn)
 	XXX_KVM_PROBE;
 #endif
 }
-
-
-extern int is_writable_pte(unsigned long pte);
 
 
 int
@@ -1045,15 +904,10 @@ kvm_read_guest_atomic(struct kvm *kvm, gpa_t gpa, void *data, unsigned long len)
 	return (0);
 }
 
-extern void kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg);
-extern int kvm_xcall_func(kvm_xcall_t func, void *arg);
-
 static void
 ack_flush(void *_completed)
 {
 }
-
-extern int kvm_xcall_func(kvm_xcall_t func, void *arg);
 
 int
 make_all_cpus_request(struct kvm *kvm, unsigned int req)
@@ -1248,10 +1102,6 @@ vcpu_destroy:
 	return (r);
 }
 
-extern int largepages_enabled;
-
-extern caddr_t smmap64(caddr_t addr, size_t len, int prot, int flags,
-    int fd, off_t pos);
 
 int kvm_arch_prepare_memory_region(struct kvm *kvm,
     struct kvm_memory_slot *memslot, struct kvm_memory_slot old,
@@ -1320,17 +1170,6 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
  *
  * Must be called holding mmap_sem for write.
  */
-
-extern void kvm_arch_commit_memory_region(struct kvm *kvm,
-    struct kvm_userspace_memory_region *mem, struct kvm_memory_slot old,
-    int user_alloc);
-
-extern int __kvm_set_memory_region(struct kvm *kvm,
-    struct kvm_userspace_memory_region *mem, int user_alloc);
-
-extern int kvm_set_memory_region(struct kvm *kvm,
-    struct kvm_userspace_memory_region *mem, int user_alloc);
-
 int
 kvm_vm_ioctl_set_memory_region(struct kvm *kvm,
     struct kvm_userspace_memory_region *mem, int user_alloc)
@@ -1484,16 +1323,4 @@ kvm_arch_vcpu_runnable(struct kvm_vcpu *vcpu)
 	    vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED ||
 	    vcpu->arch.nmi_pending ||
 	    (kvm_arch_interrupt_allowed(vcpu) && kvm_cpu_has_interrupt(vcpu)));
-}
-
-void
-kvm_free_physmem(struct kvm *kvm)
-{
-	int ii;
-	struct kvm_memslots *slots = kvm->memslots;
-
-	for (ii = 0; ii < slots->nmemslots; ii++)
-		kvm_free_physmem_slot(&slots->memslots[ii], NULL);
-
-	kmem_free(kvm->memslots, sizeof (struct kvm_memslots));
 }
