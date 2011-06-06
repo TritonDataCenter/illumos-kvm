@@ -29,18 +29,11 @@
  * Copyright 2011 Joyent, Inc. All Rights Reserved.
  */
 
-/* XXX Includes are always in bad shape, what a surprise! */
 #include <sys/types.h>
+#include <sys/mutex.h>
 
-#include "msr.h"
-#include "irqflags.h"
+#include "kvm_bitops.h"
 #include "kvm_host.h"
-#include "kvm_x86host.h"
-#include "kvm_iodev.h"
-#include "kvm.h"
-#include "kvm_apicdef.h"
-#include "kvm_ioapic.h"
-#include "kvm_lapic.h"
 #include "kvm_irq.h"
 
 static void

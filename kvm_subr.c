@@ -304,5 +304,3 @@ find_first_zero_bit(const unsigned long *addr, unsigned long size)
 found:
 	return (result + ffz(tmp));
 }
-
-

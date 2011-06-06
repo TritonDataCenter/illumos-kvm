@@ -2,10 +2,7 @@
 #define __KVM_IO_APIC_H
 
 #include "kvm_host.h"
-
-#ifdef XXX
-#include "iodev.h"
-#endif /*XXX*/
+#include "kvm_iodev.h"
 
 struct kvm;
 struct kvm_vcpu;

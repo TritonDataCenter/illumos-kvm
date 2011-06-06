@@ -28,18 +28,14 @@
  *  Copyright 2011 Joyent, Inc. All Rights Reserved.
  */
 
-/*
- * XXX Need proper header files!
- */
+#include <sys/types.h>
+#include <sys/mutex.h>
+
 #include "kvm_bitops.h"
-#include "msr.h"
-#include "irqflags.h"
 #include "kvm_host.h"
-#include "kvm_x86host.h"
-#include "kvm_iodev.h"
-#include "kvm.h"
-#include "kvm_apicdef.h"
+#include "kvm_timer.h"
 #include "kvm_ioapic.h"
+#include "kvm_lapic.h"
 #include "kvm_irq.h"
 
 static int ioapic_deliver(struct kvm_ioapic *, int);

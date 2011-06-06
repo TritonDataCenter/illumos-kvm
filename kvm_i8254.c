@@ -32,19 +32,12 @@
  * Copyright 2011 Joyent, Inc. All rights reserved.
  */
 
-/*
- * XXX Need proper header files!
- */
-#include "msr.h"
-#include "irqflags.h"
-#include "kvm_host.h"
-#include "kvm_x86host.h"
-#include "kvm_iodev.h"
-#include "kvm.h"
-#include "kvm_i8254.h"
-#include "kvm_irq.h"
+#include <sys/debug.h>
+#include <sys/mutex.h>
 
-extern int kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu);
+#include "kvm_host.h"
+#include "kvm_irq.h"
+#include "kvm_i8254.h"
 
 #define	mod_64(x, y) ((x) % (y))
 
