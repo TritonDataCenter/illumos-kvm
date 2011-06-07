@@ -27,9 +27,10 @@
 
 /*
  * Currently we use one kernel module for all of kvm. This is the entry point
- * for initializing the VMX subsystem.
+ * for initializing and tearing down the VMX subsystem.
  */
 extern int vmx_init(void);
+extern void vmx_fini(void);
 
 /*
  * Definitions of Primary Processor-Based VM-Execution Controls.

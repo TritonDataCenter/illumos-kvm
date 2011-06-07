@@ -156,7 +156,6 @@ static int hardware_enable_all(void);
 static void hardware_disable_all(void);
 static void kvm_destroy_vm(struct kvm *);
 static int kvm_avlmmucmp(const void *, const void *);
-extern int enable_vpid;
 extern struct kvm_x86_ops vmx_x86_ops;
 extern struct kvm_shared_msrs **shared_msrs;
 extern int make_all_cpus_request(struct kvm *, unsigned int);
@@ -170,7 +169,6 @@ kmem_cache_t *kvm_vcpu_cache;
 struct kvm_x86_ops *kvm_x86_ops;
 
 
-#define	VMX_NR_VPIDS				(1 << 16)
 ulong_t *vmx_vpid_bitmap;
 size_t vpid_bitmap_words;
 kmutex_t vmx_vpid_lock;
@@ -682,41 +680,21 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 		return (DDI_FAILURE);
 	}
 
-	if (enable_vpid) {
-		vpid_bitmap_words = howmany(VMX_NR_VPIDS, 64);
-		vmx_vpid_bitmap = kmem_zalloc(sizeof (ulong_t) *
-		    vpid_bitmap_words, KM_SLEEP);
-		mutex_init(&vmx_vpid_lock, NULL, MUTEX_DRIVER, NULL);
-	}
-
 	mutex_init(&kvm_lock, NULL, MUTEX_DRIVER, 0);
 	kvm_x86_ops = &vmx_x86_ops;
 	if (vmx_init() != DDI_SUCCESS) {
 		ddi_soft_state_fini(&kvm_state);
 		ddi_remove_minor_node(dip, NULL);
 		mutex_destroy(&kvm_lock);
-		if (enable_vpid && vmx_vpid_bitmap != NULL) {
-			kmem_free(vmx_vpid_bitmap,
-			    sizeof (ulong_t) * vpid_bitmap_words);
-			mutex_destroy(&vmx_vpid_lock);
-		}
-
 		return (DDI_FAILURE);
 	}
 
 	if (hardware_enable_all() != 0) {
-		/* XXX Missing vmx_fini */
 		ddi_soft_state_fini(&kvm_state);
 		ddi_remove_minor_node(dip, NULL);
 		mutex_destroy(&kvm_lock);
-		if (enable_vpid && vmx_vpid_bitmap != NULL) {
-			kmem_free(vmx_vpid_bitmap,
-			    sizeof (ulong_t) * vpid_bitmap_words);
-			mutex_destroy(&vmx_vpid_lock);
-		}
-
+		vmx_fini();
 		return (DDI_FAILURE);
-
 	}
 
 	kvm_dip = dip;
@@ -750,15 +728,9 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	kvm_dip = NULL;
 
 	hardware_disable_all();
-	if (enable_vpid && vmx_vpid_bitmap != NULL) {
-		kmem_free(vmx_vpid_bitmap,
-		    sizeof (ulong_t) * vpid_bitmap_words);
-		mutex_destroy(&vmx_vpid_lock);
-	}
 	mutex_destroy(&kvm_lock);
 	ddi_soft_state_fini(&kvm_state);
-
-	/* XXX Mising vmx_fini */
+	vmx_fini();
 
 	return (DDI_SUCCESS);
 }

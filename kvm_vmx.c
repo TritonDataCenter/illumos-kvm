@@ -17,6 +17,7 @@
  *
  */
 
+#include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/mach_mmu.h>
 #include <asm/cpu.h>
@@ -34,14 +35,13 @@
 #include "kvm_mmu.h"
 #include "kvm_vmx.h"
 
-/* XXX These shouldn't need to be static */
-extern kmutex_t vmx_vpid_lock;
-extern ulong_t *vmx_vpid_bitmap;
-extern size_t vpid_bitmap_words;
-
+/* XXX These should be static */
+#define	VMX_NR_VPIDS				(1 << 16)
+static kmutex_t vmx_vpid_lock;
+static ulong_t *vmx_vpid_bitmap;
+static size_t vpid_bitmap_words;
 static int bypass_guest_pf = 1;
-/* XXX This should be static */
-int enable_vpid = 1;
+static int enable_vpid = 1;
 static int flexpriority_enabled = 1;
 static int enable_ept = 1;
 static int enable_unrestricted_guest = 1;
@@ -4605,6 +4605,13 @@ vmx_init(void)
 	for (i = 0; i < NR_VMX_MSR; ++i)
 		kvm_define_shared_msr(i, vmx_msr_index[i]);
 
+	if (enable_vpid) {
+		vpid_bitmap_words = howmany(VMX_NR_VPIDS, 64);
+		vmx_vpid_bitmap = kmem_zalloc(sizeof (ulong_t) *
+		    vpid_bitmap_words, KM_SLEEP);
+		mutex_init(&vmx_vpid_lock, NULL, MUTEX_DRIVER, NULL);
+	}
+
 #ifdef XXX
 	vmx_io_bitmap_a = kmem_zalloc(PAGESIZE, KM_SLEEP);
 	vmx_io_bitmap_b = kmem_zalloc(PAGESIZE, KM_SLEEP);
@@ -4665,4 +4672,15 @@ out:
 	kmem_free(vmx_io_bitmap_a, PAGESIZE);
 
 	return (r);
+}
+
+void
+vmx_fini(void)
+{
+	XXX_KVM_PROBE;
+	if (enable_vpid) {
+		mutex_destroy(&vmx_vpid_lock);
+		kmem_free(vmx_vpid_bitmap, sizeof (ulong_t) *
+		    vpid_bitmap_words);
+	}
 }
