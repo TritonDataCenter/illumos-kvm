@@ -201,12 +201,6 @@ kvm_arch_hardware_setup(void)
 	return (kvm_x86_ops->hardware_setup());
 }
 
-static void *
-mmu_memory_cache_alloc(struct kvm_mmu_memory_cache *mc, size_t size)
-{
-	return (mc->objects[--mc->nobjs]);
-}
-
 void
 bitmap_zero(unsigned long *dst, int nbits)
 {
