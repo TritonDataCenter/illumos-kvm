@@ -1026,7 +1026,7 @@ kvm_get_kvm(struct kvm *kvm)
  * Creates some virtual cpus.  Good luck creating more than one.
  */
 int
-kvm_vm_ioctl_create_vcpu(struct kvm *kvm, int32_t id, int *rval_p)
+kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p)
 {
 	int r, i;
 	struct kvm_vcpu *vcpu, *v;

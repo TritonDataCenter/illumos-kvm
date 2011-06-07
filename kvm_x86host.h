@@ -910,6 +910,8 @@ void kvm_define_shared_msr(unsigned index, uint32_t msr);
 void kvm_set_shared_msr(struct kvm_vcpu *, unsigned index, uint64_t val,
     uint64_t mask);
 
+/* XXX Readdress after kvm/kvm_x86.c refactor */
+extern int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rv);
 #define NMI_VECTOR 0x02
 
 #endif

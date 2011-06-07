@@ -26,6 +26,12 @@
  */
 
 /*
+ * Currently we use one kernel module for all of kvm. This is the entry point
+ * for initializing the VMX subsystem.
+ */
+extern int vmx_init(void);
+
+/*
  * Definitions of Primary Processor-Based VM-Execution Controls.
  */
 #define CPU_BASED_VIRTUAL_INTR_PENDING          0x00000004

@@ -4,6 +4,10 @@
 #include "kvm_iodev.h"
 #include "kvm_timer.h"
 
+#define	APIC_LVT_NUM			6
+/* 14 is the version for Xeon and Pentium 8.4.8 */
+#define	APIC_VERSION			(0x14UL | ((APIC_LVT_NUM - 1) << 16))
+
 typedef struct kvm_lapic {
 	unsigned long base_address;
 	struct kvm_io_device dev;

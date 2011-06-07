@@ -35,9 +35,6 @@ static int __apic_accept_irq(struct kvm_lapic *, int, int, int, int);
 #define	APIC_BUS_CYCLE_NS 1
 #define	APIC_LDR	0xD0
 
-#define	APIC_LVT_NUM			6
-/* 14 is the version for Xeon and Pentium 8.4.8 */
-#define	APIC_VERSION			(0x14UL | ((APIC_LVT_NUM - 1) << 16))
 #define	LAPIC_MMIO_LENGTH		(1 << 12)
 /* followed define is not in apicdef.h */
 #define	APIC_SHORT_MASK			0xc0000
