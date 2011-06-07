@@ -42,7 +42,6 @@
 
 struct kvm;
 struct kvm_vcpu;
-extern struct kmem_cache *kvm_vcpu_cache;
 
 /*
  * It would be nice to use something smarter than a linear search, TBD...
@@ -228,7 +227,7 @@ void vcpu_load(struct kvm_vcpu *vcpu);
 void vcpu_put(struct kvm_vcpu *vcpu);
 
 
-int kvm_init(void *opaque, unsigned int vcpu_size);
+int kvm_init(void *opaque);
 void kvm_exit(void);
 
 void kvm_get_kvm(struct kvm *kvm);

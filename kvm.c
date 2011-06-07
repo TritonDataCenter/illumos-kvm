@@ -164,7 +164,6 @@ static void kvm_on_user_return(struct kvm_vcpu *,
     struct kvm_user_return_notifier *);
 page_t *bad_page;
 pfn_t bad_pfn;
-kmem_cache_t *kvm_vcpu_cache;
 struct kvm_x86_ops *kvm_x86_ops;
 
 inline int
@@ -463,7 +462,7 @@ kvm_arch_check_processor_compat(void *rtn)
 }
 
 int
-kvm_init(void *opaque, unsigned int vcpu_size)
+kvm_init(void *opaque)
 {
 	int r;
 	int cpu;
@@ -522,20 +521,6 @@ kvm_init(void *opaque, unsigned int vcpu_size)
 #else
 	XXX_KVM_PROBE;
 #endif
-	/* A kmem cache lets us meet the alignment requirements of fx_save. */
-	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", (size_t)vcpu_size,
-#ifdef XXX_KVM_DECLARATION
-	    (size_t)__alignof__(struct kvm_vcpu),
-#else
-	    (size_t)PAGESIZE,
-#endif
-	    zero_constructor, NULL, NULL, (void *)((uint64_t)vcpu_size),
-	    NULL, 0);
-
-	if (!kvm_vcpu_cache) {
-		r = ENOMEM;
-		goto out_free_5;
-	}
 
 #ifdef XXX
 	kvm_chardev_ops.owner = module;
@@ -566,7 +551,6 @@ kvm_init(void *opaque, unsigned int vcpu_size)
 	return (0);
 
 out_free:
-	kmem_cache_destroy(kvm_vcpu_cache);
 out_free_5:
 #ifdef XXX
 	sysdev_unregister(&kvm_sysdev);

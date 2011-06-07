@@ -35,7 +35,6 @@
 #include "kvm_mmu.h"
 #include "kvm_vmx.h"
 
-/* XXX These should be static */
 #define	VMX_NR_VPIDS				(1 << 16)
 static kmutex_t vmx_vpid_lock;
 static ulong_t *vmx_vpid_bitmap;
@@ -46,6 +45,7 @@ static int flexpriority_enabled = 1;
 static int enable_ept = 1;
 static int enable_unrestricted_guest = 1;
 static int emulate_invalid_guest_state = 0;
+static kmem_cache_t *kvm_vcpu_cache;
 
 /*
  * In linux, there is a separate vmx kernel module from the kvm driver.
@@ -4621,6 +4621,21 @@ vmx_init(void)
 	XXX_KVM_PROBE;
 #endif
 
+	/* A kmem cache lets us meet the alignment requirements of fx_save. */
+	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", sizeof (struct vcpu_vmx),
+#ifdef XXX_KVM_DECLARATION
+	    (size_t)__alignof__(struct kvm_vcpu),
+#else
+	    (size_t)PAGESIZE,
+#endif
+	    zero_constructor, NULL, NULL, (void *)(sizeof (struct vcpu_vmx)),
+	    NULL, 0);
+
+	if (kvm_vcpu_cache == NULL) {
+		r = ENOMEM;
+		goto out3;
+	}
+
 	/*
 	 * Allow direct access to the PC debug port (it is often used for I/O
 	 * delays, but the vmexits simply slow things down).
@@ -4635,10 +4650,10 @@ vmx_init(void)
 
 	set_bit(0, vmx_vpid_bitmap); /* 0 is reserved for host */
 
-	r = kvm_init(&vmx_x86_ops, sizeof (struct vcpu_vmx));
+	r = kvm_init(&vmx_x86_ops);
 
 	if (r)
-		goto out3;
+		goto out4;
 
 	vmx_disable_intercept_for_msr(MSR_FS_BASE, 0);
 	vmx_disable_intercept_for_msr(MSR_GS_BASE, 0);
@@ -4662,6 +4677,9 @@ vmx_init(void)
 
 	return (0);
 
+
+out4:
+	kmem_cache_destroy(kvm_vcpu_cache);
 out3:
 	kmem_free(vmx_msr_bitmap_longmode, PAGESIZE);
 out2:
@@ -4683,4 +4701,5 @@ vmx_fini(void)
 		kmem_free(vmx_vpid_bitmap, sizeof (ulong_t) *
 		    vpid_bitmap_words);
 	}
+	kmem_cache_destroy(kvm_vcpu_cache);
 }
