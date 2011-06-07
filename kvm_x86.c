@@ -1324,3 +1324,9 @@ kvm_arch_vcpu_runnable(struct kvm_vcpu *vcpu)
 	    vcpu->arch.nmi_pending ||
 	    (kvm_arch_interrupt_allowed(vcpu) && kvm_cpu_has_interrupt(vcpu)));
 }
+
+void
+kvm_reload_remote_mmus(struct kvm *kvm)
+{
+	make_all_cpus_request(kvm, KVM_REQ_MMU_RELOAD);
+}

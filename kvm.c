@@ -83,14 +83,15 @@ static vmem_t *kvm_minor;	/* minor number arena */
 static dev_info_t *kvm_dip;	/* global devinfo hanlde */
 static minor_t kvm_base_minor;	/* The only minor device that can be opened */
 
-int kvmid;  /* monotonically increasing, unique per vm */
+static int kvmid;  /* monotonically increasing, unique per vm */
 
-int largepages_enabled = 1;
+static int largepages_enabled = 1;
 static cpuset_t cpus_hardware_enabled;
 static volatile uint32_t hardware_enable_failed;
 static int kvm_usage_count;
 static list_t vm_list;
-kmutex_t kvm_lock;
+static kmutex_t kvm_lock;
+static int ignore_msrs = 0;
 
 /*
  * Driver forward declarations
@@ -158,21 +159,13 @@ static void kvm_destroy_vm(struct kvm *);
 static int kvm_avlmmucmp(const void *, const void *);
 extern struct kvm_x86_ops vmx_x86_ops;
 extern struct kvm_shared_msrs **shared_msrs;
-extern int make_all_cpus_request(struct kvm *, unsigned int);
 struct kvm_shared_msrs_global shared_msrs_global;
-int ignore_msrs = 0;
 static void kvm_on_user_return(struct kvm_vcpu *,
     struct kvm_user_return_notifier *);
 page_t *bad_page;
 pfn_t bad_pfn;
 kmem_cache_t *kvm_vcpu_cache;
 struct kvm_x86_ops *kvm_x86_ops;
-
-
-ulong_t *vmx_vpid_bitmap;
-size_t vpid_bitmap_words;
-kmutex_t vmx_vpid_lock;
-
 
 inline int
 kvm_exception_is_soft(unsigned int nr)
@@ -258,12 +251,6 @@ gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
 			return (memslot);
 	}
 	return (NULL);
-}
-
-void
-kvm_reload_remote_mmus(struct kvm *kvm)
-{
-	make_all_cpus_request(kvm, KVM_REQ_MMU_RELOAD);
 }
 
 gfn_t
