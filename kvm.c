@@ -96,6 +96,34 @@ static kmutex_t kvm_lock;
 static int ignore_msrs = 0;
 static unsigned long empty_zero_page[PAGESIZE / sizeof (unsigned long)];
 
+int
+kvm_xcall_func(kvm_xcall_t func, void *arg)
+{
+	if (func != NULL)
+		(*func)(arg);
+
+	return (0);
+}
+
+void
+kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg)
+{
+	cpuset_t set;
+
+	CPUSET_ZERO(set);
+
+	if (cpu == KVM_CPUALL) {
+		CPUSET_ALL(set);
+	} else {
+		CPUSET_ADD(set, cpu);
+	}
+
+	kpreempt_disable();
+	xc_sync((xc_arg_t)func, (xc_arg_t)arg, 0, CPUSET2BV(set),
+		(xc_func_t) kvm_xcall_func);
+	kpreempt_enable();
+}
+
 void
 kvm_user_return_notifier_register(struct kvm_vcpu *vcpu,
     struct kvm_user_return_notifier *urn)
@@ -143,6 +171,12 @@ kvm_ctx_restore(void *arg)
 	kvm_arch_vcpu_load(vcpu, cpu);
 }
 
+void
+kvm_migrate_timers(struct kvm_vcpu *vcpu)
+{
+	set_bit(KVM_REQ_MIGRATE_TIMER, &vcpu->requests);
+}
+
 #ifdef XXX_KVM_DECLARATION
 #define	pfn_valid(pfn) ((pfn < physmax) && (pfn != PFN_INVALID))
 #else
@@ -179,6 +213,17 @@ vcpu_load(struct kvm_vcpu *vcpu)
 	    NULL, NULL, NULL);
 	kvm_arch_vcpu_load(vcpu, cpu);
 	kpreempt_enable();
+}
+
+struct kvm_vcpu *
+kvm_get_vcpu(struct kvm *kvm, int i)
+{
+#ifdef XXX
+	smp_rmb();
+#else
+	XXX_KVM_PROBE;
+#endif
+	return (kvm->vcpus[i]);
 }
 
 void
@@ -480,11 +525,16 @@ kvm_free_physmem(struct kvm *kvm)
 	kmem_free(kvm->memslots, sizeof (struct kvm_memslots));
 }
 
-
 void
 kvm_get_kvm(struct kvm *kvm)
 {
 	atomic_inc_32(&kvm->users_count);
+}
+
+unsigned long
+kvm_dirty_bitmap_bytes(struct kvm_memory_slot *memslot)
+{
+	return (BT_SIZEOFMAP(memslot->npages));
 }
 
 /*
@@ -1149,6 +1199,12 @@ mark_page_dirty(struct kvm *kvm, gfn_t gfn)
 	}
 }
 
+int
+kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu)
+{
+	return (vcpu->kvm->bsp_vcpu_id == vcpu->vcpu_id);
+}
+
 /*
  * The vCPU has executed a HLT instruction with in-kernel mode enabled.
  */
@@ -1657,6 +1713,39 @@ kvm_guest_enter(void)
 #else
 	XXX_KVM_PROBE;
 #endif
+}
+
+/*
+ * Find the first cleared bit in a memory region.
+ */
+unsigned long
+find_first_zero_bit(const unsigned long *addr, unsigned long size)
+{
+	const unsigned long *p = addr;
+	unsigned long result = 0;
+	unsigned long tmp;
+
+	while (size & ~(64-1)) {
+		if (~(tmp = *(p++)))
+			goto found;
+		result += 64;
+		size -= 64;
+	}
+	if (!size)
+		return (result);
+
+	tmp = (*p) | (~0UL << size);
+	if (tmp == ~0UL)	/* Are any bits zero? */
+		return (result + size);	/* Nope. */
+found:
+	return (result + ffz(tmp));
+}
+
+int
+zero_constructor(void *buf, void *arg, int tags)
+{
+	bzero(buf, (size_t)arg);
+	return (0);
 }
 
 static int

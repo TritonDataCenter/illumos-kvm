@@ -3028,3 +3028,49 @@ kvm_avlmmucmp(const void *arg1, const void *arg2)
 	ASSERT(mp1->kmp_avlspt == mp2->kmp_avlspt);
 	return (0);
 }
+
+inline page_t *
+compound_head(page_t *page)
+{
+	/* XXX - linux links page_t together. */
+	return (page);
+}
+
+inline void
+get_page(page_t *page)
+{
+	page = compound_head(page);
+}
+
+page_t *
+pfn_to_page(pfn_t pfn)
+{
+	return (page_numtopp_nolock(pfn));
+}
+
+page_t *
+alloc_page(size_t size, int flag)
+{
+	caddr_t page_addr;
+	pfn_t pfn;
+	page_t *pp;
+
+	if ((page_addr = kmem_zalloc(size, flag)) == NULL)
+		return ((page_t *)NULL);
+
+	pp = page_numtopp_nolock(hat_getpfnum(kas.a_hat, page_addr));
+	return (pp);
+}
+
+/*
+ * Often times we have pages that correspond to addresses that are in a users
+ * virtual address space. Rather than trying to constantly map them in and out
+ * of our address space we instead go through and use the kpm segment to
+ * facilitate this for us. This always returns an address that is always in the
+ * kernel's virtual address space.
+ */
+caddr_t
+page_address(page_t *page)
+{
+	return (hat_kpm_mapin_pfn(page->p_pagenum));
+}

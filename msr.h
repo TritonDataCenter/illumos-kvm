@@ -132,15 +132,6 @@ do {							\
 	(high) = (uint32_t)(_l >> 32);			\
 } while (0)
 
-#define rdtscp(low, high, aux)					\
-do {                                                            \
-	unsigned long long _val = native_read_tscp(&(aux));     \
-	(low) = (uint32_t)_val;                                      \
-	(high) = (uint32_t)(_val >> 32);                             \
-} while (0)
-
-#define rdtscpll(val, aux) (val) = native_read_tscp(&(aux))
-
 #endif	/* !CONFIG_PARAVIRT */
 
 

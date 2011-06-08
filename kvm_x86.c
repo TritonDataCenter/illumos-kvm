@@ -39,8 +39,15 @@
 /* XXX These don't belong here! */
 extern caddr_t smmap64(caddr_t addr, size_t len, int prot, int flags,
     int fd, off_t pos);
+extern int lwp_sigmask(int, uint_t, uint_t, uint_t, uint_t);
 
 static unsigned long empty_zero_page[PAGESIZE / sizeof (unsigned long)];
+
+/*
+ * Globals
+ */
+struct kvm_x86_ops *kvm_x86_ops;
+int ignore_msrs = 0;
 
 #define	MAX_IO_MSRS 256
 #define	CR0_RESERVED_BITS						\
@@ -67,11 +74,24 @@ static uint64_t efer_reserved_bits = 0xfffffffffffffffeULL;
 #endif
 
 static void update_cr8_intercept(struct kvm_vcpu *);
-
-struct kvm_x86_ops *kvm_x86_ops;
-int ignore_msrs = 0;
-
 static struct kvm_shared_msrs_global shared_msrs_global;
+
+void
+kvm_sigprocmask(int how, sigset_t *setp, sigset_t *osetp)
+{
+	k_sigset_t kset;
+
+	ASSERT(how == SIG_SETMASK);
+	ASSERT(setp != NULL);
+
+	sigutok(setp, &kset);
+
+	if (osetp != NULL)
+		sigktou(&curthread->t_hold, osetp);
+
+	(void) lwp_sigmask(SIG_SETMASK,
+	    kset.__sigbits[0], kset.__sigbits[1], kset.__sigbits[2], 0);
+}
 
 static void
 kvm_on_user_return(struct kvm_vcpu *vcpu, struct kvm_user_return_notifier *urn)
@@ -290,6 +310,12 @@ void
 kvm_inject_nmi(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.nmi_pending = 1;
+}
+
+void
+kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code)
+{
+	kvm_queue_exception_e(vcpu, GP_VECTOR, error_code);
 }
 
 void
@@ -4600,6 +4626,24 @@ typedef struct fxsave {
 #endif
 } fxsave_t;
 
+void
+kvm_fx_save(struct i387_fxsave_struct *image)
+{
+	__asm__("fxsave (%0)":: "r" (image));
+}
+
+void
+kvm_fx_restore(struct i387_fxsave_struct *image)
+{
+	__asm__("fxrstor (%0)":: "r" (image));
+}
+
+void
+kvm_fx_finit(void)
+{
+	__asm__("finit");
+}
+
 int
 kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 {
@@ -5248,8 +5292,284 @@ kvm_va2pa(caddr_t va)
 	return (pa);
 }
 
-void
-kvm_migrate_timers(struct kvm_vcpu *vcpu)
+uint32_t
+get_rdx_init_val(void)
 {
-	set_bit(KVM_REQ_MIGRATE_TIMER, &vcpu->requests);
+	return (0x600); /* P6 family */
+}
+
+unsigned long long
+native_read_msr(unsigned int msr)
+{
+	DECLARE_ARGS(val, low, high);
+
+	__asm__ volatile("rdmsr" : EAX_EDX_RET(val, low, high) : "c" (msr));
+	return (EAX_EDX_VAL(val, low, high));
+}
+
+void
+native_write_msr(unsigned int msr, unsigned low, unsigned high)
+{
+	__asm__ volatile("wrmsr" : : "c" (msr),
+	    "a"(low), "d" (high) : "memory");
+}
+
+unsigned long long
+__native_read_tsc(void)
+{
+	DECLARE_ARGS(val, low, high);
+
+	__asm__ volatile("rdtsc" : EAX_EDX_RET(val, low, high));
+
+	return (EAX_EDX_VAL(val, low, high));
+}
+
+unsigned long long
+native_read_pmc(int counter)
+{
+	DECLARE_ARGS(val, low, high);
+
+	__asm__ volatile("rdpmc" : EAX_EDX_RET(val, low, high) : "c" (counter));
+	return (EAX_EDX_VAL(val, low, high));
+}
+
+int
+wrmsr_safe(unsigned msr, unsigned low, unsigned high)
+{
+	return (native_write_msr_safe(msr, low, high));
+}
+
+int
+rdmsrl_safe(unsigned msr, unsigned long long *p)
+{
+	int err;
+
+	*p = native_read_msr_safe(msr, &err);
+	return (err);
+}
+
+unsigned long
+read_msr(unsigned long msr)
+{
+	uint64_t value;
+
+	rdmsrl(msr, value);
+	return (value);
+}
+
+uint64_t
+native_read_msr_safe(unsigned int msr, int *err)
+{
+	DECLARE_ARGS(val, low, high);
+	uint64_t ret = 0;
+	on_trap_data_t otd;
+
+	if (on_trap(&otd, OT_DATA_ACCESS) == 0) {
+		ret = native_read_msr(msr);
+		*err = 0;
+	} else {
+		*err = EINVAL; /* XXX probably not right... */
+	}
+	no_trap();
+
+	return (ret);
+}
+
+/* Can be uninlined because referenced by paravirt */
+int
+native_write_msr_safe(unsigned int msr, unsigned low, unsigned high)
+{
+	int err = 0;
+	on_trap_data_t otd;
+
+	if (on_trap(&otd, OT_DATA_ACCESS) == 0) {
+		native_write_msr(msr, low, high);
+	} else {
+		err = EINVAL;  /* XXX probably not right... */
+	}
+	no_trap();
+
+	return (err);
+}
+
+unsigned long
+kvm_read_tr_base(void)
+{
+	unsigned short tr;
+	__asm__("str %0" : "=g"(tr));
+	return (segment_base(tr));
+}
+
+unsigned short
+kvm_read_fs(void)
+{
+	unsigned short seg;
+	__asm__("mov %%fs, %0" : "=g"(seg));
+	return (seg);
+}
+
+unsigned short
+kvm_read_gs(void)
+{
+	unsigned short seg;
+	__asm__("mov %%gs, %0" : "=g"(seg));
+	return (seg);
+}
+
+unsigned short
+kvm_read_ldt(void)
+{
+	unsigned short ldt;
+	__asm__("sldt %0" : "=g"(ldt));
+	return (ldt);
+}
+
+void
+kvm_load_fs(unsigned short sel)
+{
+	__asm__("mov %0, %%fs" : : "rm"(sel));
+}
+
+void
+kvm_load_gs(unsigned short sel)
+{
+	__asm__("mov %0, %%gs" : : "rm"(sel));
+}
+
+void
+kvm_load_ldt(unsigned short sel)
+{
+	__asm__("lldt %0" : : "rm"(sel));
+}
+
+
+void
+kvm_get_idt(struct descriptor_table *table)
+{
+	__asm__("sidt %0" : "=m"(*table));
+}
+
+void
+kvm_get_gdt(struct descriptor_table *table)
+{
+	__asm__("sgdt %0" : "=m"(*table));
+}
+
+/*
+ * Volatile isn't enough to prevent the compiler from reordering the
+ * read/write functions for the control registers and messing everything up.
+ * A memory clobber would solve the problem, but would prevent reordering of
+ * all loads stores around it, which can hurt performance. Solution is to
+ * use a variable and mimic reads and writes to it to enforce serialization
+ */
+static unsigned long __force_order;
+
+unsigned long
+native_read_cr0(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr0,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return (val);
+}
+
+unsigned long
+native_read_cr4(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr4,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return (val);
+}
+
+unsigned long
+native_read_cr3(void)
+{
+	unsigned long val;
+	__asm__ volatile("mov %%cr3,%0\n\t" : "=r" (val), "=m" (__force_order));
+	return (val);
+}
+
+inline unsigned long
+get_desc_limit(const struct desc_struct *desc)
+{
+	return (desc->c.b.limit0 | (desc->c.b.limit << 16));
+}
+
+unsigned long
+get_desc_base(const struct desc_struct *desc)
+{
+	return (unsigned)(desc->c.b.base0 | ((desc->c.b.base1) << 16) |
+	    ((desc->c.b.base2) << 24));
+}
+
+inline void
+kvm_clear_exception_queue(struct kvm_vcpu *vcpu)
+{
+	vcpu->arch.exception.pending = 0;
+}
+
+inline void
+kvm_queue_interrupt(struct kvm_vcpu *vcpu, uint8_t vector, int soft)
+{
+	vcpu->arch.interrupt.pending = 1;
+	vcpu->arch.interrupt.soft = soft;
+	vcpu->arch.interrupt.nr = vector;
+}
+
+inline void
+kvm_clear_interrupt_queue(struct kvm_vcpu *vcpu)
+{
+	vcpu->arch.interrupt.pending = 0;
+}
+
+int
+kvm_event_needs_reinjection(struct kvm_vcpu *vcpu)
+{
+	return (vcpu->arch.exception.pending || vcpu->arch.interrupt.pending ||
+	    vcpu->arch.nmi_injected);
+}
+
+inline int
+kvm_exception_is_soft(unsigned int nr)
+{
+	return (nr == BP_VECTOR) || (nr == OF_VECTOR);
+}
+
+inline int
+is_protmode(struct kvm_vcpu *vcpu)
+{
+	return (kvm_read_cr0_bits(vcpu, X86_CR0_PE));
+}
+
+int
+is_long_mode(struct kvm_vcpu *vcpu)
+{
+#ifdef CONFIG_X86_64
+	return (vcpu->arch.efer & EFER_LMA);
+#else
+	return (0);
+#endif
+}
+
+inline int
+is_pae(struct kvm_vcpu *vcpu)
+{
+	return (kvm_read_cr4_bits(vcpu, X86_CR4_PAE));
+}
+
+int
+is_pse(struct kvm_vcpu *vcpu)
+{
+	return (kvm_read_cr4_bits(vcpu, X86_CR4_PSE));
+}
+
+int
+is_paging(struct kvm_vcpu *vcpu)
+{
+	return (kvm_read_cr0_bits(vcpu, X86_CR0_PG));
+}
+
+uint32_t
+bit(int bitno)
+{
+	return (1 << (bitno & 31));
 }
