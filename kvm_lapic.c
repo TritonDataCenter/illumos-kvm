@@ -19,6 +19,7 @@
  * Copyright 2011 Joyent, Inc. All rights reserved.
  */
 #include <sys/types.h>
+#include <sys/atmoc.h>
 
 #include "kvm_bitops.h"
 #include "msr.h"
@@ -743,12 +744,8 @@ apic_manage_nmi_watchdog(struct kvm_lapic *apic, uint32_t lvt0_val)
 	int nmi_wd_enabled = apic_lvt_nmi_mode(apic_get_reg(apic, APIC_LVT0));
 
 	if (apic_lvt_nmi_mode(lvt0_val)) {
-		if (!nmi_wd_enabled) {
-			/* XXX - debug */
-			cmn_err(CE_NOTE, "Receive NMI setting on APIC_LVT0 "
-			    "for cpu %d\n", apic->vcpu->vcpu_id);
+		if (!nmi_wd_enabled)
 			apic->vcpu->kvm->arch.vapics_in_nmi_mode++;
-		}
 	} else if (nmi_wd_enabled)
 		apic->vcpu->kvm->arch.vapics_in_nmi_mode--;
 }
@@ -806,7 +803,6 @@ apic_reg_write(struct kvm_lapic *apic, uint32_t reg, uint32_t val)
 				apic_set_reg(apic, APIC_LVTT + 0x10 * i,
 				    lvt_val | APIC_LVT_MASKED);
 			}
-			/* XXX pending needs protection? */
 			apic->lapic_timer.pending = 0;
 		}
 		break;
@@ -1015,12 +1011,8 @@ kvm_lapic_reset(struct kvm_vcpu *vcpu)
 	}
 	apic->irr_pending = 0;
 	update_divide_count(apic);
-#ifdef XXX
-	atomic_set(&apic->lapic_timer.pending, 0);
-#else
 	apic->lapic_timer.pending = 0;
-	XXX_KVM_PROBE;
-#endif
+
 	if (kvm_vcpu_is_bsp(vcpu))
 		vcpu->arch.apic_base |= MSR_IA32_APICBASE_BSP;
 	apic_update_ppr(apic);
@@ -1061,14 +1053,8 @@ apic_has_pending_timer(struct kvm_vcpu *vcpu)
 {
 	struct kvm_lapic *lapic = vcpu->arch.apic;
 
-#ifdef XXX
-	if (lapic && apic_enabled(lapic) && apic_lvt_enabled(lapic, APIC_LVTT))
-		return (atomic_read(&lapic->lapic_timer.pending));
-#else
-	XXX_KVM_SYNC_PROBE;
 	if (lapic && apic_enabled(lapic) && apic_lvt_enabled(lapic, APIC_LVTT))
 		return (lapic->lapic_timer.pending);
-#endif
 
 	return (0);
 }
@@ -1187,18 +1173,10 @@ kvm_inject_apic_timer_irqs(struct kvm_vcpu *vcpu)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
 
-#ifdef XXX
-	if (apic && atomic_read(&apic->lapic_timer.pending) > 0) {
-		if (kvm_apic_local_deliver(apic, APIC_LVTT))
-			atomic_dec(&apic->lapic_timer.pending);
-	}
-#else
-	XXX_KVM_SYNC_PROBE;
 	if (apic && apic->lapic_timer.pending > 0) {
 		if (kvm_apic_local_deliver(apic, APIC_LVTT))
 			atomic_dec_32(&apic->lapic_timer.pending);
 	}
-#endif
 }
 
 int
@@ -1264,11 +1242,6 @@ kvm_lapic_sync_from_vapic(struct kvm_vcpu *vcpu)
 
 	data = *(uint32_t *)((uintptr_t)vapic +
 	    offset_in_page(vcpu->arch.apic->vapic_addr));
-#ifdef XXX
-	kunmap_atomic(vapic, KM_USER0);
-#else
-	XXX_KVM_PROBE;
-#endif
 
 	apic_set_tpr(vcpu->arch.apic, data & 0xff);
 }
@@ -1298,11 +1271,6 @@ kvm_lapic_sync_to_vapic(struct kvm_vcpu *vcpu)
 
 	*(uint32_t *)((uintptr_t)vapic +
 	    offset_in_page(vcpu->arch.apic->vapic_addr)) = data;
-#ifdef XXX
-	kunmap_atomic(vapic, KM_USER0);
-#else
-	XXX_KVM_PROBE;
-#endif
 }
 
 int
