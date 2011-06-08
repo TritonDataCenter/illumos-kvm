@@ -1,5 +1,5 @@
 #ifndef _ASM_X86_BITOPS_H
-#define _ASM_X86_BITOPS_H
+#define	_ASM_X86_BITOPS_H
 
 /*
  * Copyright 1992, Linus Torvalds.
@@ -8,8 +8,8 @@
  * __always_inline to avoid problems with older gcc's inlining heuristics.
  */
 
-#define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
-#define BITS_TO_LONGS(nr)	DIV_ROUND_UP(nr, 8 * sizeof(long))
+#define	DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+#define	BITS_TO_LONGS(nr)	DIV_ROUND_UP(nr, 8 * sizeof (long))
 
 /*
  * These have to be done with inline assembly: that way the bit-setting
@@ -18,24 +18,26 @@
  *
  * bit 0 is the LSB of addr; bit 32 is the LSB of (addr+1).
  */
-
 #if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 1)
-/* Technically wrong, but this avoids compilation errors on some gcc
-   versions. */
-#define BITOP_ADDR(x) "=m" (*(volatile long *) (x))
+/*
+ * Technically wrong, but this avoids compilation errors on some gcc
+ * versions.
+ */
+#define	BITOP_ADDR(x) "=m" (*(volatile long *) (x))
 #else
-#define BITOP_ADDR(x) "+m" (*(volatile long *) (x))
+#define	BITOP_ADDR(x) "+m" (*(volatile long *) (x))
 #endif
 
 /*
  * We do the locked ops that don't return the old value as
  * a mask operation on a byte.
  */
-#define IS_IMMEDIATE(nr)		(__builtin_constant_p(nr))
-#define CONST_MASK_ADDR(nr, addr)	BITOP_ADDR((uintptr_t)(addr) + ((nr)>>3))
-#define CONST_MASK(nr)			(1 << ((nr) & 7))
+#define	IS_IMMEDIATE(nr)		(__builtin_constant_p(nr))
+#define	CONST_MASK_ADDR(nr, addr)	\
+	BITOP_ADDR((uintptr_t)(addr) + ((nr) >> 3))
+#define	CONST_MASK(nr)			(1 << ((nr) & 7))
 
-/**
+/*
  * set_bit - Atomically set a bit in memory
  * @nr: the bit to set
  * @addr: the address to start counting from
@@ -52,7 +54,7 @@
  */
 inline void set_bit(unsigned int nr, volatile unsigned long *addr);
 
-/**
+/*
  * __set_bit - Set a bit in memory
  * @nr: the bit to set
  * @addr: the address to start counting from
@@ -63,7 +65,7 @@ inline void set_bit(unsigned int nr, volatile unsigned long *addr);
  */
 inline void __set_bit(int nr, volatile unsigned long *addr);
 
-/**
+/*
  * clear_bit - Clears a bit in memory
  * @nr: Bit to clear
  * @addr: Address to start counting from
@@ -101,10 +103,10 @@ inline void __clear_bit(int nr, volatile unsigned long *addr);
  */
 inline void __clear_bit_unlock(unsigned nr, volatile unsigned long *addr);
 
-#define smp_mb__before_clear_bit()	barrier()
-#define smp_mb__after_clear_bit()	barrier()
+#define	smp_mb__before_clear_bit()	barrier()
+#define	smp_mb__after_clear_bit()	barrier()
 
-/**
+/*
  * __change_bit - Toggle a bit in memory
  * @nr: the bit to change
  * @addr: the address to start counting from
@@ -115,7 +117,7 @@ inline void __clear_bit_unlock(unsigned nr, volatile unsigned long *addr);
  */
 inline void __change_bit(int nr, volatile unsigned long *addr);
 
-/**
+/*
  * change_bit - Toggle a bit in memory
  * @nr: Bit to change
  * @addr: Address to start counting from
@@ -126,7 +128,7 @@ inline void __change_bit(int nr, volatile unsigned long *addr);
  */
 inline void change_bit(int nr, volatile unsigned long *addr);
 
-/**
+/*
  * test_and_set_bit - Set a bit and return its old value
  * @nr: Bit to set
  * @addr: Address to count from
@@ -136,7 +138,7 @@ inline void change_bit(int nr, volatile unsigned long *addr);
  */
 inline int test_and_set_bit(int nr, volatile unsigned long *addr);
 
-/**
+/*
  * test_and_set_bit_lock - Set a bit and return its old value for lock
  * @nr: Bit to set
  * @addr: Address to count from
@@ -145,7 +147,7 @@ inline int test_and_set_bit(int nr, volatile unsigned long *addr);
  */
 inline int test_and_set_bit_lock(int nr, volatile unsigned long *addr);
 
-/**
+/*
  * __test_and_set_bit - Set a bit and return its old value
  * @nr: Bit to set
  * @addr: Address to count from
@@ -156,7 +158,7 @@ inline int test_and_set_bit_lock(int nr, volatile unsigned long *addr);
  */
 inline int __test_and_set_bit(int nr, volatile unsigned long *addr);
 
-/**
+/*
  * test_and_clear_bit - Clear a bit and return its old value
  * @nr: Bit to clear
  * @addr: Address to count from
@@ -166,7 +168,7 @@ inline int __test_and_set_bit(int nr, volatile unsigned long *addr);
  */
 inline int test_and_clear_bit(int nr, volatile unsigned long *addr);
 
-/**
+/*
  * __test_and_clear_bit - Clear a bit and return its old value
  * @nr: Bit to clear
  * @addr: Address to count from
@@ -180,7 +182,7 @@ inline int __test_and_clear_bit(int nr, volatile unsigned long *addr);
 /* WARNING: non atomic and it can be reordered! */
 inline int __test_and_change_bit(int nr, volatile unsigned long *addr);
 
-/**
+/*
  * test_and_change_bit - Change a bit and return its old value
  * @nr: Bit to change
  * @addr: Address to count from
@@ -190,25 +192,22 @@ inline int __test_and_change_bit(int nr, volatile unsigned long *addr);
  */
 inline int test_and_change_bit(int nr, volatile unsigned long *addr);
 
-inline int constant_test_bit(unsigned int nr, const volatile unsigned long *addr);
-
+inline int constant_test_bit(unsigned int nr,
+    const volatile unsigned long *addr);
 inline int variable_test_bit(int nr, volatile const unsigned long *addr);
 
-#if 0 /* Fool kernel-doc since it doesn't do macros yet */
-/**
+/*
  * test_bit - Determine whether a bit is set
  * @nr: bit number to test
  * @addr: Address to start counting from
  */
-int test_bit(int nr, const volatile unsigned long *addr);
-#endif
 
-#define test_bit(nr, addr)			\
+#define	test_bit(nr, addr)			\
 	(__builtin_constant_p((nr))		\
-	 ? constant_test_bit((nr), (addr))	\
-	 : variable_test_bit((nr), (addr)))
+	? constant_test_bit((nr), (addr))	\
+	: variable_test_bit((nr), (addr)))
 
-/**
+/*
  * __ffs - find first set bit in word
  * @word: The word to search
  *
@@ -216,7 +215,7 @@ int test_bit(int nr, const volatile unsigned long *addr);
  */
 inline unsigned long __ffs(unsigned long word);
 
-/**
+/*
  * ffz - find first zero bit in word
  * @word: The word to search
  *
@@ -233,7 +232,7 @@ inline unsigned long ffz(unsigned long word);
 inline unsigned long __fls(unsigned long word);
 
 #ifdef __KERNEL__
-/**
+/*
  * ffs - find first set bit in word
  * @x: the word to search
  *
@@ -246,7 +245,7 @@ inline unsigned long __fls(unsigned long word);
  */
 inline int ffs(int x);
 
-/**
+/*
  * fls - find last set bit in word
  * @x: the word to search
  *
