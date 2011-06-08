@@ -69,11 +69,7 @@ int ignore_msrs = 0;
  * - enable syscall per default because its emulated by KVM
  * - enable LME and LMA per default on 64 bit KVM
  */
-#ifdef CONFIG_X86_64
 static uint64_t efer_reserved_bits = 0xfffffffffffffafeULL;
-#else
-static uint64_t efer_reserved_bits = 0xfffffffffffffffeULL;
-#endif
 
 static void update_cr8_intercept(struct kvm_vcpu *);
 static struct kvm_shared_msrs_global shared_msrs_global;
@@ -200,11 +196,9 @@ segment_base(uint16_t selector)
 	d = (struct desc_struct *)(table_base + (selector & ~7));
 	v = get_desc_base(d);
 
-#ifdef CONFIG_X86_64
 	if (d->c.b.s == 0 &&
 	    (d->c.b.type == 2 || d->c.b.type == 9 || d->c.b.type == 11))
 		v |= ((unsigned long)((struct ldttss_desc64 *)d)->base3) << 32;
-#endif
 
 	return (v);
 }
@@ -400,12 +394,10 @@ kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
 	cr0 |= X86_CR0_ET;
 
-#ifdef CONFIG_X86_64
 	if (cr0 & 0xffffffff00000000UL) {
 		kvm_inject_gp(vcpu, 0);
 		return;
 	}
-#endif
 
 	cr0 &= ~CR0_RESERVED_BITS;
 
@@ -420,7 +412,7 @@ kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	}
 
 	if (!is_paging(vcpu) && (cr0 & X86_CR0_PG)) {
-#ifdef CONFIG_X86_64
+
 		if ((vcpu->arch.efer & EFER_LME)) {
 			int cs_db, cs_l;
 
@@ -436,7 +428,7 @@ kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 
 			}
 		} else
-#endif
+
 		if (is_pae(vcpu) && !load_pdptrs(vcpu, vcpu->arch.cr3)) {
 			kvm_inject_gp(vcpu, 0);
 			return;
@@ -580,9 +572,7 @@ static uint32_t msrs_to_save[] = {
 	HV_X64_MSR_APIC_ASSIST_PAGE,
 	MSR_IA32_SYSENTER_CS, MSR_IA32_SYSENTER_ESP, MSR_IA32_SYSENTER_EIP,
 	MSR_K6_STAR,
-#ifdef CONFIG_X86_64
 	MSR_CSTAR, MSR_KERNEL_GS_BASE, MSR_SYSCALL_MASK, MSR_LSTAR,
-#endif
 	MSR_IA32_TSC, MSR_IA32_PERF_STATUS, MSR_IA32_CR_PAT, MSR_VM_HSAVE_PA
 };
 
@@ -1754,14 +1744,9 @@ do_cpuid_ent(struct kvm_cpuid_entry2 *entry, uint32_t function,
 {
 	unsigned int ddic;
 	unsigned f_nx = is_efer_nx() ? F(NX) : 0;
-#ifdef CONFIG_X86_64
 	unsigned f_gbpages = (kvm_x86_ops->get_lpage_level() == PT_PDPE_LEVEL)
 				? F(GBPAGES) : 0;
 	unsigned f_lm = F(LM);
-#else
-	unsigned f_gbpages = 0;
-	unsigned f_lm = 0;
-#endif
 	unsigned f_rdtscp = kvm_x86_ops->rdtscp_supported() ? F(RDTSCP) : 0;
 
 	/* cpuid 1.edx */
@@ -2625,35 +2610,6 @@ emulator_cmpxchg_emulated(unsigned long addr, const void *old,
     const void *new, unsigned int bytes, struct kvm_vcpu *vcpu)
 {
 	cmn_err(CE_WARN, "kvm: emulating exchange as write\n");
-#ifndef CONFIG_X86_64
-	/* guests cmpxchg8b have to be emulated atomically */
-	if (bytes == 8) {
-		gpa_t gpa;
-		page_t page;
-		char *kaddr;
-		uint64_t val;
-
-		gpa = kvm_mmu_gva_to_gpa_write(vcpu, addr, NULL);
-
-		if (gpa == UNMAPPED_GVA ||
-		    (gpa & PAGEMASK) == APIC_DEFAULT_PHYS_BASE)
-			goto emul_write;
-
-		if (((gpa + bytes - 1) & PAGEMASK) != (gpa & PAGEMASK))
-			goto emul_write;
-
-		val = *(uint64_t *)new;
-
-		page = gfn_to_page(vcpu->kvm, gpa >> PAGESHIFT);
-		kaddr = kmap_atomic(page, KM_USER0);
-
-		set_64bit((uint64_t *)(kaddr + offset_in_page(gpa)), val);
-		kunmap_atomic(kaddr, KM_USER0);
-		kvm_release_page_dirty(page);
-	}
-emul_write:
-#endif
-
 	return (emulator_write_emulated(addr, new, bytes, vcpu));
 }
 
@@ -3065,14 +3021,11 @@ kvm_hv_hypercall(struct kvm_vcpu *vcpu)
 		outgpa = ((uint64_t)kvm_register_read(vcpu,
 		    VCPU_REGS_RDI) << 32) | (kvm_register_read(vcpu,
 		    VCPU_REGS_RSI) & 0xffffffff);
-	}
-#ifdef CONFIG_X86_64
-	else {
+	} else {
 		param = kvm_register_read(vcpu, VCPU_REGS_RCX);
 		ingpa = kvm_register_read(vcpu, VCPU_REGS_RDX);
 		outgpa = kvm_register_read(vcpu, VCPU_REGS_R8);
 	}
-#endif
 
 	code = param & 0xffff;
 	fast = (param >> 16) & 0x1;
@@ -3782,7 +3735,6 @@ kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 	regs->rdi = kvm_register_read(vcpu, VCPU_REGS_RDI);
 	regs->rsp = kvm_register_read(vcpu, VCPU_REGS_RSP);
 	regs->rbp = kvm_register_read(vcpu, VCPU_REGS_RBP);
-#ifdef CONFIG_X86_64
 	regs->r8 = kvm_register_read(vcpu, VCPU_REGS_R8);
 	regs->r9 = kvm_register_read(vcpu, VCPU_REGS_R9);
 	regs->r10 = kvm_register_read(vcpu, VCPU_REGS_R10);
@@ -3791,7 +3743,6 @@ kvm_arch_vcpu_ioctl_get_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 	regs->r13 = kvm_register_read(vcpu, VCPU_REGS_R13);
 	regs->r14 = kvm_register_read(vcpu, VCPU_REGS_R14);
 	regs->r15 = kvm_register_read(vcpu, VCPU_REGS_R15);
-#endif
 
 	regs->rip = kvm_rip_read(vcpu);
 	regs->rflags = kvm_get_rflags(vcpu);
@@ -3814,7 +3765,6 @@ kvm_arch_vcpu_ioctl_set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 	kvm_register_write(vcpu, VCPU_REGS_RDI, regs->rdi);
 	kvm_register_write(vcpu, VCPU_REGS_RSP, regs->rsp);
 	kvm_register_write(vcpu, VCPU_REGS_RBP, regs->rbp);
-#ifdef CONFIG_X86_64
 	kvm_register_write(vcpu, VCPU_REGS_R8, regs->r8);
 	kvm_register_write(vcpu, VCPU_REGS_R9, regs->r9);
 	kvm_register_write(vcpu, VCPU_REGS_R10, regs->r10);
@@ -3823,7 +3773,6 @@ kvm_arch_vcpu_ioctl_set_regs(struct kvm_vcpu *vcpu, struct kvm_regs *regs)
 	kvm_register_write(vcpu, VCPU_REGS_R13, regs->r13);
 	kvm_register_write(vcpu, VCPU_REGS_R14, regs->r14);
 	kvm_register_write(vcpu, VCPU_REGS_R15, regs->r15);
-#endif
 
 	kvm_rip_write(vcpu, regs->rip);
 	kvm_set_rflags(vcpu, regs->rflags);
@@ -5521,11 +5470,7 @@ is_protmode(struct kvm_vcpu *vcpu)
 int
 is_long_mode(struct kvm_vcpu *vcpu)
 {
-#ifdef CONFIG_X86_64
 	return (vcpu->arch.efer & EFER_LMA);
-#else
-	return (0);
-#endif
 }
 
 inline int

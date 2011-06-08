@@ -450,14 +450,8 @@ static uint32_t group2_table[] = {
  * any modified flags.
  */
 
-#if defined(CONFIG_X86_64)
 #define	_LO32 "k"		/* force 32-bit operand */
 #define	_STK  "%%rsp"		/* stack pointer */
-#elif defined(__i386__)
-#define	_LO32 ""		/* force 32-bit operand */
-#define	_STK  "%%esp"		/* stack pointer */
-#error 32-bit variant of _PRE_EFLAGS not supported
-#endif
 
 /*
  * These EFLAGS bits are restored from saved value during emulation, and
@@ -490,11 +484,7 @@ static uint32_t group2_table[] = {
 	"andl %"_msk",%"_LO32 _tmp"; "		\
 	"orl  %"_LO32 _tmp",%"_sav"; "
 
-#ifdef CONFIG_X86_64
 #define	ON64(x) x
-#else
-#define	ON64(x)
-#endif
 
 /* BEGIN CSTYLED */
 #define	____emulate_2op(_op, _src, _dst, _eflags, _x, _y, _suffix)	\
@@ -1015,12 +1005,10 @@ x86_decode_insn(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 	case X86EMUL_MODE_PROT32:
 		def_op_bytes = def_ad_bytes = 4;
 		break;
-#ifdef CONFIG_X86_64
 	case X86EMUL_MODE_PROT64:
 		def_op_bytes = 4;
 		def_ad_bytes = 8;
 		break;
-#endif
 	default:
 		return (-1);
 	}
@@ -1710,7 +1698,6 @@ emulate_syscall(struct x86_emulate_ctxt *ctxt)
 
 	c->regs[VCPU_REGS_RCX] = c->eip;
 	if (is_long_mode(ctxt->vcpu)) {
-#ifdef CONFIG_X86_64
 		c->regs[VCPU_REGS_R11] = ctxt->eflags & ~EFLG_RF;
 
 		kvm_x86_ops->get_msr(ctxt->vcpu,
@@ -1720,7 +1707,6 @@ emulate_syscall(struct x86_emulate_ctxt *ctxt)
 
 		kvm_x86_ops->get_msr(ctxt->vcpu, MSR_SYSCALL_MASK, &msr_data);
 		ctxt->eflags &= ~(msr_data | EFLG_RF);
-#endif
 	} else {
 		/* legacy mode */
 		kvm_x86_ops->get_msr(ctxt->vcpu, MSR_STAR, &msr_data);

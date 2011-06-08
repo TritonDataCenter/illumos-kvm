@@ -226,11 +226,7 @@ static void
 __set_spte(uint64_t *sptep, uint64_t spte)
 {
 #ifdef XXX
-#ifdef CONFIG_X86_64
 	set_64bit((unsigned long *)sptep, spte);
-#else
-	set_64bit((unsigned long long *)sptep, spte);
-#endif
 #else
 	XXX_KVM_PROBE;
 	*sptep = spte;
