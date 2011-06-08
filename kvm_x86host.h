@@ -93,7 +93,6 @@ enum kvm_reg {
 	VCPU_REGS_RBP = 5,
 	VCPU_REGS_RSI = 6,
 	VCPU_REGS_RDI = 7,
-#ifdef CONFIG_X86_64
 	VCPU_REGS_R8 = 8,
 	VCPU_REGS_R9 = 9,
 	VCPU_REGS_R10 = 10,
@@ -102,7 +101,6 @@ enum kvm_reg {
 	VCPU_REGS_R13 = 13,
 	VCPU_REGS_R14 = 14,
 	VCPU_REGS_R15 = 15,
-#endif
 	VCPU_REGS_RIP,
 	NR_VCPU_REGS
 };

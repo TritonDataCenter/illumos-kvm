@@ -185,11 +185,7 @@ typedef struct x86_emulate_ctxt {
 #define X86EMUL_MODE_PROT64   8	/* 64-bit (long) mode.    */
 
 /* Host execution mode. */
-#if defined(CONFIG_X86_32)
-#define X86EMUL_MODE_HOST X86EMUL_MODE_PROT32
-#elif defined(CONFIG_X86_64)
 #define X86EMUL_MODE_HOST X86EMUL_MODE_PROT64
-#endif
 
 #ifdef _KERNEL
 int x86_decode_insn(struct x86_emulate_ctxt *ctxt,

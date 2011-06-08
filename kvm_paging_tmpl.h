@@ -33,13 +33,8 @@
 	#define PT_INDEX(addr, level) PT64_INDEX(addr, level)
 	#define PT_LEVEL_MASK(level) PT64_LEVEL_MASK(level)
 	#define PT_LEVEL_BITS PT64_LEVEL_BITS
-	#ifdef CONFIG_X86_64
 	#define PT_MAX_FULL_LEVELS 4
 	#define CMPXCHG cmpxchg
-	#else
-	#define CMPXCHG cmpxchg64
-	#define PT_MAX_FULL_LEVELS 2
-	#endif
 #elif PTTYPE == 32
 	#define pt_element_t uint32_t
 	#define guest_walker guest_walker32
