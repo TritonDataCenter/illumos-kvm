@@ -40,24 +40,6 @@
 extern caddr_t smmap64(caddr_t addr, size_t len, int prot, int flags,
     int fd, off_t pos);
 
-#ifdef XXX_KVM_DECLARATION
-unsigned long *vmx_io_bitmap_a;
-unsigned long *vmx_io_bitmap_b;
-unsigned long *vmx_msr_bitmap_legacy;
-unsigned long *vmx_msr_bitmap_longmode;
-#else
-/* make these arrays to try to force into low 4GB memory... */
-/* also need to be aligned... */
-__attribute__((__aligned__(PAGESIZE)))unsigned long
-    vmx_io_bitmap_a[PAGESIZE / sizeof (unsigned long)];
-__attribute__((__aligned__(PAGESIZE)))unsigned long
-    vmx_io_bitmap_b[PAGESIZE / sizeof (unsigned long)];
-__attribute__((__aligned__(PAGESIZE)))unsigned long
-    vmx_msr_bitmap_legacy[PAGESIZE / sizeof (unsigned long)];
-__attribute__((__aligned__(PAGESIZE)))unsigned long
-    vmx_msr_bitmap_longmode[PAGESIZE / sizeof (unsigned long)];
-#endif
-
 static unsigned long empty_zero_page[PAGESIZE / sizeof (unsigned long)];
 
 #define	MAX_IO_MSRS 256

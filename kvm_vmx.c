@@ -53,13 +53,23 @@ static int enable_unrestricted_guest = 1;
 static int emulate_invalid_guest_state = 0;
 static kmem_cache_t *kvm_vcpu_cache;
 
-/*
- * In linux, there is a separate vmx kernel module from the kvm driver.
- * That may be a good idea, but we're going to do everything in
- * the kvm driver, for now.
- * The call to vmx_init() in _init() is done when the vmx module
- * is loaded on linux.
- */
+#ifdef XXX_KVM_DECLARATION
+static unsigned long *vmx_io_bitmap_a;
+static unsigned long *vmx_io_bitmap_b;
+static unsigned long *vmx_msr_bitmap_legacy;
+static unsigned long *vmx_msr_bitmap_longmode;
+#else
+/* make these arrays to try to force into low 4GB memory... */
+/* also need to be aligned... */
+__attribute__((__aligned__(PAGESIZE)))static unsigned long
+    vmx_io_bitmap_a[PAGESIZE / sizeof (unsigned long)];
+__attribute__((__aligned__(PAGESIZE)))static unsigned long
+    vmx_io_bitmap_b[PAGESIZE / sizeof (unsigned long)];
+__attribute__((__aligned__(PAGESIZE)))static unsigned long
+    vmx_msr_bitmap_legacy[PAGESIZE / sizeof (unsigned long)];
+__attribute__((__aligned__(PAGESIZE)))static unsigned long
+    vmx_msr_bitmap_longmode[PAGESIZE / sizeof (unsigned long)];
+#endif
 
 static struct vmcs **vmxarea;  /* 1 per cpu */
 static struct vmcs **current_vmcs;
@@ -176,12 +186,6 @@ to_vmx(struct kvm_vcpu *vcpu)
 	return ((struct vcpu_vmx *)vcpu);
 #endif
 }
-
-/* XXX Should be pointers, not arrays of unknown length! */
-static unsigned long vmx_io_bitmap_a[];
-static unsigned long vmx_io_bitmap_b[];
-static unsigned long vmx_msr_bitmap_legacy[];
-static unsigned long vmx_msr_bitmap_longmode[];
 
 typedef struct vmcs_config {
 	int size;
