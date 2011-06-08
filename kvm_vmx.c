@@ -4359,16 +4359,8 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 	}
 
 	vmx->guest_msrs = kmem_zalloc(PAGESIZE, KM_SLEEP);
-	if (!vmx->guest_msrs) {
-		return (NULL);  /* XXX - need cleanup here */
-	}
 
 	vmx->vmcs = kmem_zalloc(PAGESIZE, KM_SLEEP);
-	if (!vmx->vmcs) {
-		kmem_cache_free(kvm_vcpu_cache, vmx);
-		vmx = NULL;
-		return (NULL);
-	}
 
 	vmx->vmcs_pa = (hat_getpfnum(kas.a_hat, (caddr_t)vmx->vmcs) <<
 	    PAGESHIFT) | ((int64_t)(vmx->vmcs) & 0xfff);
@@ -4644,22 +4636,9 @@ vmx_init(void)
 		mutex_init(&vmx_vpid_lock, NULL, MUTEX_DRIVER, NULL);
 	}
 
-#ifdef XXX
-	vmx_io_bitmap_a = kmem_zalloc(PAGESIZE, KM_SLEEP);
-	vmx_io_bitmap_b = kmem_zalloc(PAGESIZE, KM_SLEEP);
-	vmx_msr_bitmap_legacy = kmem_zalloc(PAGESIZE, KM_SLEEP);
-	vmx_msr_bitmap_longmode = kmem_zalloc(PAGESIZE, KM_SLEEP);
-#else
-	XXX_KVM_PROBE;
-#endif
-
 	/* A kmem cache lets us meet the alignment requirements of fx_save. */
 	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", sizeof (struct vcpu_vmx),
-#ifdef XXX_KVM_DECLARATION
-	    (size_t)__alignof__(struct kvm_vcpu),
-#else
 	    (size_t)PAGESIZE,
-#endif
 	    zero_constructor, NULL, NULL, (void *)(sizeof (struct vcpu_vmx)),
 	    NULL, 0);
 
@@ -4685,7 +4664,7 @@ vmx_init(void)
 	r = kvm_init(&vmx_x86_ops);
 
 	if (r)
-		goto out4;
+		goto out;
 
 	vmx_disable_intercept_for_msr(MSR_FS_BASE, 0);
 	vmx_disable_intercept_for_msr(MSR_GS_BASE, 0);
@@ -4710,16 +4689,8 @@ vmx_init(void)
 	return (0);
 
 
-out4:
-	kmem_cache_destroy(kvm_vcpu_cache);
-out3:
-	kmem_free(vmx_msr_bitmap_longmode, PAGESIZE);
-out2:
-	kmem_free(vmx_msr_bitmap_legacy, PAGESIZE);
-out1:
-	kmem_free(vmx_io_bitmap_b, PAGESIZE);
 out:
-	kmem_free(vmx_io_bitmap_a, PAGESIZE);
+	kmem_cache_destroy(kvm_vcpu_cache);
 
 	return (r);
 }
