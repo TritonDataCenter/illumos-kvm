@@ -8,6 +8,7 @@
 #include <sys/bitmap.h>
 #include <vm/page.h>
 #include <sys/pte.h>
+#include <sys/regset.h>
 
 #include "kvm.h"
 #include "kvm_types.h"
@@ -261,41 +262,6 @@ typedef struct kvm_mmu {
 	uint64_t rsvd_bits_mask[2][4];
 } kvm_mmu_t;
 
-struct i387_fxsave_struct {
-       unsigned short                  cwd; /* Control Word                    */
-       unsigned short                  swd; /* Status Word                     */
-       unsigned short                  twd; /* Tag Word                        */
-       unsigned short                  fop; /* Last Instruction Opcode         */
-       union {
-               struct {
-                       uint64_t        rip; /* Instruction Pointer             */
-                       uint64_t        rdp; /* Data Pointer                    */
-               }v1;
-               struct {
-                       uint32_t        fip; /* FPU IP Offset                   */
-                       uint32_t        fcs; /* FPU IP Selector                 */
-                       uint32_t        foo; /* FPU Operand Offset              */
-                       uint32_t        fos; /* FPU Operand Selector            */
-               }v2;
-       }v12;
-       uint32_t                        mxcsr;          /* MXCSR Register State */
-       uint32_t                        mxcsr_mask;     /* MXCSR Mask           */
-
-       /* 8*16 bytes for each FP-reg = 128 bytes:                      */
-       uint32_t                        st_space[32];
-
-       /* 16*16 bytes for each XMM-reg = 256 bytes:                    */
-       uint32_t                        xmm_space[64];
-
-       uint32_t                        padding[12];
-
-       union {
-               uint32_t                padding1[12];
-               uint32_t                sw_reserved[12];
-       }v3;
-
-} __attribute__((aligned(16)));
-
 /*
  * These structs MUST NOT be changed.
  * They are the ABI between hypervisor and guest OS.
@@ -413,8 +379,8 @@ typedef struct kvm_vcpu_arch {
 		unsigned long mmu_seq;
 	} update_pte;
 
-	struct i387_fxsave_struct host_fx_image;
-	struct i387_fxsave_struct guest_fx_image;
+	struct fxsave_state host_fx_image;
+	struct fxsave_state guest_fx_image;
 
 	gva_t mmio_fault_cr2;
 	struct kvm_pio_request pio;
@@ -841,9 +807,9 @@ extern unsigned long kvm_read_tr_base(void);
 
 extern unsigned long read_msr(unsigned long);
 
-void kvm_fx_save(struct i387_fxsave_struct *image);
+void kvm_fx_save(struct fxsave_state *image);
 
-void kvm_fx_restore(struct i387_fxsave_struct *image);
+void kvm_fx_restore(struct fxsave_state *image);
 
 void kvm_fx_finit(void);
 

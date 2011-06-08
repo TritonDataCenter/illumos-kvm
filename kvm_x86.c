@@ -8,6 +8,8 @@
 #include <sys/ksynch.h>
 #include <sys/condvar_impl.h>
 #include <sys/ddi.h>
+#include <sys/regset.h>
+#include <sys/fp.h>
 
 #include <vm/page.h>
 #include <vm/hat.h>
@@ -4602,40 +4604,16 @@ kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 	return (0);
 }
 
-/*
- * fxsave fpu state.  Taken from x86_64/processor.h.  To be killed when
- * we have asm/x86/processor.h
- *
- * 8*16 bytes for each FP-reg = 128 bytes
- * 16*16 bytes for each XMM-reg=256 bytes
- */
-typedef struct fxsave {
-	uint16_t	cwd;
-	uint16_t	swd;
-	uint16_t	twd;
-	uint16_t	fop;
-	uint64_t	rip;
-	uint64_t	rdp;
-	uint32_t	mxcsr;
-	uint32_t	mxcsr_mask;
-	uint32_t	st_space[32];
-#ifdef CONFIG_X86_64
-	uint32_t	xmm_space[64];
-#else
-	uint32_t	xmm_space[32];
-#endif
-} fxsave_t;
-
 void
-kvm_fx_save(struct i387_fxsave_struct *image)
+kvm_fx_save(struct fxsave_state *image)
 {
-	__asm__("fxsave (%0)":: "r" (image));
+	fpxsave(image);
 }
 
 void
-kvm_fx_restore(struct i387_fxsave_struct *image)
+kvm_fx_restore(struct fxsave_state *image)
 {
-	__asm__("fxrstor (%0)":: "r" (image));
+	fpxrestore(image);
 }
 
 void
@@ -4647,18 +4625,18 @@ kvm_fx_finit(void)
 int
 kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 {
-	struct fxsave *fxsave = (struct fxsave *)&vcpu->arch.guest_fx_image;
+	struct fxsave_state *fxsave = &vcpu->arch.guest_fx_image;
 
 	vcpu_load(vcpu);
 
-	memcpy(fpu->fpr, fxsave->st_space, 128);
-	fpu->fcw = fxsave->cwd;
-	fpu->fsw = fxsave->swd;
-	fpu->ftwx = fxsave->twd;
-	fpu->last_opcode = fxsave->fop;
-	fpu->last_ip = fxsave->rip;
-	fpu->last_dp = fxsave->rdp;
-	memcpy(fpu->xmm, fxsave->xmm_space, sizeof (fxsave->xmm_space));
+	memcpy(fpu->fpr, fxsave->fx_st, 128);
+	fpu->fcw = fxsave->fx_fcw;
+	fpu->fsw = fxsave->fx_fsw;
+	fpu->ftwx = fxsave->fx_fctw;
+	fpu->last_opcode = fxsave->fx_fop;
+	fpu->last_ip = fxsave->fx_rip;
+	fpu->last_dp = fxsave->fx_rdp;
+	memcpy(fpu->xmm, fxsave->fx_xmm, sizeof (fxsave->fx_xmm));
 
 	vcpu_put(vcpu);
 
@@ -4668,18 +4646,18 @@ kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 int
 kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 {
-	struct fxsave *fxsave = (struct fxsave *)&vcpu->arch.guest_fx_image;
+	struct fxsave_state *fxsave = &vcpu->arch.guest_fx_image;
 
 	vcpu_load(vcpu);
 
-	memcpy(fxsave->st_space, fpu->fpr, 128);
-	fxsave->cwd = fpu->fcw;
-	fxsave->swd = fpu->fsw;
-	fxsave->twd = fpu->ftwx;
-	fxsave->fop = fpu->last_opcode;
-	fxsave->rip = fpu->last_ip;
-	fxsave->rdp = fpu->last_dp;
-	memcpy(fxsave->xmm_space, fpu->xmm, sizeof (fxsave->xmm_space));
+	memcpy(fxsave->fx_st, fpu->fpr, 128);
+	fxsave->fx_fcw = fpu->fcw;
+	fxsave->fx_fsw = fpu->fsw;
+	fxsave->fx_fctw = fpu->ftwx;
+	fxsave->fx_fop = fpu->last_opcode;
+	fxsave->fx_rip = fpu->last_ip;
+	fxsave->fx_rdp = fpu->last_dp;
+	memcpy(fxsave->fx_xmm, fpu->xmm, sizeof (fxsave->fx_xmm));
 
 	vcpu_put(vcpu);
 
@@ -4712,10 +4690,10 @@ fx_init(struct kvm_vcpu *vcpu)
 	kpreempt_enable();
 
 	vcpu->arch.cr0 |= X86_CR0_ET;
-	after_mxcsr_mask = offsetof(struct i387_fxsave_struct, st_space);
-	vcpu->arch.guest_fx_image.mxcsr = 0x1f80;
+	after_mxcsr_mask = offsetof(struct fxsave_state, fx_st);
+	vcpu->arch.guest_fx_image.fx_mxcsr = 0x1f80;
 	memset((void *)((uintptr_t)&vcpu->arch.guest_fx_image +
-	    after_mxcsr_mask), 0, sizeof (struct i387_fxsave_struct) -
+	    after_mxcsr_mask), 0, sizeof (struct fxsave_state) -
 	    after_mxcsr_mask);
 }
 
