@@ -16,6 +16,10 @@
 #define offsetof(s, m) ((size_t)(&((s *)0)->m))
 #endif
 
+#define MCG_CTL_P		(1ULL<<8)    /* MCG_CTL register available */
+#define KVM_MAX_MCE_BANKS 32
+#define KVM_MCE_CAP_SUPPORTED MCG_CTL_P
+
 #define	KVM_MAX_VCPUS	64
 #define	KVM_MEMORY_SLOTS	32
 /* memory slots that are not exposted to userspace */
@@ -741,7 +745,6 @@ void kvm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
 void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8);
 unsigned long kvm_get_cr8(struct kvm_vcpu *vcpu);
 void kvm_lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
-void kvm_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l);
 
 int kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata);
 int kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data);

@@ -35,6 +35,12 @@
 #include "kvm_mmu.h"
 #include "kvm_vmx.h"
 
+
+/*
+ * Globals
+ */
+struct kvm_shared_msrs **shared_msrs;
+
 #define	VMX_NR_VPIDS				(1 << 16)
 static kmutex_t vmx_vpid_lock;
 static ulong_t *vmx_vpid_bitmap;
@@ -57,8 +63,6 @@ static kmem_cache_t *kvm_vcpu_cache;
 
 static struct vmcs **vmxarea;  /* 1 per cpu */
 static struct vmcs **current_vmcs;
-/* XXX Should shared_msrs be static? */
-struct kvm_shared_msrs **shared_msrs;
 static list_t **vcpus_on_cpu;
 static uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
 
@@ -585,6 +589,30 @@ vmwrite_error(unsigned long field, unsigned long value)
 {
 	cmn_err(CE_WARN, "vmwrite error: reg %lx value %lx (err %x)\n",
 	    field, value, vmcs_read32(VM_INSTRUCTION_ERROR));
+}
+
+static void
+__vmwrite(unsigned long field, unsigned long value)
+{
+	uint8_t err = 0;
+
+	/*CSTYLED*/
+	__asm__ volatile ( ASM_VMX_VMWRITE_RAX_RDX "\n\t" "setna %0"
+	    /* XXX: CF==1 or ZF==1 --> crash (ud2) */
+	    /* "ja 1f ; ud2 ; 1:\n" */
+	    : "=q"(err) : "a" (value), "d" (field)
+	    : "cc", "memory");
+
+	/* XXX the following should be ifdef debug... */
+	if (err) {
+#ifdef XXX
+		vmcs_read32(VM_INSTRUCTION_ERROR);
+		cmn_err(CE_WARN, "_vmwrite: error writing %lx to %lx: "
+		    "error number = %d\n", value, field, err & 0xff);
+#else
+		XXX_KVM_PROBE;
+#endif
+	}
 }
 
 /* XXX Should be static! */

@@ -43,6 +43,35 @@
 struct kvm;
 struct kvm_vcpu;
 
+typedef struct kvm_user_return_notifier {
+	void (*on_user_return)(struct kvm_vcpu *,
+	    struct kvm_user_return_notifier *);
+} kvm_user_return_notifier_t;
+
+void kvm_user_return_notifier_register(struct kvm_vcpu *vcpu,
+    struct kvm_user_return_notifier *urn);
+void kvm_user_return_notifier_unregister(struct kvm_vcpu *vcpu,
+    struct kvm_user_return_notifier *urn);
+void kvm_fire_urn(struct kvm_vcpu *vcpu);
+
+#define KVM_NR_SHARED_MSRS 16
+
+typedef struct kvm_shared_msrs_global {
+	int nr;
+	uint32_t msrs[KVM_NR_SHARED_MSRS];
+} kvm_shared_msrs_global_t;
+
+typedef struct kvm_shared_msrs {
+	struct kvm_user_return_notifier urn;
+	int registered;
+	struct kvm_shared_msr_values {
+		uint64_t host;
+		uint64_t curr;
+	} values[KVM_NR_SHARED_MSRS];
+} kvm_shared_msrs_t;
+
+extern struct kvm_shared_msrs **shared_msrs;
+
 /*
  * It would be nice to use something smarter than a linear search, TBD...
  * Thankfully we dont expect many devices to register (famous last words :),
@@ -316,12 +345,14 @@ int kvm_get_dirty_log(struct kvm *kvm,
 int kvm_vm_ioctl_get_dirty_log(struct kvm *kvm,
 				struct kvm_dirty_log *log);
 
+int kvm_vm_ioctl_get_msr_index_list(struct kvm *kvm, uintptr_t arg);
 int kvm_vm_ioctl_set_memory_region(struct kvm *kvm,
 				   struct
 				   kvm_userspace_memory_region *mem,
 				   int user_alloc);
-long kvm_arch_vm_ioctl(struct file *filp,
-		       unsigned int ioctl, unsigned long arg);
+int kvm_vm_ioctl_set_tss_addr(struct kvm *kvmp, caddr_t addr);
+int kvm_vm_ioctl_get_irqchip(struct kvm *kvm, struct kvm_irqchip *chip);
+int kvm_vm_ioctl_set_irqchip(struct kvm *kvm, struct kvm_irqchip *chip);
 
 int kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu);
 int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu);
@@ -340,6 +371,24 @@ int kvm_arch_vcpu_ioctl_set_guest_debug(struct kvm_vcpu *vcpu,
 					struct kvm_guest_debug *dbg);
 int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu);
 
+int kvm_vcpu_ioctl_get_msrs(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs, int *rv);
+int kvm_vcpu_ioctl_set_msrs(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs, int *rv);
+int kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu, uint64_t *mcg_capp);
+int kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid);
+int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid);
+int kvm_vcpu_ioctl_get_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s);
+int kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s);
+int kvm_vcpu_ioctl_x86_get_vcpu_events(struct kvm_vcpu *vcpu,
+    struct kvm_vcpu_events *events);
+int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
+    struct kvm_vcpu_events *events);
+int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu, struct kvm_interrupt *irq);
+int kvm_vm_ioctl_get_pit2(struct kvm *kvm, struct kvm_pit_state2 *ps);
+int kvm_vm_ioctl_set_pit2(struct kvm *kvm, struct kvm_pit_state2 *ps);
+int kvm_vm_ioctl_set_identity_map_addr(struct kvm *kvm, uint64_t ident_addr);
+int kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *,
+    struct kvm_cpuid_entry2 *);
+
 int kvm_arch_init(void *opaque);
 void kvm_arch_exit(void);
 
@@ -349,6 +398,7 @@ void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu);
 void kvm_arch_vcpu_free(struct kvm_vcpu *vcpu);
 void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
 void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu);
+struct kvm_vcpu * kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id);
 int kvm_arch_vcpu_setup(struct kvm_vcpu *vcpu);
 void kvm_arch_vcpu_destroy(struct kvm_vcpu *vcpu);
 
@@ -444,20 +494,6 @@ void kvm_guest_enter(void);
 void kvm_guest_exit(void);
 void kvm_migrate_timers(struct kvm_vcpu *vcpu);
 
-enum kvm_stat_kind {
-	KVM_STAT_VM,
-	KVM_STAT_VCPU,
-};
-
-typedef struct kvm_stats_debugfs_item {
-	const char *name;
-	int offset;
-	enum kvm_stat_kind kind;
-	struct dentry *dentry;
-} kvm_stats_debugfs_item_t;
-extern struct kvm_stats_debugfs_item debugfs_entries[];
-extern struct dentry *kvm_debugfs_dir;
-
 #ifndef KVM_ARCH_HAS_UNALIAS_INSTANTIATION
 #define unalias_gfn_instantiation unalias_gfn
 #endif
@@ -488,26 +524,7 @@ void kvm_sigprocmask(int how, sigset_t *, sigset_t *);
  */
 #define offset_in_page(p)	((unsigned long)(p) & ~PAGEMASK)
 
-/* borrowed liberally from linux... */
-
-#define MAX_IO_MSRS 256
-#define CR0_RESERVED_BITS						\
-	(~(unsigned long)(X86_CR0_PE | X86_CR0_MP | X86_CR0_EM | X86_CR0_TS \
-			  | X86_CR0_ET | X86_CR0_NE | X86_CR0_WP | X86_CR0_AM \
-			  | X86_CR0_NW | X86_CR0_CD | X86_CR0_PG))
-#define CR4_RESERVED_BITS						\
-	(~(unsigned long)(X86_CR4_VME | X86_CR4_PVI | X86_CR4_TSD | X86_CR4_DE\
-			  | X86_CR4_PSE | X86_CR4_PAE | X86_CR4_MCE	\
-			  | X86_CR4_PGE | X86_CR4_PCE | X86_CR4_OSFXSR	\
-			  | X86_CR4_OSXMMEXCPT | X86_CR4_VMXE))
-
-#define CR8_RESERVED_BITS (~(unsigned long)X86_CR8_TPR)
-
-#define MCG_CTL_P		(1ULL<<8)    /* MCG_CTL register available */
-#define KVM_MAX_MCE_BANKS 32
-#define KVM_MCE_CAP_SUPPORTED MCG_CTL_P
 #define page_to_pfn(page) (page->p_pagenum)
-
 
 /* LDT or TSS descriptor in the GDT. 16 bytes. */
 struct ldttss_desc64 {

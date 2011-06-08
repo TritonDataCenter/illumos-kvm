@@ -701,6 +701,13 @@ kvm_page_table_hashfn(gfn_t gfn)
 	return (gfn & ((1 << KVM_MMU_HASH_SHIFT) - 1));
 }
 
+static void
+bitmap_zero(unsigned long *dst, int nbits)
+{
+	int len = BITS_TO_LONGS(nbits) * sizeof (unsigned long);
+	memset(dst, 0, len);
+}
+
 static struct kvm_mmu_page *
 kvm_mmu_alloc_page(struct kvm_vcpu *vcpu, uint64_t *parent_pte)
 {
@@ -2999,4 +3006,35 @@ int
 is_present_gpte(unsigned long pte)
 {
 	return (pte & PT_PRESENT_MASK);
+}
+
+static struct kvm_mmu_page *
+page_private(kvm_t *kvmp, page_t *page)
+{
+	kvm_mmu_page_t mp, *res;
+	mp.kmp_avlspt = (uintptr_t)page;
+	mutex_enter(&kvmp->kvm_avllock);
+	res = avl_find(&kvmp->kvm_avlmp, &mp, NULL);
+	mutex_exit(&kvmp->kvm_avllock);
+	ASSERT(res != NULL);
+	return (res);
+}
+
+struct kvm_mmu_page *
+page_header(kvm_t *kvmp, hpa_t shadow_page)
+{
+	return (page_private(kvmp, pfn_to_page(shadow_page >> PAGESHIFT)));
+}
+
+int
+kvm_avlmmucmp(const void *arg1, const void *arg2)
+{
+	const kvm_mmu_page_t *mp1 = arg1;
+	const kvm_mmu_page_t *mp2 = arg2;
+	if (mp1->kmp_avlspt > mp2->kmp_avlspt)
+		return (1);
+	if (mp1->kmp_avlspt < mp2->kmp_avlspt)
+		return (-1);
+	ASSERT(mp1->kmp_avlspt == mp2->kmp_avlspt);
+	return (0);
 }

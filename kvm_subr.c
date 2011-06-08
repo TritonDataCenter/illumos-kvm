@@ -195,21 +195,7 @@ kvm_xcall(processorid_t cpu, kvm_xcall_t func, void *arg)
 	kpreempt_enable();
 }
 
-uint32_t
-bit(int bitno)
-{
-	return (1 << (bitno & 31));
-}
 
-int
-is_long_mode(struct kvm_vcpu *vcpu)
-{
-#ifdef CONFIG_X86_64
-	return (vcpu->arch.efer & EFER_LMA);
-#else
-	return (0);
-#endif
-}
 
 unsigned short
 kvm_read_fs(void)
@@ -356,4 +342,155 @@ inline void
 get_page(page_t *page)
 {
 	page = compound_head(page);
+}
+
+
+page_t *
+pfn_to_page(pfn_t pfn)
+{
+	return (page_numtopp_nolock(pfn));
+}
+
+
+inline void
+kvm_clear_exception_queue(struct kvm_vcpu *vcpu)
+{
+	vcpu->arch.exception.pending = 0;
+}
+
+inline void
+kvm_queue_interrupt(struct kvm_vcpu *vcpu, uint8_t vector, int soft)
+{
+	vcpu->arch.interrupt.pending = 1;
+	vcpu->arch.interrupt.soft = soft;
+	vcpu->arch.interrupt.nr = vector;
+}
+
+inline void
+kvm_clear_interrupt_queue(struct kvm_vcpu *vcpu)
+{
+	vcpu->arch.interrupt.pending = 0;
+}
+
+int
+kvm_event_needs_reinjection(struct kvm_vcpu *vcpu)
+{
+	return (vcpu->arch.exception.pending || vcpu->arch.interrupt.pending ||
+	    vcpu->arch.nmi_injected);
+}
+
+inline int
+kvm_exception_is_soft(unsigned int nr)
+{
+	return (nr == BP_VECTOR) || (nr == OF_VECTOR);
+}
+
+inline int
+is_protmode(struct kvm_vcpu *vcpu)
+{
+	return (kvm_read_cr0_bits(vcpu, X86_CR0_PE));
+}
+
+int
+is_long_mode(struct kvm_vcpu *vcpu)
+{
+#ifdef CONFIG_X86_64
+	return (vcpu->arch.efer & EFER_LMA);
+#else
+	return (0);
+#endif
+}
+
+inline int
+is_pae(struct kvm_vcpu *vcpu)
+{
+	return (kvm_read_cr4_bits(vcpu, X86_CR4_PAE));
+}
+
+int
+is_pse(struct kvm_vcpu *vcpu)
+{
+	return (kvm_read_cr4_bits(vcpu, X86_CR4_PSE));
+}
+
+int
+is_paging(struct kvm_vcpu *vcpu)
+{
+	return (kvm_read_cr0_bits(vcpu, X86_CR0_PG));
+}
+
+uint64_t
+native_read_msr_safe(unsigned int msr, int *err)
+{
+	DECLARE_ARGS(val, low, high);
+	uint64_t ret = 0;
+	on_trap_data_t otd;
+
+	if (on_trap(&otd, OT_DATA_ACCESS) == 0) {
+		ret = native_read_msr(msr);
+		*err = 0;
+	} else {
+		*err = EINVAL; /* XXX probably not right... */
+	}
+	no_trap();
+
+	return (ret);
+}
+
+/* Can be uninlined because referenced by paravirt */
+int
+native_write_msr_safe(unsigned int msr, unsigned low, unsigned high)
+{
+	int err = 0;
+	on_trap_data_t otd;
+
+	if (on_trap(&otd, OT_DATA_ACCESS) == 0) {
+		native_write_msr(msr, low, high);
+	} else {
+		err = EINVAL;  /* XXX probably not right... */
+	}
+	no_trap();
+
+	return (err);
+}
+
+
+/* XXX Where should this live */
+page_t *
+alloc_page(size_t size, int flag)
+{
+	caddr_t page_addr;
+	pfn_t pfn;
+	page_t *pp;
+
+	if ((page_addr = kmem_zalloc(size, flag)) == NULL)
+		return ((page_t *)NULL);
+
+	pp = page_numtopp_nolock(hat_getpfnum(kas.a_hat, page_addr));
+	return (pp);
+}
+
+int
+kvm_vcpu_is_bsp(struct kvm_vcpu *vcpu)
+{
+	return (vcpu->kvm->bsp_vcpu_id == vcpu->vcpu_id);
+}
+
+/*
+ * Often times we have pages that correspond to addresses that are in a users
+ * virtual address space. Rather than trying to constantly map them in and out
+ * of our address space we instead go through and use the kpm segment to
+ * facilitate this for us. This always returns an address that is always in the
+ * kernel's virtual address space.
+ */
+caddr_t
+page_address(page_t *page)
+{
+	return (hat_kpm_mapin_pfn(page->p_pagenum));
+}
+
+uint32_t
+bit(int bitno)
+{
+	return (1 << (bitno & 31));
 }
