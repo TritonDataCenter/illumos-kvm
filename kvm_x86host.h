@@ -817,18 +817,6 @@ uint32_t get_rdx_init_val(void);
 
 void kvm_inject_gp(struct kvm_vcpu *vcpu, uint32_t error_code);
 
-#define	__kvm_handle_fault_on_reboot(insn) \
-	"666: " insn "\n\t" \
-	".pushsection .fixup, \"ax\" \n" \
-	"667: \n\t" \
-	__ASM_SIZE(push) " $666b \n\t"	      \
-	".popsection \n\t" \
-	".pushsection __ex_table, \"a\" \n\t" \
-	_ASM_PTR " 666b, 667b \n\t" \
-	".popsection \n\t"
-
-
-
 #define TSS_IOPB_BASE_OFFSET 0x66
 #define TSS_BASE_SIZE 0x68
 #define TSS_IOPB_SIZE (65536 / 8)
