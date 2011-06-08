@@ -714,20 +714,12 @@ kvm_create_pit(struct kvm *kvm, uint32_t flags)
 	return (pit);
 
 fail_unregister:
-#ifdef XXX
 	kvm_io_bus_unregister_dev(kvm, KVM_PIO_BUS, &pit->dev);
-#else
-	XXX_KVM_PROBE;
-#endif
 fail:
-#ifdef XXX
 	kvm_unregister_irq_mask_notifier(kvm, 0, &pit->mask_notifier);
 	kvm_unregister_irq_ack_notifier(kvm, &pit_state->irq_ack_notifier);
 	kvm_free_irq_source_id(kvm, pit->irq_source_id);
 	kmem_free(pit, sizeof (struct kvm_pit));
-#else
-	XXX_KVM_PROBE;
-#endif
 	return (NULL);
 }
 
