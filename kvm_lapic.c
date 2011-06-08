@@ -19,7 +19,7 @@
  * Copyright 2011 Joyent, Inc. All rights reserved.
  */
 #include <sys/types.h>
-#include <sys/atmoc.h>
+#include <sys/atomic.h>
 
 #include "kvm_bitops.h"
 #include "msr.h"

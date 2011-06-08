@@ -4644,7 +4644,7 @@ vmx_init(void)
 
 	if (kvm_vcpu_cache == NULL) {
 		r = ENOMEM;
-		goto out3;
+		goto out;
 	}
 
 	/*
