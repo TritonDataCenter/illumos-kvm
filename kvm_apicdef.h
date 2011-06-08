@@ -413,9 +413,5 @@ typedef struct local_apic local_apic_t;
 
 #undef uint32_t
 
-#ifdef CONFIG_X86_32
- #define BAD_APICID 0xFFu
-#else
- #define BAD_APICID 0xFFFFu
-#endif
+#define	BAD_APICID	0xFFFFu
 #endif /* _ASM_X86_APICDEF_H */
