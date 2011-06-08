@@ -79,7 +79,7 @@ pit_set_gate(struct kvm *kvm, int channel, uint32_t val)
 	default:
 	case 0:
 	case 4:
-		/* XXX: just disable/enable counting */
+		/* just disable/enable counting */
 		break;
 	case 1:
 	case 2:
@@ -160,7 +160,7 @@ pit_get_count(struct kvm *kvm, int channel)
 		counter = (c->count - d) & 0xffff;
 		break;
 	case 3:
-		/* XXX: may be incorrect for odd counts */
+		/* may be incorrect for odd counts */
 		counter = c->count - (mod_64((2 * d), c->count));
 		break;
 	default:
@@ -242,14 +242,9 @@ pit_has_pending_timer(struct kvm_vcpu *vcpu)
 {
 	struct kvm_pit *pit = vcpu->kvm->arch.vpit;
 
-#ifdef XXX
-	if (pit && kvm_vcpu_is_bsp(vcpu) && pit->pit_state.irq_ack)
-		return (atomic_read(&pit->pit_state.pit_timer.pending));
-#else
-	XXX_KVM_SYNC_PROBE;
 	if (pit && kvm_vcpu_is_bsp(vcpu) && pit->pit_state.irq_ack)
 		return (pit->pit_state.pit_timer.pending);
-#endif
+
 	return (0);
 }
 
@@ -316,7 +311,7 @@ create_pit_timer(struct kvm_kpit_state *ps, uint32_t val, int is_period)
 	pt->kvm = ps->pit->kvm;
 	pt->vcpu = pt->kvm->bsp_vcpu;
 
-	pt->pending = 0;  /* XXX need protection? */
+	pt->pending = 0;
 	ps->irq_ack = 1;
 	pt->start = gethrtime();
 
@@ -604,12 +599,7 @@ speaker_ioport_read(struct kvm_io_device *this, gpa_t addr, int len, void *data)
 		return (-EOPNOTSUPP);
 
 	/* Refresh clock toggles at about 15us. We approximate as 2^14ns. */
-#ifdef XXX
-	refresh_clock = ((unsigned int)ktime_to_ns(ktime_get()) >> 14) & 1;
-#else
 	refresh_clock = ((unsigned int)gethrtime() >> 14) & 1;
-	XXX_KVM_PROBE;
-#endif
 
 	mutex_enter(&pit_state->lock);
 	ret = ((pit_state->speaker_data_on << 1) | pit_get_gate(kvm, 2) |
@@ -639,7 +629,7 @@ kvm_pit_reset(struct kvm_pit *pit)
 	}
 	mutex_exit(&pit->pit_state.lock);
 
-	pit->pit_state.pit_timer.pending =  0; /* XXX need protection? */
+	pit->pit_state.pit_timer.pending =  0;
 	pit->pit_state.irq_ack = 1;
 }
 
@@ -650,12 +640,7 @@ pit_mask_notifer(struct kvm_irq_mask_notifier *kimn, int mask)
 	    offsetof(struct kvm_pit, mask_notifier));
 
 	if (!mask) {
-#ifdef XXX
-		atomic_set(&pit->pit_state.pit_timer.pending, 0);
-#else
 		pit->pit_state.pit_timer.pending = 0;
-		XXX_KVM_PROBE;
-#endif
 		pit->pit_state.irq_ack = 1;
 	}
 }
@@ -689,23 +674,13 @@ kvm_create_pit(struct kvm *kvm, uint32_t flags)
 
 	mutex_init(&pit->pit_state.lock, NULL, MUTEX_DRIVER, 0);
 	mutex_enter(&pit->pit_state.lock);
-#ifdef XXX
-	raw_spin_lock_init(&pit->pit_state.inject_lock);
-#else
-	XXX_KVM_SYNC_PROBE;
 	mutex_init(&pit->pit_state.inject_lock, NULL, MUTEX_DRIVER, 0);
-#endif
+
 	kvm->arch.vpit = pit;
 	pit->kvm = kvm;
 
 	pit_state = &pit->pit_state;
 	pit_state->pit = pit;
-#ifdef XXX
-	hrtimer_init(&pit_state->pit_timer.timer,
-	    CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
-#else
-	XXX_KVM_PROBE;
-#endif
 
 	pit_state->irq_ack_notifier.gsi = 0;
 	pit_state->irq_ack_notifier.irq_acked = kvm_pit_ack_irq;
@@ -794,22 +769,13 @@ kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu)
 		 * Try to inject pending interrupts when
 		 * last one has been acked.
 		 */
-#ifdef XXX
-		raw_spin_lock(&ps->inject_lock);
-		if (atomic_read(&ps->pit_timer.pending) && ps->irq_ack) {
-			ps->irq_ack = 0;
-			inject = 1;
-		}
-		raw_spin_unlock(&ps->inject_lock);
-#else
-		XXX_KVM_SYNC_PROBE;
 		mutex_enter(&ps->inject_lock);
 		if (ps->pit_timer.pending && ps->irq_ack) {
 			ps->irq_ack = 0;
 			inject = 1;
 		}
 		mutex_exit(&ps->inject_lock);
-#endif
+
 		if (inject)
 			__inject_pit_timer_intr(kvm);
 	}
