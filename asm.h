@@ -9,11 +9,7 @@
 # define __ASM_EX_SEC	" .section __ex_table,\"a\"\n"
 #endif
 
-#ifdef CONFIG_X86_32
-# define __ASM_SEL(a,b) __ASM_FORM(a)
-#else
 # define __ASM_SEL(a,b) __ASM_FORM(b)
-#endif
 
 #define __ASM_SIZE(inst)	__ASM_SEL(inst##l, inst##q)
 #define __ASM_REG(reg)		__ASM_SEL(e##reg, r##reg)

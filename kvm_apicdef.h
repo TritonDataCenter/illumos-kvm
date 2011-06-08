@@ -24,11 +24,7 @@
 #define		APIC_LVR_DIRECTED_EOI	(1 << 24)
 #define		GET_APIC_VERSION(x)	((x) & 0xFFu)
 #define		GET_APIC_MAXLVT(x)	(((x) >> 16) & 0xFFu)
-#ifdef CONFIG_X86_32
-#  define	APIC_INTEGRATED(x)	((x) & 0xF0u)
-#else
-#  define	APIC_INTEGRATED(x)	(1)
-#endif
+#define		APIC_INTEGRATED(x)	(1)
 #define		APIC_XAPIC(x)		((x) >= 0x14)
 #define		APIC_EXT_SPACE(x)	((x) & 0x80000000)
 #define	APIC_TASKPRI	0x80
@@ -142,12 +138,8 @@
 #define APIC_BASE_MSR	0x800
 #define X2APIC_ENABLE	(1UL << 10)
 
-#ifdef CONFIG_X86_32
-# define MAX_IO_APICS 64
-#else
-# define MAX_IO_APICS 128
-# define MAX_LOCAL_APIC 32768
-#endif
+#define	MAX_IO_APICS 128
+#define	MAX_LOCAL_APIC 32768
 
 /*
  * All x86-64 systems are xAPIC compatible.
