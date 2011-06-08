@@ -92,18 +92,18 @@ set ylabel "Occurences of XXX"
 set xlabel "Date"
 
 set title "Number of XXXs in KVM"
-plot "/tmp/kvm-xxx.out-all" using 1:2 with lines title "#ifdef XXX", \
-    "/tmp/kvm-xxx.out-all" using 1:3 with lines title "Commented XXX"
+plot "$out-all" using 1:2 with lines title "#ifdef XXX", \
+    "$out-all" using 1:3 with lines title "Commented XXX"
  
 set format x "%m/%d"
 set title "Number of XXXs in KVM over the past month"
-plot "/tmp/kvm-xxx.out-month" using 1:2 with lines title "#ifdef XXX", \
-    "/tmp/kvm-xxx.out-month" using 1:3 with lines title "Commented XXX"
+plot "$out-month" using 1:2 with lines title "#ifdef XXX", \
+    "$out-month" using 1:3 with lines title "Commented XXX"
 
 set format x "%m/%d\n%H:%M"
 set title "Number of XXXs in KVM over the past week"
-plot "/tmp/kvm-xxx.out-week" using 1:2 with lines title "#ifdef XXX", \
-    "/tmp/kvm-xxx.out-week" using 1:3 with lines title "Commented XXX"
+plot "$out-week" using 1:2 with lines title "#ifdef XXX", \
+    "$out-week" using 1:3 with lines title "Commented XXX"
 
 EOF
 
