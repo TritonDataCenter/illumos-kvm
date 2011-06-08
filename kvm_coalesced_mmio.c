@@ -15,12 +15,9 @@
 static struct kvm_coalesced_mmio_dev *
 to_mmio(struct kvm_io_device *dev)
 {
-#ifdef XXX
-	return (container_of(dev, struct kvm_coalesced_mmio_dev, dev));
-#else
-	XXX_KVM_PROBE;
-	return ((struct kvm_coalesced_mmio_dev *)dev);
-#endif
+	uintptr_t dp = (uintptr_t)dev;
+	return ((struct kvm_coalesced_mmio_dev *)(dp -
+	    offsetof(struct kvm_coalesced_mmio_dev, dev)));
 }
 
 static int

@@ -178,13 +178,8 @@ typedef struct vcpu_vmx {
 static struct vcpu_vmx *
 to_vmx(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX_KVM_DOESNTCOMPILE
-	return (container_of(vcpu, struct vcpu_vmx, vcpu));
-#else
-	/* assumes vcpu is first field in vcpu_vmx */
-	/* because gcc with kernel flags complains about container_of */
-	return ((struct vcpu_vmx *)vcpu);
-#endif
+	return ((struct vcpu_vmx *)((uintptr_t)vcpu -
+	    offsetof(struct vcpu_vmx, vcpu)));
 }
 
 typedef struct vmcs_config {

@@ -1452,13 +1452,9 @@ kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages)
 			!list_is_empty(&kvm->arch.active_mmu_pages)) {
 			struct kvm_mmu_page *page;
 
-#ifdef XXX_KVM_DOESNTCOMPILE
-			page = container_of(kvm->arch.active_mmu_pages.prev,
-					    struct kvm_mmu_page, link);
-#else
 			page = (struct kvm_mmu_page *)
 			    list_head(&kvm->arch.active_mmu_pages);
-#endif
+
 			/* page removed by kvm_mmu_zap_page */
 			used_pages -= kvm_mmu_zap_page(kvm, page);
 			used_pages--;
@@ -2713,13 +2709,7 @@ __kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 	    !list_is_empty(&vcpu->kvm->arch.active_mmu_pages)) {
 		struct kvm_mmu_page *sp;
 
-#ifdef XXX
-		sp = container_of(vcpu->kvm->arch.active_mmu_pages.prev,
-		    struct kvm_mmu_page, link);
-#else
-		XXX_KVM_PROBE;
 		sp = list_head(&vcpu->kvm->arch.active_mmu_pages);
-#endif
 		kvm_mmu_zap_page(vcpu->kvm, sp);
 		KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_recycled);
 	}

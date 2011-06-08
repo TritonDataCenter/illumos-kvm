@@ -600,12 +600,8 @@ __apic_read(struct kvm_lapic *apic, unsigned int offset)
 static inline struct kvm_lapic *
 to_lapic(struct kvm_io_device *dev)
 {
-#ifdef XXX
-	return (container_of(dev, struct kvm_lapic, dev));
-#else
-	XXX_KVM_PROBE;
-	return (dev->lapic);
-#endif
+	return ((struct kvm_lapic *)((uintptr_t)dev -
+	    offsetof(struct kvm_lapic, dev)));
 }
 
 int

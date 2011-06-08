@@ -475,11 +475,7 @@ picdev_in_range(gpa_t addr)
 static inline struct kvm_pic *
 to_pic(struct kvm_io_device *dev)
 {
-#ifdef XXX_KVM_DOESNTCOMPILE
-	return (container_of(dev, struct kvm_pic, dev));
-#else
 	return ((struct kvm_pic *)((caddr_t)dev-offsetof(struct kvm_pic, dev)));
-#endif
 }
 
 static int
