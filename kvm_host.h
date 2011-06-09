@@ -223,11 +223,9 @@ typedef struct kvm {
 #endif
 
 	kmutex_t irq_lock;
-#ifdef CONFIG_HAVE_KVM_IRQCHIP
 	struct kvm_irq_routing_table *irq_routing;
 	list_t mask_notifier_list;
 	list_t irq_ack_notifier_list;
-#endif
 
 #if defined(KVM_ARCH_WANT_MMU_NOTIFIER)  && defined(CONFIG_MMU_NOTIFIER)
 	struct mmu_notifier mmu_notifier;
@@ -498,20 +496,12 @@ void kvm_migrate_timers(struct kvm_vcpu *vcpu);
 #define unalias_gfn_instantiation unalias_gfn
 #endif
 
-#ifdef CONFIG_HAVE_KVM_IRQCHIP
-
 int kvm_setup_default_irq_routing(struct kvm *kvm);
 int kvm_set_irq_routing(struct kvm *kvm,
 			const struct kvm_irq_routing_entry *entries,
 			unsigned nr,
 			unsigned flags);
 void kvm_free_irq_routing(struct kvm *kvm);
-
-#else
-
-static void kvm_free_irq_routing(struct kvm *kvm) {}
-
-#endif /*CONFIG_HAVE_KVM_IRQCHIP*/
 
 #ifdef	CONFIG_KVM_APIC_ARCHITECTURE
 extern int kvm_vcpu_is_bsp(struct kvm_vcpu *);

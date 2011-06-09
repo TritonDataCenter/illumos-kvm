@@ -379,13 +379,12 @@ kvm_destroy_vm(struct kvm *kvmp)
 		kmem_free(kvmp->buses[ii], sizeof (struct kvm_io_bus));
 
 	rw_destroy(&kvmp->kvm_rwlock);
-#ifdef CONFIG_HAVE_KVM_IRQCHIP
+
 	/*
 	 * These lists are contained by the pic. However, the pic isn't
 	 */
 	list_destroy(&kvmp->irq_ack_notifier_list);
 	list_destroy(&kvmp->mask_notifier_list);
-#endif
 	kvm_arch_destroy_vm(kvmp);
 }
 
@@ -399,14 +398,12 @@ kvm_create_vm(void)
 	if (kvmp == NULL)
 		return (NULL);
 
-#ifdef CONFIG_HAVE_KVM_IRQCHIP
 	list_create(&kvmp->mask_notifier_list,
 		    sizeof (struct kvm_irq_mask_notifier),
 		    offsetof(struct kvm_irq_mask_notifier, link));
 	list_create(&kvmp->irq_ack_notifier_list,
 		    sizeof (struct kvm_irq_ack_notifier),
 		    offsetof(struct kvm_irq_ack_notifier, link));
-#endif
 
 	kvmp->memslots = kmem_zalloc(sizeof (struct kvm_memslots), KM_SLEEP);
 
@@ -1355,11 +1352,9 @@ kvm_dev_ioctl_check_extension_generic(long arg, int *rv)
 	case KVM_CAP_INTERNAL_ERROR_DATA:
 		*rv = 1;
 		return (DDI_SUCCESS);
-#ifdef CONFIG_HAVE_KVM_IRQCHIP
 	case KVM_CAP_IRQ_ROUTING:
 		*rv = KVM_MAX_IRQ_ROUTES;
 		return (DDI_SUCCESS);
-#endif
 	default:
 		break;
 	}
