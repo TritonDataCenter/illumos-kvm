@@ -314,9 +314,7 @@ typedef struct kvm_guest_debug {
 #define	KVM_CAP_SET_GUEST_DEBUG			23
 #endif
 #define	KVM_CAP_REINJECT_CONTROL		24
-#ifdef __KVM_HAVE_IOAPIC
 #define	KVM_CAP_IRQ_ROUTING			25
-#endif
 #define	KVM_CAP_IRQ_INJECT_STATUS		26
 #ifdef __KVM_HAVE_DEVICE_ASSIGNMENT
 #define	KVM_CAP_DEVICE_DEASSIGNMENT		27
