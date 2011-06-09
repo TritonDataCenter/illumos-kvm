@@ -182,12 +182,6 @@ typedef struct kvm_coalesced_mmio_ring {
 	struct kvm_coalesced_mmio coalesced_mmio[1];
 } kvm_coalesced_mmio_ring_t;
 
-/* XXX NEEDS TO DIE! */
-typedef struct kvm_coalesced_mmio_zone_ioc {
-	struct kvm_coalesced_mmio_zone zone;
-	int kvmid;
-} kvm_coalesced_mmio_zone_ioc_t;
-
 #define	KVM_COALESCED_MMIO_MAX \
 	((PAGESIZE - sizeof (struct kvm_coalesced_mmio_ring)) / \
 	sizeof (struct kvm_coalesced_mmio))
@@ -430,9 +424,9 @@ typedef struct kvm_clock_data {
 #define	KVM_IRQ_LINE_STATUS	_IOWR(KVMIO, 0x67, struct kvm_irq_level)
 
 #define	KVM_REGISTER_COALESCED_MMIO _IOW(KVMIO,  0x67, \
-					    struct kvm_coalesced_mmio_zone_ioc)
+					    struct kvm_coalesced_mmio_zone)
 #define	KVM_UNREGISTER_COALESCED_MMIO _IOW(KVMIO,  0x68, \
-					    struct kvm_coalesced_mmio_zone_ioc)
+					    struct kvm_coalesced_mmio_zone)
 #define	KVM_SET_GSI_ROUTING	_IOW(KVMIO,  0x6a, struct kvm_irq_routing)
 #define	KVM_REINJECT_CONTROL	_IO(KVMIO,   0x71)
 #define	KVM_CREATE_PIT2		_IOW(KVMIO,  0x77, struct kvm_pit_config)

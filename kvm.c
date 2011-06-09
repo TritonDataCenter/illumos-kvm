@@ -2375,52 +2375,50 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 
 	case KVM_REGISTER_COALESCED_MMIO: {
 		struct kvm *kvmp;
-		struct kvm_coalesced_mmio_zone_ioc *zone_ioc;
-		size_t sz = sizeof (struct kvm_coalesced_mmio_zone_ioc);
+		struct kvm_coalesced_mmio_zone *zone;
+		size_t sz = sizeof (struct kvm_coalesced_mmio_zone);
 
-		zone_ioc = kmem_zalloc(sz, KM_SLEEP);
+		zone = kmem_zalloc(sz, KM_SLEEP);
 
-		if (copyin(argp, zone_ioc, sz) != 0) {
-			kmem_free(zone_ioc, sz);
+		if (copyin(argp, zone, sz) != 0) {
+			kmem_free(zone, sz);
 			rval = EFAULT;
 			break;
 		}
 
 		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
-			kmem_free(zone_ioc, sz);
+			kmem_free(zone, sz);
 			break;
 		}
 
-		rval = kvm_vm_ioctl_register_coalesced_mmio(kvmp,
-		    &zone_ioc->zone);
+		rval = kvm_vm_ioctl_register_coalesced_mmio(kvmp, zone);
 
-		kmem_free(zone_ioc, sz);
+		kmem_free(zone, sz);
 		break;
 	}
 
 	case KVM_UNREGISTER_COALESCED_MMIO: {
-		struct kvm_coalesced_mmio_zone_ioc *zone_ioc;
+		struct kvm_coalesced_mmio_zone *zone;
 		struct kvm *kvmp;
-		size_t sz = sizeof (struct kvm_coalesced_mmio_zone_ioc);
+		size_t sz = sizeof (struct kvm_coalesced_mmio_zone);
 
-		zone_ioc = kmem_zalloc(sz, KM_SLEEP);
+		zone = kmem_zalloc(sz, KM_SLEEP);
 
-		if (copyin(argp, zone_ioc, sz) != 0) {
-			kmem_free(zone_ioc, sz);
+		if (copyin(argp, zone, sz) != 0) {
+			kmem_free(zone, sz);
 			break;
 		}
 
 		if ((kvmp = ksp->kds_kvmp) == NULL) {
-			kmem_free(zone_ioc, sz);
+			kmem_free(zone, sz);
 			rval = EINVAL;
 			break;
 		}
 
-		rval = kvm_vm_ioctl_unregister_coalesced_mmio(kvmp,
-		    &zone_ioc->zone);
+		rval = kvm_vm_ioctl_unregister_coalesced_mmio(kvmp, zone);
 
-		kmem_free(zone_ioc, sz);
+		kmem_free(zone, sz);
 		break;
 	}
 #ifdef KVM_CAP_IRQ_ROUTING
