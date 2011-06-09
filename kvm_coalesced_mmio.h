@@ -11,8 +11,6 @@
  */
 #include "kvm_iodev.h"
 
-#ifdef CONFIG_KVM_MMIO
-
 #define KVM_COALESCED_MMIO_ZONE_MAX 100
 
 /* for KVM_REGISTER_COALESCED_MMIO / KVM_UNREGISTER_COALESCED_MMIO */
@@ -31,7 +29,5 @@ extern int kvm_vm_ioctl_register_coalesced_mmio(struct kvm *,
     struct kvm_coalesced_mmio_zone *);
 extern int kvm_vm_ioctl_unregister_coalesced_mmio(struct kvm *,
     struct kvm_coalesced_mmio_zone *);
-
-#endif /* CONFIG_KVM_MMIO */
 
 #endif /* __KVM_COALESCED_MMIO_H__ */
