@@ -4540,13 +4540,11 @@ kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 
 	update_cr8_intercept(vcpu);
 
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	/* Older userspace won't unhalt the vcpu on reset. */
 	if (kvm_vcpu_is_bsp(vcpu) && kvm_rip_read(vcpu) == 0xfff0 &&
 	    sregs->cs.selector == 0xf000 && sregs->cs.base == 0xffff0000 &&
 	    !is_protmode(vcpu))
 		vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
-#endif /* CONFIG_KVM_APIC_ARCHITECTURE */
 
 	vcpu_put(vcpu);
 

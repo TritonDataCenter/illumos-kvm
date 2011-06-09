@@ -196,10 +196,8 @@ typedef struct kvm {
 	/* the following was a read-copy update mechanism */
 	/* we'll use a reader-writer lock, for now */
 	krwlock_t kvm_rwlock;
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	uint32_t bsp_vcpu_id;
 	struct kvm_vcpu *bsp_vcpu;
-#endif
 	struct kvm_vcpu *vcpus[KVM_MAX_VCPUS];
 	volatile int online_vcpus;
 	struct list_node vm_list;
@@ -503,9 +501,7 @@ int kvm_set_irq_routing(struct kvm *kvm,
 			unsigned flags);
 void kvm_free_irq_routing(struct kvm *kvm);
 
-#ifdef	CONFIG_KVM_APIC_ARCHITECTURE
 extern int kvm_vcpu_is_bsp(struct kvm_vcpu *);
-#endif
 
 void kvm_sigprocmask(int how, sigset_t *, sigset_t *);
 

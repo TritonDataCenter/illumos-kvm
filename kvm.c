@@ -1293,10 +1293,8 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p)
 #endif
 	atomic_inc_32(&kvm->online_vcpus);
 
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	if (kvm->bsp_vcpu_id == id)
 		kvm->bsp_vcpu = vcpu;
-#endif
 
 	mutex_exit(&kvm->lock);
 	return (r);
@@ -1346,9 +1344,7 @@ kvm_dev_ioctl_check_extension_generic(long arg, int *rv)
 	case KVM_CAP_USER_MEMORY:
 	case KVM_CAP_DESTROY_MEMORY_REGION_WORKS:
 	case KVM_CAP_JOIN_MEMORY_REGIONS_WORKS:
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	case KVM_CAP_SET_BOOT_CPU_ID:
-#endif
 	case KVM_CAP_INTERNAL_ERROR_DATA:
 		*rv = 1;
 		return (DDI_SUCCESS);
@@ -2358,7 +2354,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		break;
 	}
 
-#ifdef CONFIG_KVM_APIC_ARCHITECTURE
 	case KVM_SET_BOOT_CPU_ID: {
 		struct kvm_set_boot_cpu_id_ioc boot_cpu_id_ioc;
 		struct kvm *kvmp;
@@ -2390,7 +2385,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		mutex_exit(&kvmp->lock);
 		break;
 	}
-#endif
+
 #ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	case KVM_REGISTER_COALESCED_MMIO: {
 		struct kvm *kvmp;
