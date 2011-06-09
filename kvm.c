@@ -353,9 +353,7 @@ kvm_destroy_vm(struct kvm *kvmp)
 
 	kvm_arch_destroy_vm_comps(kvmp);
 
-#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	kvm_coalesced_mmio_free(kvmp);
-#endif
 
 	list_remove(&vm_list, kvmp);
 	/*
@@ -471,9 +469,7 @@ kvm_create_vm(void)
 
 	kstat_install(kvmp->kvm_kstat);
 
-#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	kvm_coalesced_mmio_init(kvmp);
-#endif
 
 	return (kvmp);
 }
@@ -2386,7 +2382,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		break;
 	}
 
-#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 	case KVM_REGISTER_COALESCED_MMIO: {
 		struct kvm *kvmp;
 		struct kvm_coalesced_mmio_zone_ioc *zone_ioc;
@@ -2437,7 +2432,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		kmem_free(zone_ioc, sz);
 		break;
 	}
-#endif
 #ifdef KVM_CAP_IRQ_ROUTING
 	case KVM_SET_GSI_ROUTING: {
 		struct kvm_irq_routing *route;

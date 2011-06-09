@@ -1591,14 +1591,9 @@ kvm_dev_ioctl_check_extension(long ext, int *rval_p)
 		r = DDI_SUCCESS;
 		break;
 	case KVM_CAP_COALESCED_MMIO:
-#ifdef KVM_COALESCED_MMIO_PAGE_OFFSET
 		*rval_p = KVM_COALESCED_MMIO_PAGE_OFFSET;
 		r = DDI_SUCCESS;
 		break;
-#else
-		r = EINVAL;
-		break;
-#endif
 	case KVM_CAP_VAPIC:
 		*rval_p = !kvm_x86_ops->cpu_has_accelerated_tpr();
 		r = DDI_SUCCESS;
