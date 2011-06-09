@@ -4970,11 +4970,6 @@ kvm_arch_destroy_vm_comps(struct kvm *kvmp)
 {
 	if (kvmp == NULL)
 
-#ifdef IOMMU
-	kvm_iommu_unmap_guest(kvmp);
-#else
-	XXX_KVM_PROBE;
-#endif /* IOMMU */
 	kvm_free_pit(kvmp);
 	kvm_free_vcpus(kvmp);
 	kvm_free_physmem(kvmp);

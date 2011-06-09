@@ -693,15 +693,6 @@ skip_lpage:
 	if (r)
 		goto out_free;
 
-#ifdef CONFIG_DMAR
-	/* map the pages in iommu page table */
-	if (npages) {
-		r = kvm_iommu_map_pages(kvmp, &new);
-		if (r)
-			goto out_free;
-	}
-#endif
-
 	r = ENOMEM;
 	slots = kmem_zalloc(sizeof (kvm_memslots_t), KM_SLEEP);
 	memcpy(slots, kvmp->memslots, sizeof (kvm_memslots_t));
