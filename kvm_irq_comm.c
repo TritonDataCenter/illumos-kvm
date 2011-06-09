@@ -46,14 +46,10 @@ static int
 kvm_set_pic_irq(struct kvm_kernel_irq_routing_entry *e,
     struct kvm *kvm, int irq_source_id, int level)
 {
-#ifdef CONFIG_X86
 	struct kvm_pic *pic = pic_irqchip(kvm);
 	level = kvm_irq_line_state(&pic->irq_states[e->irqchip.pin],
 	    irq_source_id, level);
 	return (kvm_pic_set_irq(pic, e->irqchip.pin, level));
-#else
-	return (-1);
-#endif
 }
 
 static int
@@ -282,9 +278,7 @@ kvm_free_irq_source_id(struct kvm *kvm, int irq_source_id)
 		clear_bit(irq_source_id, &kvm->arch.vioapic->irq_states[i]);
 		if (i >= 16)
 			continue;
-#ifdef CONFIG_X86
 		clear_bit(irq_source_id, &pic_irqchip(kvm)->irq_states[i]);
-#endif
 	}
 unlock:
 	mutex_exit(&kvm->irq_lock);
@@ -489,7 +483,6 @@ out:
 
 #define	ROUTING_ENTRY1(irq) IOAPIC_ROUTING_ENTRY(irq)
 
-#ifdef CONFIG_X86
 #define	PIC_ROUTING_ENTRY(irq)					\
 	{							\
 		.gsi = irq,					\
@@ -500,10 +493,6 @@ out:
 
 #define	ROUTING_ENTRY2(irq) \
 	IOAPIC_ROUTING_ENTRY(irq), PIC_ROUTING_ENTRY(irq)
-#else
-#define	ROUTING_ENTRY2(irq) \
-	IOAPIC_ROUTING_ENTRY(irq)
-#endif
 
 static const struct kvm_irq_routing_entry default_routing[] = {
 	ROUTING_ENTRY2(0), ROUTING_ENTRY2(1),

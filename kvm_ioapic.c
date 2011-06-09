@@ -182,7 +182,6 @@ ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 	irqe.level = 1;
 	irqe.shorthand = 0;
 
-#ifdef CONFIG_X86
 	/* Always delivery PIT interrupt to vcpu 0 */
 	if (irq == 0) {
 		irqe.dest_mode = 0; /* Physical mode. */
@@ -192,7 +191,7 @@ ioapic_deliver(struct kvm_ioapic *ioapic, int irq)
 		 */
 		irqe.dest_id = ioapic->kvm->bsp_vcpu->vcpu_id;
 	}
-#endif
+
 	return (kvm_irq_delivery_to_apic(ioapic->kvm, NULL, &irqe));
 }
 
