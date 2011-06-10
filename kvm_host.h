@@ -261,6 +261,7 @@ void kvm_put_kvm(struct kvm *kvm);
 static int is_error_hpa(hpa_t hpa) { return hpa >> HPA_MSB; }
 
 extern page_t *bad_page;
+extern void *bad_page_kma;
 extern pfn_t bad_pfn;
 
 int is_error_page(struct page *page);

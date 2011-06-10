@@ -72,6 +72,7 @@ typedef struct {
  * Globals
  */
 page_t *bad_page;
+void *bad_page_kma;
 pfn_t bad_pfn;
 
 /*
@@ -482,14 +483,13 @@ kvm_free_physmem_slot(struct kvm_memory_slot *free,
     struct kvm_memory_slot *dont)
 {
 	int i;
-#ifdef XXX  /* currently, this routine does nothing (memory leak, at best) */
 
 	if (!dont || free->rmap != dont->rmap)
-		vfree(free->rmap);
+		kmem_free(free->rmap, free->npages * sizeof (struct page *));
 
+#ifdef XXX
 	if (!dont || free->dirty_bitmap != dont->dirty_bitmap)
-		vfree(free->dirty_bitmap);
-
+		kmem_free(free->dirty_bitmap);
 
 	for (i = 0; i < KVM_NR_PAGE_SIZES - 1; ++i) {
 		if (!dont || free->lpage_info[i] != dont->lpage_info[i]) {
@@ -500,8 +500,8 @@ kvm_free_physmem_slot(struct kvm_memory_slot *free,
 
 	free->npages = 0;
 	free->dirty_bitmap = NULL;
-	free->rmap = NULL;
 #else
+	free->rmap = NULL;
 	XXX_KVM_PROBE;
 #endif
 }
@@ -1551,7 +1551,7 @@ kvm_init(void *opaque)
 	if (r != DDI_SUCCESS)
 		return (r);
 
-	bad_page = alloc_page(PAGESIZE, KM_SLEEP);
+	bad_page = alloc_page(KM_SLEEP, &bad_page_kma);
 	bad_pfn = bad_page->p_pagenum;
 
 #ifdef XXX
@@ -1655,11 +1655,7 @@ out_free_0a:
 	XXX_KVM_PROBE;
 #endif
 out_free_0:
-#ifdef XXX
-	free_page(bad_page, PAGESIZE);
-#else
-	XXX_KVM_PROBE;
-#endif
+	kmem_free(bad_page_kma, PAGESIZE);
 out:
 #ifdef XXX
 	kvm_arch_exit();
@@ -1786,6 +1782,8 @@ static int
 kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 {
 	int instance;
+
+	return (EBUSY);
 
 	if (cmd != DDI_DETACH)
 		return (DDI_FAILURE);

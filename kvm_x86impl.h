@@ -27,7 +27,7 @@ inline int is_pse(struct kvm_vcpu *vcpu);
 inline int is_paging(struct kvm_vcpu *vcpu);
 
 caddr_t page_address(page_t *page);
-extern page_t *alloc_page(size_t, int);
+extern page_t *alloc_page(int, void **);
 extern uint64_t kvm_va2pa(caddr_t va);
 extern page_t *pfn_to_page(pfn_t);
 extern int zero_constructor(void *, void *, int);

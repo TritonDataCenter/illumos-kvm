@@ -243,9 +243,8 @@ mmu_topup_memory_cache(struct kvm_mmu_memory_cache *cache,
 		return (0);
 	while (cache->nobjs < ARRAY_SIZE(cache->objects)) {
 		obj = kmem_cache_alloc(base_cache, KM_SLEEP);
-		if (!obj)
-			return (-ENOMEM);
-		cache->objects[cache->nobjs++] = obj;
+		cache->objects[cache->nobjs].kma_object = obj;
+		cache->objects[cache->nobjs++].kpm_object = NULL;
 	}
 	return (0);
 }
@@ -259,11 +258,12 @@ mmu_topup_memory_cache_page(struct kvm_mmu_memory_cache *cache, int min)
 		return (0);
 
 	while (cache->nobjs < ARRAY_SIZE(cache->objects)) {
-		page = alloc_page(PAGESIZE, KM_SLEEP);
+		page = alloc_page(KM_SLEEP,
+		    &cache->objects[cache->nobjs].kma_object);
 		if (!page)
 			return (-ENOMEM);
 
-		cache->objects[cache->nobjs++] = page_address(page);
+		cache->objects[cache->nobjs++].kpm_object = page_address(page);
 	}
 
 	return (0);
@@ -300,6 +300,15 @@ out:
 
 static void *
 mmu_memory_cache_alloc(struct kvm_mmu_memory_cache *mc, size_t size)
+{
+	if (mc->objects[--mc->nobjs].kpm_object)
+		return (mc->objects[mc->nobjs].kpm_object);
+	else
+		return (mc->objects[mc->nobjs].kma_object);
+}
+
+static struct kvm_objects
+mmu_memory_page_cache_alloc(struct kvm_mmu_memory_cache *mc, size_t size)
 {
 	return (mc->objects[--mc->nobjs]);
 }
@@ -679,6 +688,8 @@ kvm_mmu_free_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 	__free_page(virt_to_page(sp->spt));
 	__free_page(virt_to_page(sp->gfns));
 #else
+	kmem_free(sp->sptkma, PAGESIZE);
+	kmem_free(sp->gfnskma, PAGESIZE);
 	XXX_KVM_PROBE;
 #endif
 
@@ -708,12 +719,20 @@ static struct kvm_mmu_page *
 kvm_mmu_alloc_page(struct kvm_vcpu *vcpu, uint64_t *parent_pte)
 {
 	struct kvm_mmu_page *sp;
+	struct kvm_objects kobj;
 
 	sp = mmu_memory_cache_alloc(&vcpu->arch.mmu_page_header_cache,
 	    sizeof (*sp));
-	sp->spt = mmu_memory_cache_alloc(&vcpu->arch.mmu_page_cache, PAGESIZE);
-	sp->gfns = mmu_memory_cache_alloc(&vcpu->arch.mmu_page_cache, PAGESIZE);
+	kobj = mmu_memory_page_cache_alloc(&vcpu->arch.mmu_page_cache,
+	    PAGESIZE);
+	sp->spt = kobj.kpm_object;
+	sp->sptkma = kobj.kma_object;
+	kobj = mmu_memory_page_cache_alloc(&vcpu->arch.mmu_page_cache,
+	    PAGESIZE);
+	sp->gfns = kobj.kpm_object;
+	sp->gfnskma = kobj.kma_object;
 	sp->kmp_avlspt = (uintptr_t)virt_to_page((caddr_t)sp->spt);
+	sp->vcpu = vcpu;
 
 	mutex_enter(&vcpu->kvm->kvm_avllock);
 	avl_add(&vcpu->kvm->kvm_avlmp, sp);
@@ -2786,7 +2805,7 @@ alloc_mmu_pages(struct kvm_vcpu *vcpu)
 	 * XXX - also, don't need to allocate a full page, we'll look
 	 * at htable_t later on solaris.
 	 */
-	page = alloc_page(PAGESIZE, KM_SLEEP);
+	page = alloc_page(KM_SLEEP, &vcpu->arch.mmu.alloc_pae_root);
 	if (!page)
 		return (-ENOMEM);
 
@@ -2831,10 +2850,44 @@ kvm_mmu_setup(struct kvm_vcpu *vcpu)
 	return (init_kvm_mmu(vcpu));
 }
 
+static void
+free_mmu_pages(struct kvm_vcpu *vcpu)
+{
+	kmem_free(vcpu->arch.mmu.alloc_pae_root, PAGESIZE);
+}
+
+static void
+mmu_free_memory_cache(struct kvm_mmu_memory_cache *mc, struct kmem_cache *cp)
+{
+	while (mc->nobjs)
+		kmem_cache_free(cp, mc->objects[--mc->nobjs].kma_object);
+}
+
+static void
+mmu_free_memory_cache_page(struct kvm_mmu_memory_cache *mc)
+{
+	while (mc->nobjs)
+		kmem_free(mc->objects[--mc->nobjs].kma_object, PAGESIZE);
+}
+
+static void
+mmu_free_memory_caches(struct kvm_vcpu *vcpu)
+{
+	mmu_free_memory_cache(&vcpu->arch.mmu_pte_chain_cache, pte_chain_cache);
+	mmu_free_memory_cache(&vcpu->arch.mmu_rmap_desc_cache, rmap_desc_cache);
+	mmu_free_memory_cache_page(&vcpu->arch.mmu_page_cache);
+	mmu_free_memory_cache(&vcpu->arch.mmu_page_header_cache,
+	    mmu_page_header_cache);
+}
+
 void
 kvm_mmu_destroy(struct kvm_vcpu *vcpu)
 {
-	XXX_KVM_PROBE;
+	ASSERT(vcpu);
+
+	destroy_kvm_mmu(vcpu);
+	free_mmu_pages(vcpu);
+	mmu_free_memory_caches(vcpu);
 }
 
 void
@@ -3045,15 +3098,16 @@ pfn_to_page(pfn_t pfn)
 }
 
 page_t *
-alloc_page(size_t size, int flag)
+alloc_page(int flag, void **kma_addr)
 {
 	caddr_t page_addr;
 	pfn_t pfn;
 	page_t *pp;
 
-	if ((page_addr = kmem_zalloc(size, flag)) == NULL)
+	if ((page_addr = kmem_zalloc(PAGESIZE, flag)) == NULL)
 		return ((page_t *)NULL);
 
+	*kma_addr = page_addr;
 	pp = page_numtopp_nolock(hat_getpfnum(kas.a_hat, page_addr));
 	return (pp);
 }

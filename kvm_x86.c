@@ -5107,11 +5107,7 @@ void
 kvm_arch_flush_shadow(struct kvm *kvm)
 {
 	kvm_mmu_zap_all(kvm);
-#ifdef XXX
 	kvm_reload_remote_mmus(kvm);
-#else
-	XXX_KVM_PROBE;
-#endif
 }
 
 int

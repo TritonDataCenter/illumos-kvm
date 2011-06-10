@@ -143,9 +143,14 @@ enum {
  */
 #define KVM_NR_MEM_OBJS 40
 
+struct kvm_objects {
+	void *kma_object;
+	void *kpm_object;
+};
+
 typedef struct kvm_mmu_memory_cache {
-	int nobjs;
-	void *objects[KVM_NR_MEM_OBJS];
+	int nobjs;  /* current number free in cache */
+	struct kvm_objects objects[KVM_NR_MEM_OBJS];
 } kvm_mmu_memory_cache_t;
 
 #define NR_PTE_CHAIN_ENTRIES 5
@@ -196,9 +201,11 @@ typedef struct kvm_mmu_page {
 	union kvm_mmu_page_role role;
 
 	uint64_t *spt;
+	char *sptkma;
 	uintptr_t kmp_avlspt;
 	/* hold the gfn of each spte inside spt */
 	gfn_t *gfns;
+	char *gfnskma;
 	/*
 	 * One bit set per slot which has memory
 	 * in this shadow page.
@@ -212,6 +219,7 @@ typedef struct kvm_mmu_page {
 		uint64_t *parent_pte;               /* !multimapped */
 		list_t parent_ptes; /* multimapped, kvm_pte_chain */
 	};
+	struct kvm_vcpu *vcpu;  /* needed for free */
 	unsigned long unsync_child_bitmap[BT_BITOUL(512)];
 } kvm_mmu_page_t;
 
@@ -257,6 +265,7 @@ typedef struct kvm_mmu {
 	union kvm_mmu_page_role base_role;
 
 	uint64_t *pae_root;
+	void *alloc_pae_root;
 	uint64_t rsvd_bits_mask[2][4];
 } kvm_mmu_t;
 
