@@ -1783,8 +1783,6 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 {
 	int instance;
 
-	return (EBUSY);
-
 	if (cmd != DDI_DETACH)
 		return (DDI_FAILURE);
 
