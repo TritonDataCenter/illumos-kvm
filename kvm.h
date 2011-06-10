@@ -498,8 +498,4 @@ typedef struct kvm_tpr_acl_ioc {
 	int cpu_index;
 } kvm_tpr_acl_ioc_t;
 
-typedef struct kvm_set_boot_cpu_id_ioc {
-	int id;
-} kvm_set_boot_cpu_id_ioc_t;
-
 #endif /* __KVM_H */

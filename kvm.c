@@ -2338,33 +2338,27 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 	}
 
 	case KVM_SET_BOOT_CPU_ID: {
-		struct kvm_set_boot_cpu_id_ioc boot_cpu_id_ioc;
 		struct kvm *kvmp;
-
-		if (copyin(argp, &boot_cpu_id_ioc,
-		    sizeof (boot_cpu_id_ioc)) != 0) {
-			rval = EFAULT;
-			break;
-		}
 
 		if ((kvmp = ksp->kds_kvmp) == NULL) {
 			rval = EINVAL;
 			break;
 		}
 
-		mutex_enter(&kvmp->lock);
-#ifdef XXX
-		if (atomic_read(&kvmp->online_vcpus) != 0)
-			rval = -EBUSY;
-		else {
-#else
-		{
-			XXX_KVM_PROBE;
-#endif
-			kvmp->bsp_vcpu_id = boot_cpu_id_ioc.id;
+		if (arg >= KVM_MAX_VCPUS) {
+			rval = EINVAL;
+			break;
 		}
 
-		*rv = kvmp->bsp_vcpu_id;
+		mutex_enter(&kvmp->lock);
+		if (kvmp->online_vcpus != 0) {
+			rval = EBUSY;
+			break;
+		} else {
+			kvmp->bsp_vcpu_id = arg;
+			*rv = kvmp->bsp_vcpu_id;
+		}
+
 		mutex_exit(&kvmp->lock);
 		break;
 	}
