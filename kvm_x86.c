@@ -4809,9 +4809,6 @@ void
 kvm_arch_hardware_disable(void *garbage)
 {
 	kvm_x86_ops->hardware_disable(garbage);
-#if defined(CONFIG_MMU_NOTIFIER) && defined(KVM_ARCH_WANT_MMU_NOTIFIER)
-	drop_user_return_notifiers(garbage);
-#endif
 }
 
 int
@@ -4983,9 +4980,6 @@ kvm_arch_destroy_vm_comps(struct kvm *kvmp)
 #else
 	XXX_KVM_PROBE;
 #endif /* XXX */
-#if defined(CONFIG_MMU_NOTIFIER) && defined(KVM_ARCH_WANT_MMU_NOTIFIER)
-	cleanup_srcu_struct(&kvm->srcu);
-#endif /* CONFIG_MMU_NOTIFIER && KVM_ARCH_WANT_MMU_NOTIFIER */
 }
 
 void

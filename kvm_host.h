@@ -103,9 +103,6 @@ int kvm_io_bus_unregister_dev(struct kvm *kvm, enum kvm_bus bus_idx,
 
 typedef struct kvm_vcpu {
 	struct kvm *kvm;
-#ifdef CONFIG_PREEMPT_NOTIFIERS
-	struct preempt_notifier preempt_notifier;
-#endif
 	int vcpu_id;
 	kmutex_t mutex;
 	int   cpu;
@@ -203,13 +200,6 @@ typedef struct kvm {
 	struct list_node vm_list;
 	kmutex_t lock;
 	struct kvm_io_bus *buses[KVM_NR_BUSES];
-#ifdef CONFIG_HAVE_KVM_EVENTFD
-	struct {
-		kmutex_t        lock;
-		struct list_head  items;
-	} irqfds;
-	struct list_head ioeventfds;
-#endif
 	struct kstat *kvm_kstat;
 	kvm_stats_t kvm_stats;
 	struct kvm_arch arch;
@@ -223,11 +213,6 @@ typedef struct kvm {
 	list_t mask_notifier_list;
 	list_t irq_ack_notifier_list;
 
-#if defined(KVM_ARCH_WANT_MMU_NOTIFIER)  && defined(CONFIG_MMU_NOTIFIER)
-	struct mmu_notifier mmu_notifier;
-	unsigned long mmu_notifier_seq;
-	long mmu_notifier_count;
-#endif
 	int kvmid;  /* unique identifier for this kvm */
 	int kvm_clones;
 	pid_t kvm_pid;			/* pid associated with this kvm */
