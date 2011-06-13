@@ -4966,6 +4966,7 @@ void
 kvm_arch_destroy_vm_comps(struct kvm *kvmp)
 {
 	if (kvmp == NULL)
+		return;
 
 	kvm_free_pit(kvmp);
 	kvm_free_vcpus(kvmp);
