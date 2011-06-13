@@ -1753,6 +1753,43 @@ set_pte:
 	return (ret);
 }
 
+static int
+kvm_unmap_rmapp(struct kvm *kvm, unsigned long *rmapp,
+		unsigned long data)
+{
+	uint64_t *spte;
+	int need_tlb_flush = 0;
+
+	while ((spte = rmap_next(kvm, rmapp, NULL))) {
+		if (!(*spte & PT_PRESENT_MASK)) {
+			cmn_err(CE_PANIC,
+				"kvm_unmap_rmapp: spte = %p, *spte = %lx\n",
+				spte, *spte);
+		}
+		rmap_remove(kvm, spte);
+		__set_spte(spte, shadow_trap_nonpresent_pte);
+		need_tlb_flush = 1;
+	}
+	return (need_tlb_flush);
+}
+
+#define	RMAP_RECYCLE_THRESHOLD	1000
+
+static void
+rmap_recycle(struct kvm_vcpu *vcpu, uint64_t *spte, gfn_t gfn)
+{
+	unsigned long *rmapp;
+	struct kvm_mmu_page *sp;
+
+	sp = page_header(vcpu->kvm, kvm_va2pa((caddr_t)spte));
+
+	gfn = unalias_gfn(vcpu->kvm, gfn);
+	rmapp = gfn_to_rmap(vcpu->kvm, gfn, sp->role.level);
+
+	kvm_unmap_rmapp(vcpu->kvm, rmapp, 0);
+	kvm_flush_remote_tlbs(vcpu->kvm);
+}
+
 static void
 mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep, unsigned pt_access,
     unsigned pte_access, int user_fault, int write_fault, int dirty,
@@ -1796,12 +1833,8 @@ mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep, unsigned pt_access,
 	if (!was_rmapped) {
 		rmap_count = rmap_add(vcpu, sptep, gfn);
 		kvm_release_pfn_clean(pfn);
-#ifdef XXX
 		if (rmap_count > RMAP_RECYCLE_THRESHOLD)
 			rmap_recycle(vcpu, sptep, gfn);
-#else
-		XXX_KVM_PROBE;
-#endif
 	} else {
 		if (was_writable)
 			kvm_release_pfn_dirty(pfn);
@@ -2480,21 +2513,27 @@ mmu_pte_write_new_pte(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 		paging64_update_pte(vcpu, sp, spte, new);
 }
 
-
+static int
+need_remote_flush(uint64_t old, uint64_t new)
+{
+	if (!is_shadow_present_pte(old))
+		return (0);
+	if (!is_shadow_present_pte(new))
+		return (1);
+	if ((old ^ new) & PT64_BASE_ADDR_MASK)
+		return (1);
+	old ^= PT64_NX_MASK;
+	new ^= PT64_NX_MASK;
+	return ((old & ~new & PT64_PERM_MASK) != 0);
+}
 
 static void
 mmu_pte_write_flush_tlb(struct kvm_vcpu *vcpu, uint64_t old, uint64_t new)
 {
-#ifdef XXX
 	if (need_remote_flush(old, new))
 		kvm_flush_remote_tlbs(vcpu->kvm);
-	else {
-#else
-	{
-		XXX_KVM_PROBE;
-#endif
+	else
 		kvm_mmu_flush_tlb(vcpu);
-	}
 }
 
 static int
@@ -2724,7 +2763,7 @@ __kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 	    !list_is_empty(&vcpu->kvm->arch.active_mmu_pages)) {
 		struct kvm_mmu_page *sp;
 
-		sp = list_head(&vcpu->kvm->arch.active_mmu_pages);
+		sp = list_remove_tail(&vcpu->kvm->arch.active_mmu_pages);
 		kvm_mmu_zap_page(vcpu->kvm, sp);
 		KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_recycled);
 	}

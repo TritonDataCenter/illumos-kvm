@@ -352,8 +352,12 @@ kvm_destroy_vm(struct kvm *kvmp)
 	if (kvmp->kvm_kstat != NULL)
 		kstat_delete(kvmp->kvm_kstat);
 
-	kvm_arch_destroy_vm_comps(kvmp);
+	kvm_arch_flush_shadow(kvmp);  /* clean up shadow page tables */
 
+	kvm_arch_destroy_vm_comps(kvmp);
+	kvm_free_irq_routing(kvmp);
+	kvm_destroy_pic(kvmp);
+	kvm_ioapic_destroy(kvmp);
 	kvm_coalesced_mmio_free(kvmp);
 
 	list_remove(&vm_list, kvmp);
@@ -384,6 +388,7 @@ kvm_destroy_vm(struct kvm *kvmp)
 	 */
 	list_destroy(&kvmp->irq_ack_notifier_list);
 	list_destroy(&kvmp->mask_notifier_list);
+
 	kvm_arch_destroy_vm(kvmp);
 }
 
@@ -487,23 +492,21 @@ kvm_free_physmem_slot(struct kvm_memory_slot *free,
 	if (!dont || free->rmap != dont->rmap)
 		kmem_free(free->rmap, free->npages * sizeof (struct page *));
 
-#ifdef XXX
-	if (!dont || free->dirty_bitmap != dont->dirty_bitmap)
-		kmem_free(free->dirty_bitmap);
+	if ((!dont || free->dirty_bitmap != dont->dirty_bitmap) &&
+	    free->dirty_bitmap)
+		kmem_free(free->dirty_bitmap, free->dirty_bitmap_sz);
 
 	for (i = 0; i < KVM_NR_PAGE_SIZES - 1; ++i) {
-		if (!dont || free->lpage_info[i] != dont->lpage_info[i]) {
-			vfree(free->lpage_info[i]);
+		if ((!dont || free->lpage_info[i] != dont->lpage_info[i]) &&
+		    free->lpage_info[i]) {
+			kmem_free(free->lpage_info[i], free->lpage_info_sz[i]);
 			free->lpage_info[i] = NULL;
 		}
 	}
 
 	free->npages = 0;
 	free->dirty_bitmap = NULL;
-#else
 	free->rmap = NULL;
-	XXX_KVM_PROBE;
-#endif
 }
 
 void
@@ -629,6 +632,7 @@ __kvm_set_memory_region(struct kvm *kvmp,
 
 		new.lpage_info[i] =
 		    kmem_zalloc(lpages * sizeof (*new.lpage_info[i]), KM_SLEEP);
+		new.lpage_info_sz[i] = lpages * sizeof (*new.lpage_info[i]);
 
 		if (base_gfn % KVM_PAGES_PER_HPAGE(level))
 			new.lpage_info[i][0].write_count = 1;
@@ -653,6 +657,7 @@ skip_lpage:
 		unsigned long dirty_bytes = kvm_dirty_bitmap_bytes(&new);
 
 		new.dirty_bitmap = kmem_zalloc(dirty_bytes, KM_SLEEP);
+		new.dirty_bitmap_sz = dirty_bytes;
 
 		/* destroy any largepage mappings for dirty tracking */
 		if (old.npages)

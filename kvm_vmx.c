@@ -4627,11 +4627,18 @@ out:
 void
 vmx_fini(void)
 {
-	XXX_KVM_PROBE;
 	if (enable_vpid) {
 		mutex_destroy(&vmx_vpid_lock);
 		kmem_free(vmx_vpid_bitmap, sizeof (ulong_t) *
 		    vpid_bitmap_words);
 	}
 	kmem_cache_destroy(kvm_vcpu_cache);
+#ifdef XXX
+	kvm_on_each_cpu(hardware_disable, NULL, 1);
+	kvm_arch_hardware_unsetup();
+	kvm_arch_exit();
+#else
+	XXX_KVM_PROBE;
+#endif
+	kmem_free(bad_page_kma, PAGESIZE);
 }

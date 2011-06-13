@@ -142,10 +142,12 @@ typedef struct kvm_memory_slot {
        unsigned long flags;
        unsigned long *rmap;
        unsigned long *dirty_bitmap;
+	size_t dirty_bitmap_sz;
        struct {
                unsigned long rmap_pde;
                int write_count;
        } *lpage_info[KVM_NR_PAGE_SIZES];
+	size_t lpage_info_sz[KVM_NR_PAGE_SIZES];
        unsigned long userspace_addr;
        int user_alloc;
 } kvm_memory_slot_t;
@@ -210,6 +212,7 @@ typedef struct kvm {
 
 	kmutex_t irq_lock;
 	struct kvm_irq_routing_table *irq_routing;
+	int irq_routing_sz;
 	list_t mask_notifier_list;
 	list_t irq_ack_notifier_list;
 

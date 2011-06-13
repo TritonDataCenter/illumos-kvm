@@ -392,6 +392,17 @@ out:
 	return (r);
 }
 
+void
+kvm_free_irq_routing(struct kvm *kvm)
+{
+	/*
+	 * Called only during vm destruction. Nobody can use the pointer
+	 * at this stage
+	 */
+	kmem_free(kvm->irq_routing->rt_entries, kvm->irq_routing_sz);
+	kmem_free(kvm->irq_routing, sizeof (struct kvm_irq_routing_table));
+}
+
 int
 kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
     unsigned nr, unsigned flags)
@@ -452,6 +463,7 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 #else
 	XXX_KVM_SYNC_PROBE;
 	kvm->irq_routing = new;
+	kvm->irq_routing_sz = sz * nr;
 #endif
 	mutex_exit(&kvm->irq_lock);
 #ifdef XXX
