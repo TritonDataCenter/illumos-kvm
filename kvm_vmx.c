@@ -4269,15 +4269,9 @@ vmx_vcpu_run(struct kvm_vcpu *vcpu)
 static void
 vmx_destroy_vcpu(struct kvm_vcpu *vcpu)
 {
-	/* XXX don't assume it's the first element */
-	vcpu_vmx_t *vmx = (vcpu_vmx_t *)vcpu;
+	vcpu_vmx_t *vmx = to_vmx(vcpu);
 
 	if (vmx->vmcs != NULL) {
-		/*
-		 * XXX This should probably be just vcpu_clear. However, we need
-		 * to get the per cpu lists working properly before we can do
-		 * that.
-		 */
 		__vcpu_clear(vmx);
 		kmem_free(vmx->vmcs, PAGESIZE);
 		vmx->vmcs = NULL;
