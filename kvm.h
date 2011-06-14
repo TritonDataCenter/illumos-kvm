@@ -468,7 +468,7 @@ typedef struct kvm_clock_data {
 #define	KVM_SET_CPUID2		_IOW(KVMIO,  0x90, struct kvm_cpuid2)
 #define	KVM_GET_CPUID2		_IOWR(KVMIO, 0x91, struct kvm_cpuid2)
 /* Available with KVM_CAP_VAPIC */
-#define	KVM_TPR_ACCESS_REPORTING _IOWR(KVMIO, 0x92, struct kvm_tpr_acl_ioc)
+#define	KVM_TPR_ACCESS_REPORTING _IOWR(KVMIO, 0x92, struct kvm_tpr_access_ctl)
 /* Available with KVM_CAP_VAPIC */
 #define	KVM_SET_VAPIC_ADDR	_IOW(KVMIO,  0x93, struct kvm_vapic_addr)
 #define	KVM_GET_MP_STATE	_IOR(KVMIO,  0x98, struct kvm_mp_state)
@@ -480,14 +480,5 @@ typedef struct kvm_clock_data {
 /* Available with KVM_CAP_VCPU_EVENTS */
 #define	KVM_GET_VCPU_EVENTS	_IOR(KVMIO,  0x9f, struct kvm_vcpu_events)
 #define	KVM_SET_VCPU_EVENTS	_IOW(KVMIO,  0xa0, struct kvm_vcpu_events)
-
-/*
- * XXX Additions which probably are changes from qemu/kvm upstream
- */
-typedef struct kvm_tpr_acl_ioc {
-	struct kvm_tpr_access_ctl tac;
-	int kvm_id;
-	int cpu_index;
-} kvm_tpr_acl_ioc_t;
 
 #endif /* __KVM_H */
