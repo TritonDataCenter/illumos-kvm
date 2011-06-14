@@ -1372,7 +1372,7 @@ hardware_enable(void *junk)
 	}
 }
 
-static void
+void
 hardware_disable(void *junk)
 {
 	int cpu = curthread->t_cpu->cpu_id;
@@ -1383,19 +1383,6 @@ hardware_disable(void *junk)
 	CPUSET_DEL(cpus_hardware_enabled, cpu);
 	kvm_arch_hardware_disable(NULL);
 }
-
-/*
- * The following needs to run on each cpu.  Currently,
- * wait is always 1, so we use the kvm_xcall() routine which
- * calls xc_sync.  Later, if needed, the implementation can be
- * changed to use xc_call or xc_call_nowait.
- */
-#define	on_each_cpu(func, info, wait)	\
-	/*CSTYLED*/			\
-	({				\
-		kvm_xcall(KVM_CPUALL, func, info);	\
-	0;				\
-	})
 
 static void
 hardware_disable_all_nolock(void)
@@ -1801,9 +1788,13 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	kvm_dip = NULL;
 
 	hardware_disable_all();
+	kvm_arch_hardware_unsetup();
+	kvm_arch_exit();
+	kmem_free(bad_page_kma, PAGESIZE);
+
+	vmx_fini();
 	mutex_destroy(&kvm_lock);
 	ddi_soft_state_fini(&kvm_state);
-	vmx_fini();
 
 	return (DDI_SUCCESS);
 }

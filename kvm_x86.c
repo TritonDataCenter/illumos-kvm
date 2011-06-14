@@ -4818,6 +4818,24 @@ kvm_arch_hardware_setup(void)
 }
 
 void
+kvm_arch_hardware_unsetup(void)
+{
+	kvm_x86_ops->hardware_unsetup();
+}
+
+void
+kvm_arch_exit(void)
+{
+	/*
+	 * XXX if (!boot_cpu_has(X86_FEATURE_CONSTANT_TSC))
+	 *	cpufreq_unregister_notifier(&kvmclock_cpufreq_notifier_block,
+	 *	CPUFREQ_TRANSITION_NOTIFIER);
+	 * kvm_x86_ops = NULL;
+	 * XXX kvm_mmu_module_exit();
+	 */
+}
+
+void
 kvm_arch_check_processor_compat(void *rtn)
 {
 	kvm_x86_ops->check_processor_compatibility(rtn);

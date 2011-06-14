@@ -1530,6 +1530,22 @@ alloc_kvm_area(void)
 	return (0);
 }
 
+static void
+free_vmcs(struct vmcs *vmcs)
+{
+	kmem_free(vmcs, PAGESIZE);
+}
+
+static void
+free_kvm_area(void)
+{
+	int cpu;
+
+	for (cpu = 0; cpu < ncpus; cpu++) {
+		free_vmcs(vmxarea[cpu]);
+		vmxarea[cpu] = NULL;
+	}
+}
 
 static int
 vmx_hardware_setup(void)
@@ -1567,6 +1583,12 @@ vmx_hardware_setup(void)
 
 
 	return (alloc_kvm_area());
+}
+
+static void
+vmx_hardware_unsetup(void)
+{
+	free_kvm_area();
 }
 
 static void
@@ -4481,7 +4503,7 @@ struct kvm_x86_ops vmx_x86_ops = {
 
 	.hardware_setup = vmx_hardware_setup,
 
-	.hardware_unsetup = (void(*)(void))nulldev, /* XXX: hardware_unsetup? */
+	.hardware_unsetup = vmx_hardware_unsetup,
 
 	.cpu_has_accelerated_tpr = report_flexpriority,
 	.vcpu_create = vmx_create_vcpu,
@@ -4633,12 +4655,4 @@ vmx_fini(void)
 		    vpid_bitmap_words);
 	}
 	kmem_cache_destroy(kvm_vcpu_cache);
-#ifdef XXX
-	kvm_on_each_cpu(hardware_disable, NULL, 1);
-	kvm_arch_hardware_unsetup();
-	kvm_arch_exit();
-#else
-	XXX_KVM_PROBE;
-#endif
-	kmem_free(bad_page_kma, PAGESIZE);
 }
