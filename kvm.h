@@ -1,6 +1,18 @@
 #ifndef __KVM_H
 #define	__KVM_H
 
+/*
+ * The userland / kernel interface was initially defined by the Linux KVM
+ * project. As a part of our efforts to port it, it's important to maintain
+ * compatibility with the portions of that interface that we implement. A side
+ * effect of this is that we require GNU extensions to C. Rather than let a
+ * consumer go crazy trying to understand and track down odd compiler errors, we
+ * explicitly note that this file is not ISO C.
+ */
+#ifndef __GNUC__
+#error "The KVM Header files require GNU C extensions for compatability."
+#endif
+
 #include <sys/types.h>
 #include <sys/param.h>
 #include "kvm_x86.h"
