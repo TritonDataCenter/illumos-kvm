@@ -4349,16 +4349,9 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 free_vmcs:
 	kmem_free(vmx->vmcs, PAGESIZE);
 	vmx->vmcs = 0;
-#ifdef XXX
-free_msrs:
-	kfree(vmx->guest_msrs);
-uninit_vcpu:
+	kmem_free(vmx->guest_msrs, PAGESIZE);
 	kvm_vcpu_uninit(&vmx->vcpu);
-free_vcpu:
 	kmem_cache_free(kvm_vcpu_cache, vmx);
-#else
-	XXX_KVM_PROBE;
-#endif
 	return (NULL);
 }
 
