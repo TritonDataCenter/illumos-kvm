@@ -410,6 +410,7 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 	struct kvm_irq_routing_table *new, *old;
 	uint32_t i, j, nr_rt_entries = 0;
 	size_t sz = sizeof (struct kvm_kernel_irq_routing_entry);
+	size_t newsz, oldsz;
 	int r;
 
 	for (i = 0; i < nr; ++i) {
@@ -435,6 +436,7 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 	}
 
 	new->rt_entries = kmem_zalloc(sz * nr, KM_SLEEP);
+	newsz = sz * nr;
 
 #endif
 
@@ -458,12 +460,13 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 
 	mutex_enter(&kvm->irq_lock);
 	old = kvm->irq_routing;
+	oldsz = kvm->irq_routing_sz;
 #ifdef XXX
 	rcu_assign_pointer(kvm->irq_routing, new);
 #else
 	XXX_KVM_SYNC_PROBE;
 	kvm->irq_routing = new;
-	kvm->irq_routing_sz = sz * nr;
+	kvm->irq_routing_sz = newsz;
 #endif
 	mutex_exit(&kvm->irq_lock);
 #ifdef XXX
@@ -473,12 +476,13 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 #endif
 
 	new = old;
+	newsz = oldsz;
 	r = 0;
 
 out:
 	if (new) {
 		if (new->rt_entries != NULL)
-			kmem_free(new->rt_entries, sz * nr);
+			kmem_free(new->rt_entries, newsz);
 
 		kmem_free(new, sizeof (*new));
 	}
