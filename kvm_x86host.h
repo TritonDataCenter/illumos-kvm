@@ -631,7 +631,7 @@ typedef struct kvm_x86_ops {
 	void (*enable_nmi_window)(struct kvm_vcpu *vcpu);
 	void (*enable_irq_window)(struct kvm_vcpu *vcpu);
 	void (*update_cr8_intercept)(struct kvm_vcpu *vcpu, int tpr, int irr);
-	int (*set_tss_addr)(struct kvm *kvm, caddr_t addr);
+	int (*set_tss_addr)(struct kvm *kvm, uintptr_t addr);
 	int (*get_tdp_level)(void);
 	uint64_t (*get_mt_mask)(struct kvm_vcpu *vcpu, gfn_t gfn, int is_mmio);
 	int (*get_lpage_level)(void);

@@ -333,7 +333,7 @@ int kvm_vm_ioctl_set_memory_region(struct kvm *kvm,
 				   struct
 				   kvm_userspace_memory_region *mem,
 				   int user_alloc);
-int kvm_vm_ioctl_set_tss_addr(struct kvm *kvmp, caddr_t addr);
+int kvm_vm_ioctl_set_tss_addr(struct kvm *kvmp, uintptr_t addr);
 int kvm_vm_ioctl_get_irqchip(struct kvm *kvm, struct kvm_irqchip *chip);
 int kvm_vm_ioctl_set_irqchip(struct kvm *kvm, struct kvm_irqchip *chip);
 

@@ -2989,13 +2989,13 @@ vmx_interrupt_allowed(struct kvm_vcpu *vcpu)
 
 /* XXX Should be static! */
 int
-vmx_set_tss_addr(struct kvm *kvmp, caddr_t addr)
+vmx_set_tss_addr(struct kvm *kvmp, uintptr_t addr)
 {
 	int ret;
 
 	struct kvm_userspace_memory_region tss_mem = {
 		.slot = TSS_PRIVATE_MEMSLOT,
-		.guest_phys_addr = (uint64_t)addr,
+		.guest_phys_addr = addr,
 		.memory_size = PAGESIZE * 3,
 		.flags = 0,
 	};
@@ -3005,7 +3005,7 @@ vmx_set_tss_addr(struct kvm *kvmp, caddr_t addr)
 	if (ret)
 		return (ret);
 
-	kvmp->arch.tss_addr = (uint64_t)addr;
+	kvmp->arch.tss_addr = addr;
 
 	return (DDI_SUCCESS);
 }

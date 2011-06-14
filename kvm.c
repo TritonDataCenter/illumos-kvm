@@ -2310,20 +2310,13 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 	}
 
 	case KVM_SET_TSS_ADDR: {
-		struct kvm_tss kvm_tss;
-		struct kvm *kvmp;
 
-		if (copyin(argp, &kvm_tss, sizeof (kvm_tss)) != 0) {
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL) {
+		if (ksp->kds_kvmp == NULL) {
 			rval = EINVAL;
 			break;
 		}
 
-		rval = kvm_vm_ioctl_set_tss_addr(kvmp, (caddr_t)kvm_tss.addr);
+		rval = kvm_vm_ioctl_set_tss_addr(ksp->kds_kvmp, arg);
 		break;
 	}
 

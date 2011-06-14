@@ -484,11 +484,6 @@ typedef struct kvm_clock_data {
 /*
  * XXX Additions which probably are changes from qemu/kvm upstream
  */
-/* for KVM_SET_TSS_ADDR ioctl */
-typedef struct kvm_tss {
-	uint64_t addr; /* in */
-} kvm_tss_t;
-
 typedef struct kvm_tpr_acl_ioc {
 	struct kvm_tpr_access_ctl tac;
 	int kvm_id;

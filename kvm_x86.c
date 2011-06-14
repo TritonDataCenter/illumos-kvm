@@ -2054,7 +2054,7 @@ kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
 }
 
 int
-kvm_vm_ioctl_set_tss_addr(struct kvm *kvmp, caddr_t addr)
+kvm_vm_ioctl_set_tss_addr(struct kvm *kvmp, uintptr_t addr)
 {
 	/*
 	 * XXX They have some other code here to check the validity of the
