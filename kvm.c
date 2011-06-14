@@ -2184,28 +2184,20 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 	}
 
 	case KVM_SET_IDENTITY_MAP_ADDR: {
-		kvm_id_map_addr_ioc_t *kvm_id_map_addr_ioc;
-		size_t sz = sizeof (kvm_id_map_addr_ioc_t);
-		struct kvm *kvmp;
+		uint64_t addr;
 
-		kvm_id_map_addr_ioc = kmem_zalloc(sz, KM_SLEEP);
-
-		if (copyin(argp, kvm_id_map_addr_ioc, sz) != 0) {
-			kmem_free(kvm_id_map_addr_ioc, sz);
-			rval = EFAULT;
-			break;
-		}
-
-		if ((kvmp = ksp->kds_kvmp) == NULL) {
-			kmem_free(kvm_id_map_addr_ioc, sz);
+		if (ksp->kds_kvmp == NULL) {
 			rval = EINVAL;
 			break;
 		}
 
-		rval = kvm_vm_ioctl_set_identity_map_addr(kvmp,
-		    kvm_id_map_addr_ioc->ident_addr);
+		if (copyin((void *)arg, &addr, sizeof (uint64_t)) != 0) {
+			rval = EFAULT;
+			break;
+		}
 
-		kmem_free(kvm_id_map_addr_ioc, sz);
+		rval = kvm_vm_ioctl_set_identity_map_addr(ksp->kds_kvmp, addr);
+
 		*rv = 0;
 		break;
 	}

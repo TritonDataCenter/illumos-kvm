@@ -422,8 +422,7 @@ typedef struct kvm_clock_data {
 					    struct kvm_userspace_memory_region)
 
 #define	KVM_SET_TSS_ADDR	_IO(KVMIO,   0x47)
-#define	KVM_SET_IDENTITY_MAP_ADDR _IOW(KVMIO,  0x48, \
-					    struct kvm_id_map_addr_ioc)
+#define	KVM_SET_IDENTITY_MAP_ADDR _IOW(KVMIO,  0x48, uint64_t)
 
 /* Device model IOC */
 #define	KVM_CREATE_IRQCHIP	_IO(KVMIO,   0x60)
@@ -489,20 +488,6 @@ typedef struct kvm_clock_data {
 typedef struct kvm_tss {
 	uint64_t addr; /* in */
 } kvm_tss_t;
-
-/*
- * for KVM_SET_IDENTITY_MAP_ADDR
- */
-
-typedef struct kvm_id_map_addr {
-	int pad;
-	uint64_t addr;
-} kvm_id_map_addr_t;
-
-/* for KVM_SET_IDENTITY_MAP_ADDR */
-typedef struct kvm_id_map_addr_ioc {
-	uint64_t ident_addr;
-} kvm_id_map_addr_ioc_t;
 
 typedef struct kvm_tpr_acl_ioc {
 	struct kvm_tpr_access_ctl tac;
