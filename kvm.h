@@ -10,7 +10,7 @@
  * explicitly note that this file is not ISO C.
  */
 #ifndef __GNUC__
-#error "The KVM Header files require GNU C extensions for compatability."
+#error "The KVM Header files require GNU C extensions for compatibility."
 #endif
 
 #include <sys/types.h>
