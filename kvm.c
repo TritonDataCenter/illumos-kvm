@@ -1984,26 +1984,28 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 
 		if (ioctl->vmwide) {
 			kvm_t *kvmp;
-			int (*func)(kvm_t *, void *, int *);
+			int (*func)(kvm_t *, void *, int *, intptr_t);
 
 			if ((kvmp = ksp->kds_kvmp) == NULL) {
 				kmem_free(buf, ioctl->size);
 				return (EINVAL);
 			}
 
-			func = (int(*)(kvm_t *, void *, int *))ioctl->func;
-			rval = func(kvmp, buf, rv);
+			func = (int(*)(kvm_t *, void *, int *,
+			    intptr_t))ioctl->func;
+			rval = func(kvmp, buf, rv, arg);
 		} else {
 			kvm_vcpu_t *vcpu;
-			int (*func)(kvm_vcpu_t *, void *, int *);
+			int (*func)(kvm_vcpu_t *, void *, int *, intptr_t);
 
 			if ((vcpu = ksp->kds_vcpu) == NULL) {
 				kmem_free(buf, ioctl->size);
 				return (EINVAL);
 			}
 
-			func = (int(*)(kvm_vcpu_t *, void *, int *))ioctl->func;
-			rval = func(vcpu, buf, rv);
+			func = (int(*)(kvm_vcpu_t *, void *, int *,
+			    intptr_t))ioctl->func;
+			rval = func(vcpu, buf, rv, arg);
 		}
 
 		if (rval == 0 && ioctl->size != 0 && ioctl->copyout) {

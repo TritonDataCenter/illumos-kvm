@@ -1,6 +1,12 @@
 #ifndef __KVM_X86_H
 #define __KVM_X86_H
 
+/* See <sys/kvm.h> for an explanation of why this is necessary */
+#ifndef __GNUC__
+#error "The KVM Header files require GNU C extensions for compatibility."
+#endif
+
+
 #include <sys/types.h>
 
 #define KVM_NR_INTERRUPTS 256
@@ -170,7 +176,7 @@ typedef struct kvm_cpuid_entry2 {
 typedef struct kvm_cpuid2 {
 	uint32_t nent;
 	uint32_t padding;
-	struct kvm_cpuid_entry2 entries[100];
+	struct kvm_cpuid_entry2 entries[0];
 } kvm_cpuid2_t;
 
 /* for KVM_GET_PIT and KVM_SET_PIT */

@@ -358,7 +358,8 @@ int kvm_vcpu_ioctl_get_msrs(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs, int *r
 int kvm_vcpu_ioctl_set_msrs(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs, int *rv);
 int kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu, uint64_t *mcg_capp);
 int kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid);
-int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid);
+int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *, struct kvm_cpuid2 *, int *,
+    intptr_t);
 int kvm_vcpu_ioctl_get_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s);
 int kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s);
 int kvm_vcpu_ioctl_x86_get_vcpu_events(struct kvm_vcpu *vcpu,

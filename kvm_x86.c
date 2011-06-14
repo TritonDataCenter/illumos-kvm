@@ -1662,13 +1662,19 @@ is_efer_nx(void)
 }
 
 int
-kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid)
+kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid,
+    int *rv, intptr_t arg)
 {
+	struct kvm_cpuid2 *id;
+
+	id = (void *)arg;
+
 	if (cpuid->nent > KVM_MAX_CPUID_ENTRIES)
 		return (E2BIG);
 
-	bcopy(cpuid->entries, vcpu->arch.cpuid_entries,
-	    cpuid->nent * sizeof (struct kvm_cpuid_entry2));
+	if (copyin(id->entries, vcpu->arch.cpuid_entries,
+	    cpuid->nent * sizeof (struct kvm_cpuid_entry2)) < 0)
+		return (EFAULT);
 
 	vcpu_load(vcpu);
 	vcpu->arch.cpuid_nent = cpuid->nent;
