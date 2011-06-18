@@ -2655,7 +2655,7 @@ static int
 kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off, size_t len,
     size_t *maplen, uint_t model)
 {
-	int res, vpi;
+	int res;
 	minor_t instance;
 	kvm_devstate_t *ksp;
 	kvm_vcpu_t *vcpu;
@@ -2671,8 +2671,14 @@ kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off, size_t len,
 	if (ddi_model_convert_from(model) == DDI_MODEL_ILP32)
 		return (EINVAL);
 
+	/* Double check for betrayl */
 	if (ksp->kds_kvmp == NULL)
 		return (EINVAL);
+
+	if (ksp->kds_vcpu == NULL)
+		return (EINVAL);
+
+	vcpu = ksp->kds_vcpu;
 
 	if (len == PAGESIZE) {
 		res = devmap_umem_setup(dhp, kvm_dip, NULL,
@@ -2681,11 +2687,6 @@ kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off, size_t len,
 		*maplen = len;
 		return (res);
 	}
-
-	vpi = btop(off) / 3;
-	VERIFY(vpi < ksp->kds_kvmp->online_vcpus);
-	vcpu = ksp->kds_kvmp->vcpus[vpi];
-	VERIFY(vcpu != NULL);
 
 	res = devmap_umem_setup(dhp, kvm_dip, NULL, vcpu->cookie, 0,
 	    PAGESIZE*2, PROT_READ | PROT_WRITE | PROT_USER, DEVMAP_DEFAULTS,
@@ -2697,8 +2698,8 @@ kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off, size_t len,
 }
 
 /*
- * We determine which vcpu we're trying to mmap in based upon the requested
- * offset. For a given vcpu n the offset to specify it is
+ * We determine which vcpu we're trying to mmap in based upon the file
+ * descriptor that is used. For a given vcpu n the offset to specify it is
  * n*KVM_VCPU_MMAP_LENGTH. Thus the first vcpu is at offset 0. 
  */
 static int
@@ -2721,16 +2722,16 @@ kvm_segmap(dev_t dev, off_t off, struct as *asp, caddr_t *addrp, off_t len,
 	if (len != ptob(KVM_VCPU_MMAP_LENGTH))
 		return (EINVAL);
 
-	poff = btop(off);
-	if (poff % 3 != 0)
+	/*
+	 * Verify that we have a VCPU
+	 */
+	if (ksp->kds_vcpu == NULL)
 		return (EINVAL);
 
 	/*
-	 * Currently vcpus can only be turned on, they cannot be offlined. As a
-	 * result we can safely check that we have a request for a valid cpu
-	 * because it is within this range.
+	 * We only allow mmaping at a specific cpu
 	 */
-	if (poff / 3 + 1 > ksp->kds_kvmp->online_vcpus)
+	if (off != 0)
 		return (EINVAL);
 
 	return (ddi_devmap_segmap(dev, off, asp, addrp, len, prot, maxprot,
