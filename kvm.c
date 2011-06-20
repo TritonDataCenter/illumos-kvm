@@ -1,5 +1,281 @@
+/*
+ * GPL HEADER START
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * GPL HEADER END 
+ *
+ * Originally implemented on Linux:
+ * Copyright (C) 2006 Qumranet, Inc.
+ *
+ * Authors:
+ *   Avi Kivity   <avi@qumranet.com>
+ *   Yaniv Kamay  <yaniv@qumranet.com>
+ *
+ * Ported to illumos by Joyent
+ * Copyright 2011 Joyent, Inc. All rights reserved.
+ *
+ * Authors:
+ *   Max Bruning	<max@joyent.com>
+ *   Bryan Cantrill	<bryan@joyent.com>
+ *   Robert Mustacchi	<rm@joyent.com>
+ */
 
-/* Solaris kvm (kernel virtual machine) driver */
+/*
+ * KVM -- Kernel Virtual Machine Driver
+ * ------------------------------------
+ *
+ * The kvm driver's purpose it to provide an interface for accelerating virtual
+ * machines. To that end the kernel implements and provides emulation for
+ * various pieces of hardware. The kernel also interacts directly with
+ * extensions to the x86 instruction set via VT-x and related technologies on
+ * Intel processors. The system is designed to support SVM (now marketed as
+ * AMD-V); however, it is not currently implemented in the illumos version. KVM
+ * does not provide all the pieces necessary for vitalization, nor is that a
+ * part of its design.
+ *
+ * KVM is a psuedo-device presented to userland as a character device. Consumers
+ * open the device and interact primarily through ioctl(2) and mmap(2).
+ *
+ * General Theory
+ * --------------
+ *
+ * A consumer will open up the KVM driver and perform ioctls to set up initial
+ * state and create virtual CPUs (VCPU). To run a specific VCPU an ioctl is
+ * performed. When the ioctl occurs we use the instruction set extensions to try
+ * and run that CPU in the current thread. This is run for as long as possible
+ * until an instruction that needs to be emulated by the host, e.g. a write to
+ * emulated hardware, or some external event brings us out e.g. an interrupt,
+ * the schedular descheduling the thread, etc.. Each VCPU is modeled as a
+ * thread.  The KVM driver notes the exit reason and either handles it and
+ * emulates it or returns to the guest to handle it. This loop generally follows
+ * this flowchart:
+ *
+ *
+ *       Userland                        Kernel
+ *                         |
+ *    |-----------|        |
+ *    | VCPU_RUN  |--------|-----------------|
+ *    | ioctl(2)  |        |                 |
+ *    |-----------|        |                \|/
+ *          ^              |            |---------|
+ *          |              |            | Run CPU |
+ *          |              |       |--->| for the |
+ *          |              |       |    |  guest  |
+ *          |              |       |    |---------|
+ *          |              |       |         |
+ *          |              |       |         | 
+ *          |              |       |         |
+ *          |              |       |         | Stop execution of
+ *          |              |       |         | guest 
+ *          |              |       |         |------------|
+ *          |              |  |---------|                 |
+ *          |              |  |  Handle |                 |
+ *          |              |  |  guest  |                \|/
+ *          |              |  |  exit   |               /   \
+ *     |---------|         |  |---------|             /       \
+ *     |  Handle |         |       ^                /  Can the  \
+ *     |  guest  |         |       |--------------/ Kernel handle \
+ *     |  exit   |         |           Yes        \   the exit    /
+ *     |---------|         |                        \  reason?  /
+ *          ^              |                          \       /
+ *          |              |                            \   /         
+ *          |              |                              |
+ *          |              |                              | No
+ *          |--------------|------------------------------|
+ *                         |
+ *
+ * The data regarding the state of the VCPU and of the overall virtual machine
+ * is available via mmap(2) of the file descriptor corresponding to the VCPU of
+ * interest.
+ *
+ * All the memory for the guest is handled in the userspace of the guest. This
+ * includes mapping in the BIOS, the program text for the guest, and providing
+ * devices. To communicate about this information, get and set kernel device
+ * state, and interact in various ways, 
+ *
+ * Kernel Emulated and Assisted Hardware
+ * -------------------------------------
+ *
+ * CPUs
+ *
+ * Intel and AMD provide hardware acceleration that allows for a CPU to run in
+ * various execution and addressing modes:
+ *   + Real Mode - 8086 style 16-bit operands and 20-bit addressing
+ *   + Protected Mode - 80286 style 32-bit operands and addressing and Virtual
+ *   			Memory
+ *   + Protected Mode with PAE - Physical Address Extensions to allow 36-bits of
+ *   				 addressing for physical memory. Only 32-bits of
+ *   				 addressing for virtual memory are available.
+ *
+ *   + Long Mode - amd64 style 64-bit operands and 64-bit virtual addressing.
+ *   		   Currently only 48 bits of physical memory can be addressed.
+ *   + System Management mode is unsupported and untested. It may work. It may
+ *     cause a panic.
+ *
+ * Other Hardware
+ *
+ * The kernel emulates various pieces of additional hardware that are necessary for an x86
+ * system to function. These include:
+ *
+ *   + i8254 PIT - Intel Programmable Interval Timer
+ *   + i8259 PIC - Intel Programmable Interrupt Controller
+ *   + Modern APIC architecture consisting of:
+ *      - Local APIC
+ *      - I/O APIC
+ *   + IRQ routing table
+ *   + MMU - Memory Management Unit
+ *
+ * The following diagram shows how the different pieces of emulated hardware fit
+ * together. An arrow pointing to something denotes that the pointed to item is
+ * contained within the object.
+ *
+ *                                 Up to KVM_MAX_VCPUS (64) cpus
+ *                                               
+ *                                         |---------|     |-------|
+ *           |-------------|               | Virtual |     | Local |    Per
+ *           |             |-------------->| CPU #n  |     | APIC  |<-- VCPU
+ *           |   Virtual   |               |---------|     |-------|     |
+ *           |   Machine   |                               ^            \|/
+ *           |             |-------------->|---------|-----|     |-------------|
+ *           |-------------|               | Virtual |           | Registers   |
+ *              | | | | |                  | CPU #0  |---------->|             |
+ *              | | | | |                  |---------|           | RAX,RIP,ETC |
+ *              | | | | |                                        | CR0,CR4,ETC |
+ *              | | | | |                                        | CPUID,ETC   |
+ *              | | | | |                                        |-------------|
+ *              | | | | | 
+ *              | | | | | 
+ *              | | | | | 
+ *              | | | | | 
+ * |-------|    | | | | |                           |---------------------------|          
+ * | i8254 |<---| | | | |                           |                           |       
+ * |  PIT  |      | | | |                           |     Memory Management     |
+ * |-------|      | | | |-------------------------->|           Unit            |
+ *                | | | |                           |            &&             |
+ *                | | | |  |--------------|         |     Shadow Page Table     |
+ * |-------|      | | | |->| Input/Output |         |                           |
+ * | i8259 |<-----| |      |     APIC     |         |---------------------------| 
+ * |  PIC  |       \|/     |--------------|
+ * |-------|   |---------|
+ *             |   IRQ   |
+ *             | Routing |
+ *             |  Table  |
+ *             |---------|
+ *
+ *
+ * Internal Code Layout and Design
+ * -------------------------------
+ *
+ * The KVM code can be broken down into the following broad sections:
+ *
+ *    + Device driver entry points 
+ *    + Generic code and driver entry points
+ *    + x86 and architecture specific code
+ *    + Hardware emulation specific code
+ *    + Host CPU specific code
+ *
+ * Host CPU Specific Code
+ *  
+ * Both Intel and AMD provide a means for accelerating guest operation, VT-X
+ * (VMX) and SVM (AMD-V) respectively. However, the instructions, design, and
+ * means of interacting with each are different. To get around this there is a
+ * generic vector of operations which are implemented by both subsystems. The
+ * rest of the code base references these operations via the vector. As a part
+ * of attach(9E), the system dynamically determines whether the system
+ * should use the VMX or SVM operations.
+ * 
+ * The operations vector is entitled kvm_x86_ops. It's functions are:
+ * TODO Functions and descriptions, though there may be too many
+ *
+ *
+ * Hardware Emulation Specific Code
+ * 
+ * Various pieces of hardware are emulated by the kernel in the KVM module as
+ * described previously. These are accessed in several ways:
+ *  
+ *    + Userland performs ioctl(2)s to get and set state
+ *    + Guests perform PIO to devices
+ *    + Guests write to memory locations that correspond to devices
+ * 
+ * To handle memory mapped devices in the guest there is an internal notion of
+ * an I/O device. There is an internal notion of an I/O bus. Devices can be
+ * registered onto the bus. Currently two buses exist. One for programmed I/O
+ * devices and another for memory mapped devices.
+ * 
+ * Code related to IRQs is primairly contained within kvm_irq.c and
+ * kvm_irq_conn.c. To facilitate and provide a more generic IRQ system there are
+ * two useful sets of notifiers. The notifiers fire a callback when the
+ * specified event occurs.  Currently there are two notifiers:
+ * 
+ *
+ *    + IRQ Mask Notifier: This fires its callback when an IRQ has been masked
+ *    			   by an operation.
+ *    + IRQ Ack Notifier: This fires its callback when an IRQ has been
+ *    			  acknowledged.
+ *
+ * The hardware emulation code is broken down across the following files:
+ * 
+ *    + i8254 PIT implementation: kvm_i8254.c and kvm_i8254.h
+ *    + i8259 PIC implementation: kvm_i8259.c 
+ *    + I/O APIC Implementation: kvm_ioapic.c and kvm_ioapic.h
+ *    + Local APIC Implementation: kvm_lapic.c and kvm_lapic.h
+ *    + Memory Management Unit: kvm_mmu.c, kvm_mmu.h, and kvm_paging_tmpl.h
+ * 
+ * x86 and Architecture Specific Code
+ *
+ * The code specific to x86 that is not device specific is broken across two
+ * files. The first is kvm_x86.c. This contains most of the x86 specific
+ * logic, calls into the CPU specific vector of operations, and serves as a
+ * gateway to some device specific portions and memory management code.
+ *
+ * The other main piece of this is kvm_emulate.c. This file contains code
+ * that cannot be handled by the CPU specific instructions and instead need to
+ * be handled by kvm, for example an inb or outb instruction.
+ *
+ * Generic Code
+ *
+ * The code that is not specific to devices or to x86 specifically can be found
+ * in kvm.c. This includes code that interacts directly with different parts of
+ * the rest of the kernel; the scheduler, cross calls, etc.
+ *
+ * Device Driver Entry Points
+ *
+ * The KVM driver is a psuedo-device that presents as a character device. All of
+ * the necessary entry points and related pieces of infrastructure are all
+ * located in kvm.c. This includes all of the logic related to open(2),
+ * close(2), mmap(2), ioctl(2), and the other necessary driver entry points.
+ *
+ * Interactions between Userland and the Kernel
+ * --------------------------------------------
+ *
+ * -Opening and cloning / VCPUs
+ * -The mmap(2) related pieces.
+ * -The general ioctl->arch->x86_ops->vmx
+ *
+ * Timers and Cyclics
+ * ------------------
+ *
+ * -Timers mapping to cyclics
+ *
+ * Memory Management
+ * -----------------
+ *
+ * -Current memory model / assumptions (i.e. can't be paged)
+ * -Use of kpm 
+ */
 
 #include <sys/types.h>
 #include <sys/param.h>
