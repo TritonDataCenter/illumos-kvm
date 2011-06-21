@@ -367,6 +367,7 @@ int kvm_vcpu_ioctl_x86_get_vcpu_events(struct kvm_vcpu *vcpu,
 int kvm_vcpu_ioctl_x86_set_vcpu_events(struct kvm_vcpu *vcpu,
     struct kvm_vcpu_events *events);
 int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu, struct kvm_interrupt *irq);
+int kvm_vcpu_ioctl_nmi(struct kvm_vcpu *vcpu);
 int kvm_vm_ioctl_get_pit2(struct kvm *kvm, struct kvm_pit_state2 *ps);
 int kvm_vm_ioctl_set_pit2(struct kvm *kvm, struct kvm_pit_state2 *ps);
 int kvm_vm_ioctl_set_identity_map_addr(struct kvm *kvm, uint64_t ident_addr);

@@ -15,7 +15,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * GPL HEADER END 
+ * GPL HEADER END
  *
  * Originally implemented on Linux:
  * Copyright (C) 2006 Qumranet, Inc.
@@ -76,10 +76,10 @@
  *          |              |       |    |  guest  |
  *          |              |       |    |---------|
  *          |              |       |         |
- *          |              |       |         | 
+ *          |              |       |         |
  *          |              |       |         |
  *          |              |       |         | Stop execution of
- *          |              |       |         | guest 
+ *          |              |       |         | guest
  *          |              |       |         |------------|
  *          |              |  |---------|                 |
  *          |              |  |  Handle |                 |
@@ -91,7 +91,7 @@
  *     |  exit   |         |           Yes        \   the exit    /
  *     |---------|         |                        \  reason?  /
  *          ^              |                          \       /
- *          |              |                            \   /         
+ *          |              |                            \   /
  *          |              |                              |
  *          |              |                              | No
  *          |--------------|------------------------------|
@@ -104,7 +104,7 @@
  * All the memory for the guest is handled in the userspace of the guest. This
  * includes mapping in the BIOS, the program text for the guest, and providing
  * devices. To communicate about this information, get and set kernel device
- * state, and interact in various ways, 
+ * state, and interact in various ways,
  *
  * Kernel Emulated and Assisted Hardware
  * -------------------------------------
@@ -117,18 +117,19 @@
  *   + Protected Mode - 80286 style 32-bit operands and addressing and Virtual
  *   			Memory
  *   + Protected Mode with PAE - Physical Address Extensions to allow 36-bits of
- *   				 addressing for physical memory. Only 32-bits of
- *   				 addressing for virtual memory are available.
+ *				 addressing for physical memory. Only 32-bits of
+ *				 addressing for virtual memory are available.
  *
  *   + Long Mode - amd64 style 64-bit operands and 64-bit virtual addressing.
- *   		   Currently only 48 bits of physical memory can be addressed.
+ *		   Currently only 48 bits of physical memory can be addressed.
+ *
  *   + System Management mode is unsupported and untested. It may work. It may
  *     cause a panic.
  *
  * Other Hardware
  *
- * The kernel emulates various pieces of additional hardware that are necessary for an x86
- * system to function. These include:
+ * The kernel emulates various pieces of additional hardware that are necessary
+ * for an x86 system to function. These include:
  *
  *   + i8254 PIT - Intel Programmable Interval Timer
  *   + i8259 PIC - Intel Programmable Interrupt Controller
@@ -143,7 +144,7 @@
  * contained within the object.
  *
  *                                 Up to KVM_MAX_VCPUS (64) cpus
- *                                               
+ *
  *                                         |---------|     |-------|
  *           |-------------|               | Virtual |     | Local |    Per
  *           |             |-------------->| CPU #n  |     | APIC  |<-- VCPU
@@ -156,18 +157,18 @@
  *              | | | | |                                        | CR0,CR4,ETC |
  *              | | | | |                                        | CPUID,ETC   |
  *              | | | | |                                        |-------------|
- *              | | | | | 
- *              | | | | | 
- *              | | | | | 
- *              | | | | | 
- * |-------|    | | | | |                           |---------------------------|          
- * | i8254 |<---| | | | |                           |                           |       
- * |  PIT  |      | | | |                           |     Memory Management     |
- * |-------|      | | | |-------------------------->|           Unit            |
- *                | | | |                           |            &&             |
- *                | | | |  |--------------|         |     Shadow Page Table     |
- * |-------|      | | | |->| Input/Output |         |                           |
- * | i8259 |<-----| |      |     APIC     |         |---------------------------| 
+ *              | | | | |
+ *              | | | | |
+ *              | | | | |
+ *              | | | | |
+ * |-------|    | | | | |                           |-------------------------|
+ * | i8254 |<---| | | | |                           |                         |
+ * |  PIT  |      | | | |                           |    Memory Management    |
+ * |-------|      | | | |-------------------------->|          Unit           |
+ *                | | | |                           |           &&            |
+ *                | | | |  |--------------|         |    Shadow Page Table    |
+ * |-------|      | | | |->| Input/Output |         |                         |
+ * | i8259 |<-----| |      |     APIC     |         |-------------------------|
  * |  PIC  |       \|/     |--------------|
  * |-------|   |---------|
  *             |   IRQ   |
@@ -181,14 +182,14 @@
  *
  * The KVM code can be broken down into the following broad sections:
  *
- *    + Device driver entry points 
+ *    + Device driver entry points
  *    + Generic code and driver entry points
  *    + x86 and architecture specific code
  *    + Hardware emulation specific code
  *    + Host CPU specific code
  *
  * Host CPU Specific Code
- *  
+ *
  * Both Intel and AMD provide a means for accelerating guest operation, VT-X
  * (VMX) and SVM (AMD-V) respectively. However, the instructions, design, and
  * means of interacting with each are different. To get around this there is a
@@ -196,44 +197,44 @@
  * rest of the code base references these operations via the vector. As a part
  * of attach(9E), the system dynamically determines whether the system
  * should use the VMX or SVM operations.
- * 
+ *
  * The operations vector is entitled kvm_x86_ops. It's functions are:
  * TODO Functions and descriptions, though there may be too many
  *
  *
  * Hardware Emulation Specific Code
- * 
+ *
  * Various pieces of hardware are emulated by the kernel in the KVM module as
  * described previously. These are accessed in several ways:
- *  
+ *
  *    + Userland performs ioctl(2)s to get and set state
  *    + Guests perform PIO to devices
  *    + Guests write to memory locations that correspond to devices
- * 
+ *
  * To handle memory mapped devices in the guest there is an internal notion of
  * an I/O device. There is an internal notion of an I/O bus. Devices can be
  * registered onto the bus. Currently two buses exist. One for programmed I/O
  * devices and another for memory mapped devices.
- * 
+ *
  * Code related to IRQs is primairly contained within kvm_irq.c and
  * kvm_irq_conn.c. To facilitate and provide a more generic IRQ system there are
  * two useful sets of notifiers. The notifiers fire a callback when the
  * specified event occurs.  Currently there are two notifiers:
- * 
+ *
  *
  *    + IRQ Mask Notifier: This fires its callback when an IRQ has been masked
- *    			   by an operation.
+ *			   by an operation.
  *    + IRQ Ack Notifier: This fires its callback when an IRQ has been
- *    			  acknowledged.
+ *			  acknowledged.
  *
  * The hardware emulation code is broken down across the following files:
- * 
+ *
  *    + i8254 PIT implementation: kvm_i8254.c and kvm_i8254.h
- *    + i8259 PIC implementation: kvm_i8259.c 
+ *    + i8259 PIC implementation: kvm_i8259.c
  *    + I/O APIC Implementation: kvm_ioapic.c and kvm_ioapic.h
  *    + Local APIC Implementation: kvm_lapic.c and kvm_lapic.h
  *    + Memory Management Unit: kvm_mmu.c, kvm_mmu.h, and kvm_paging_tmpl.h
- * 
+ *
  * x86 and Architecture Specific Code
  *
  * The code specific to x86 that is not device specific is broken across two
@@ -274,7 +275,7 @@
  * -----------------
  *
  * -Current memory model / assumptions (i.e. can't be paged)
- * -Use of kpm 
+ * -Use of kpm
  */
 
 #include <sys/types.h>
@@ -2830,6 +2831,21 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		rval = kvm_vm_ioctl_get_dirty_log(kvmp, &log);
+		break;
+	}
+	case KVM_NMI: {
+
+		if (ksp->kds_kvmp == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		if (ksp->kds_vcpu == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		rval = kvm_vcpu_ioctl_nmi(ksp->kds_vcpu);
 		break;
 	}
 	case KVM_NET_QUEUE: {

@@ -1964,6 +1964,16 @@ kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu, struct kvm_interrupt *irq)
 }
 
 int
+kvm_vcpu_ioctl_nmi(struct kvm_vcpu *vcpu)
+{
+	vcpu_load(vcpu);
+	kvm_inject_nmi(vcpu);
+	vcpu_put(vcpu);
+
+	return (0);
+}
+
+int
 kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu, uint64_t *mcg_capp)
 {
 	int rval;
@@ -2317,7 +2327,7 @@ kvm_vm_ioctl_get_dirty_log(struct kvm *kvm, struct kvm_dirty_log *log)
 	}
 
 	r = 0;
-	if (copyout(dirty_bitmap, log->v.dirty_bitmap, n) != 0)
+	if (copyout(dirty_bitmap, log->dirty_bitmap, n) != 0)
 		r = EFAULT;
 out_free:
 	kmem_free(dirty_bitmap, n);

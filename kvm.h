@@ -15,6 +15,7 @@
 
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sys/ioccom.h>
 #include "kvm_x86.h"
 
 #define	KVM_API_VERSION 12   /* same as linux (for qemu compatability...) */
@@ -211,7 +212,7 @@ typedef struct kvm_dirty_log {
 	union {
 		void  *dirty_bitmap; /* one bit per page */
 		uint64_t padding2;
-	}v;
+	};
 } kvm_dirty_log_t;
 
 /* for KVM_SET_SIGNAL_MASK */
@@ -312,9 +313,7 @@ typedef struct kvm_guest_debug {
 /* Bug in KVM_SET_USER_MEMORY_REGION fixed: */
 #define	KVM_CAP_DESTROY_MEMORY_REGION_WORKS	21
 
-#ifdef __KVM_HAVE_USER_NMI
 #define	KVM_CAP_USER_NMI			22
-#endif
 
 #ifdef __KVM_HAVE_GUEST_DEBUG
 #define	KVM_CAP_SET_GUEST_DEBUG			23
@@ -473,6 +472,8 @@ typedef struct kvm_clock_data {
 #define	KVM_SET_VAPIC_ADDR	_IOW(KVMIO,  0x93, struct kvm_vapic_addr)
 #define	KVM_GET_MP_STATE	_IOR(KVMIO,  0x98, struct kvm_mp_state)
 #define	KVM_SET_MP_STATE	_IOW(KVMIO,  0x99, struct kvm_mp_state)
+/* Available with KVM_CAP_NMI */
+#define	KVM_NMI			_IO(KVMIO,   0x9a)
 /* MCE for x86 */
 #define	KVM_X86_SETUP_MCE	_IOW(KVMIO,  0x9c, uint64_t)
 #define	KVM_X86_GET_MCE_CAP_SUPPORTED _IOR(KVMIO,  0x9d, uint64_t)
