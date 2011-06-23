@@ -392,13 +392,15 @@ out:
 	return (r);
 }
 
+/*
+ * Called only during vm destruction. Nobody can use the pointer at this stage
+ */
 void
 kvm_free_irq_routing(struct kvm *kvm)
 {
-	/*
-	 * Called only during vm destruction. Nobody can use the pointer
-	 * at this stage
-	 */
+	if (kvm->irq_routing == NULL)
+		return;
+
 	kmem_free(kvm->irq_routing->rt_entries, kvm->irq_routing_sz);
 	kmem_free(kvm->irq_routing, sizeof (struct kvm_irq_routing_table));
 }
