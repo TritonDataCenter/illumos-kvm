@@ -3203,7 +3203,12 @@ static int
 handle_external_interrupt(struct kvm_vcpu *vcpu)
 {
 	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_irq_exits);
-	return (1);
+	if (CPU->cpu_runrun || CPU->cpu_kprunrun) {
+		vcpu->run->exit_reason = KVM_EXIT_INTR;
+		return (0);
+	} else {
+		return (1);
+	}
 }
 
 static int
