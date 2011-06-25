@@ -1270,12 +1270,12 @@ kvm_lapic_sync_to_vapic(struct kvm_vcpu *vcpu)
 }
 
 int
-kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, gpa_t vapic_addr)
+kvm_lapic_set_vapic_addr(struct kvm_vcpu *vcpu, struct kvm_vapic_addr *va)
 {
 	if (!irqchip_in_kernel(vcpu->kvm))
 		return (EINVAL);
 
-	vcpu->arch.apic->vapic_addr = vapic_addr;
+	vcpu->arch.apic->vapic_addr = va->vapic_addr;
 
 	return (0);
 }
