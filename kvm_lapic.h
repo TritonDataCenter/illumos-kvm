@@ -44,7 +44,7 @@ extern int kvm_apic_compare_prio(struct kvm_vcpu *, struct kvm_vcpu *);
 
 extern void kvm_lapic_set_tpr(struct kvm_vcpu *vcpu, unsigned long cr8);
 extern void kvm_lapic_set_base(struct kvm_vcpu *vcpu, uint64_t value);
-extern int kvm_lapic_set_vapic_addr(struct kvm_vcpu *, gpa_t); 
+extern int kvm_lapic_set_vapic_addr(struct kvm_vcpu *, struct kvm_vapic_addr *); 
 
 extern int kvm_x2apic_msr_write(struct kvm_vcpu *, uint32_t, uint64_t);
 extern int kvm_x2apic_msr_read(struct kvm_vcpu *, uint32_t, uint64_t *);
