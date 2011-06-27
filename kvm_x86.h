@@ -1,15 +1,14 @@
 #ifndef __KVM_X86_H
-#define __KVM_X86_H
+#define	__KVM_X86_H
 
 /* See <sys/kvm.h> for an explanation of why this is necessary */
 #ifndef __GNUC__
 #error "The KVM Header files require GNU C extensions for compatibility."
 #endif
 
-
 #include <sys/types.h>
 
-#define KVM_NR_INTERRUPTS 256
+#define	KVM_NR_INTERRUPTS 256
 
 /* for KVM_GET_IRQCHIP and KVM_SET_IRQCHIP */
 typedef struct kvm_pic_state {
@@ -31,7 +30,7 @@ typedef struct kvm_pic_state {
 	uint8_t elcr_mask;
 } kvm_pic_state_t;
 
-#define KVM_IOAPIC_NUM_PINS  24
+#define	KVM_IOAPIC_NUM_PINS  24
 typedef struct kvm_ioapic_state {
 	uint64_t base_address;
 	uint32_t ioregsel;
@@ -56,15 +55,15 @@ typedef struct kvm_ioapic_state {
 	} redirtbl[KVM_IOAPIC_NUM_PINS];
 } kvm_ioapic_state_t;
 
-#define KVM_IRQCHIP_PIC_MASTER   0
-#define KVM_IRQCHIP_PIC_SLAVE    1
-#define KVM_IRQCHIP_IOAPIC       2
-#define KVM_NR_IRQCHIPS          3
+#define	KVM_IRQCHIP_PIC_MASTER	0
+#define	KVM_IRQCHIP_PIC_SLAVE	1
+#define	KVM_IRQCHIP_IOAPIC	2
+#define	KVM_NR_IRQCHIPS		3
 
 /* for KVM_GET_REGS and KVM_SET_REGS */
 typedef struct kvm_regs {
 	/* out (KVM_GET_REGS) / in (KVM_SET_REGS) */
-        uint64_t rax, rbx, rcx, rdx;
+	uint64_t rax, rbx, rcx, rdx;
 	uint64_t rsi, rdi, rsp, rbp;
 	uint64_t r8,  r9,  r10, r11;
 	uint64_t r12, r13, r14, r15;
@@ -72,7 +71,7 @@ typedef struct kvm_regs {
 } kvm_regs_t;
 
 /* for KVM_GET_LAPIC and KVM_SET_LAPIC */
-#define KVM_APIC_REG_SIZE 0x400
+#define	KVM_APIC_REG_SIZE 0x400
 typedef struct kvm_lapic_state {
 	char regs[KVM_APIC_REG_SIZE];
 } kvm_lapic_state_t;
@@ -102,7 +101,7 @@ typedef struct kvm_sregs {
 	uint64_t cr0, cr2, cr3, cr4, cr8;
 	uint64_t efer;
 	uint64_t apic_base;
-	unsigned long interrupt_bitmap[(KVM_NR_INTERRUPTS + (64-1)) / 64]; /*XXX 64 = bits in unsigned long*/
+	unsigned long interrupt_bitmap[(KVM_NR_INTERRUPTS + (64-1)) / 64];
 } kvm_sregs_t;
 
 /* for KVM_GET_FPU and KVM_SET_FPU */
@@ -168,9 +167,9 @@ typedef struct kvm_cpuid_entry2 {
 } kvm_cpuid_entry2_t;
 
 
-#define KVM_CPUID_FLAG_SIGNIFCANT_INDEX 1
-#define KVM_CPUID_FLAG_STATEFUL_FUNC    2
-#define KVM_CPUID_FLAG_STATE_READ_NEXT  4
+#define	KVM_CPUID_FLAG_SIGNIFCANT_INDEX 1
+#define	KVM_CPUID_FLAG_STATEFUL_FUNC    2
+#define	KVM_CPUID_FLAG_STATE_READ_NEXT  4
 
 /* for KVM_SET_CPUID2 */
 typedef struct kvm_cpuid2 {
@@ -204,10 +203,10 @@ typedef struct kvm_debug_exit_arch {
 	uint64_t dr7;
 } kvm_debug_exit_arch_t;
 
-#define KVM_GUESTDBG_USE_SW_BP		0x00010000
-#define KVM_GUESTDBG_USE_HW_BP		0x00020000
-#define KVM_GUESTDBG_INJECT_DB		0x00040000
-#define KVM_GUESTDBG_INJECT_BP		0x00080000
+#define	KVM_GUESTDBG_USE_SW_BP		0x00010000
+#define	KVM_GUESTDBG_USE_HW_BP		0x00020000
+#define	KVM_GUESTDBG_INJECT_DB		0x00040000
+#define	KVM_GUESTDBG_INJECT_BP		0x00080000
 
 /* for KVM_SET_GUEST_DEBUG */
 typedef struct kvm_guest_debug_arch {
@@ -219,7 +218,7 @@ typedef struct kvm_pit_state {
 	struct kvm_pit_channel_state channels[3];
 } kvm_pit_state_t;
 
-#define KVM_PIT_FLAGS_HPET_LEGACY  0x00000001
+#define	KVM_PIT_FLAGS_HPET_LEGACY  0x00000001
 
 typedef struct kvm_pit_state2 {
 	struct kvm_pit_channel_state channels[3];
@@ -233,8 +232,8 @@ typedef struct kvm_reinject_control {
 } kvm_reinject_control_t;
 
 /* When set in flags, include corresponding fields on KVM_SET_VCPU_EVENTS */
-#define KVM_VCPUEVENT_VALID_NMI_PENDING	0x00000001
-#define KVM_VCPUEVENT_VALID_SIPI_VECTOR	0x00000002
+#define	KVM_VCPUEVENT_VALID_NMI_PENDING	0x00000001
+#define	KVM_VCPUEVENT_VALID_SIPI_VECTOR	0x00000002
 
 /* for KVM_GET/SET_VCPU_EVENTS */
 typedef struct kvm_vcpu_events {
