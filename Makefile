@@ -17,11 +17,12 @@ CSTYLE=$(KERNEL_SOURCE)/usr/src/tools/scripts/cstyle
 
 all: kvm kvm.so
 
-HEADERS= \
-	kvm.h \
-	kvm_bitops.h \
-	kvm_cache_regs.h \
-	kvm_coalesced_mmio.h \
+HEADERS=			 \
+	kvm.h			 \
+	kvm_bitops.h		 \
+	kvm_cache_regs.h	 \
+	kvm_coalesced_mmio.h	 \
+	kvm_cpuid.h		 \
 	kvm_x86.h
 
 kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h msr.h kvm_bitops.h kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c
