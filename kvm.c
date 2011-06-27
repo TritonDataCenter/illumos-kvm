@@ -2110,15 +2110,6 @@ kvm_open(dev_t *devp, int flag, int otype, cred_t *credp)
 	kvm_devstate_t *ksp;
 
 
-	minor = (minor_t)(uintptr_t)vmem_alloc(kvm_minor,
-	    1, VM_BESTFIT | VM_SLEEP);
-
-	ksp = ddi_get_soft_state(kvm_state, minor);
-	if (!ksp) {
-		vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
-		return (ENXIO);
-	}
-
 	if (flag & FEXCL || flag & FNDELAY)
 		return (EINVAL);
 
@@ -2137,12 +2128,17 @@ kvm_open(dev_t *devp, int flag, int otype, cred_t *credp)
 	if (getminor(*devp) != kvm_base_minor)
 		return (ENXIO);
 
+	minor = (minor_t)(uintptr_t)vmem_alloc(kvm_minor,
+	    1, VM_BESTFIT | VM_SLEEP);
+
 	if (ddi_soft_state_zalloc(kvm_state, minor) != 0) {
 		vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
 		return (ENXIO);
 	}
 
 	*devp = makedevice(getmajor(*devp), minor);
+	ksp = ddi_get_soft_state(kvm_state, minor);
+	VERIFY(ksp != NULL);
 
 	return (0);
 }
