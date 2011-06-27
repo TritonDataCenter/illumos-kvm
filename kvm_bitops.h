@@ -52,7 +52,7 @@
  * Note that @nr may be almost arbitrarily large; this function is not
  * restricted to acting on a single-word quantity.
  */
-inline void set_bit(unsigned int nr, volatile unsigned long *addr);
+inline void set_bit(unsigned int, volatile unsigned long *);
 
 /*
  * __set_bit - Set a bit in memory
@@ -63,7 +63,7 @@ inline void set_bit(unsigned int nr, volatile unsigned long *addr);
  * If it's called on the same region of memory simultaneously, the effect
  * may be that only one operation succeeds.
  */
-inline void __set_bit(int nr, volatile unsigned long *addr);
+inline void __set_bit(int, volatile unsigned long *);
 
 /*
  * clear_bit - Clears a bit in memory
@@ -75,7 +75,7 @@ inline void __set_bit(int nr, volatile unsigned long *addr);
  * you should call smp_mb__before_clear_bit() and/or smp_mb__after_clear_bit()
  * in order to ensure changes are visible on other processors.
  */
-inline void clear_bit(int nr, volatile unsigned long *addr);
+inline void clear_bit(int, volatile unsigned long *);
 
 /*
  * clear_bit_unlock - Clears a bit in memory
@@ -85,9 +85,9 @@ inline void clear_bit(int nr, volatile unsigned long *addr);
  * clear_bit() is atomic and implies release semantics before the memory
  * operation. It can be used for an unlock.
  */
-inline void clear_bit_unlock(unsigned nr, volatile unsigned long *addr);
+inline void clear_bit_unlock(unsigned, volatile unsigned long *);
 
-inline void __clear_bit(int nr, volatile unsigned long *addr);
+inline void __clear_bit(int, volatile unsigned long *);
 
 /*
  * __clear_bit_unlock - Clears a bit in memory
@@ -101,7 +101,7 @@ inline void __clear_bit(int nr, volatile unsigned long *addr);
  * No memory barrier is required here, because x86 cannot reorder stores past
  * older loads. Same principle as spin_unlock.
  */
-inline void __clear_bit_unlock(unsigned nr, volatile unsigned long *addr);
+inline void __clear_bit_unlock(unsigned, volatile unsigned long *);
 
 #define	smp_mb__before_clear_bit()	barrier()
 #define	smp_mb__after_clear_bit()	barrier()
@@ -115,7 +115,7 @@ inline void __clear_bit_unlock(unsigned nr, volatile unsigned long *addr);
  * If it's called on the same region of memory simultaneously, the effect
  * may be that only one operation succeeds.
  */
-inline void __change_bit(int nr, volatile unsigned long *addr);
+inline void __change_bit(int, volatile unsigned long *);
 
 /*
  * change_bit - Toggle a bit in memory
@@ -126,7 +126,7 @@ inline void __change_bit(int nr, volatile unsigned long *addr);
  * Note that @nr may be almost arbitrarily large; this function is not
  * restricted to acting on a single-word quantity.
  */
-inline void change_bit(int nr, volatile unsigned long *addr);
+inline void change_bit(int, volatile unsigned long *);
 
 /*
  * test_and_set_bit - Set a bit and return its old value
@@ -136,7 +136,7 @@ inline void change_bit(int nr, volatile unsigned long *addr);
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
-inline int test_and_set_bit(int nr, volatile unsigned long *addr);
+inline int test_and_set_bit(int, volatile unsigned long *);
 
 /*
  * test_and_set_bit_lock - Set a bit and return its old value for lock
@@ -145,7 +145,7 @@ inline int test_and_set_bit(int nr, volatile unsigned long *addr);
  *
  * This is the same as test_and_set_bit on x86.
  */
-inline int test_and_set_bit_lock(int nr, volatile unsigned long *addr);
+inline int test_and_set_bit_lock(int, volatile unsigned long *);
 
 /*
  * __test_and_set_bit - Set a bit and return its old value
@@ -156,7 +156,7 @@ inline int test_and_set_bit_lock(int nr, volatile unsigned long *addr);
  * If two examples of this operation race, one can appear to succeed
  * but actually fail.  You must protect multiple accesses with a lock.
  */
-inline int __test_and_set_bit(int nr, volatile unsigned long *addr);
+inline int __test_and_set_bit(int, volatile unsigned long *);
 
 /*
  * test_and_clear_bit - Clear a bit and return its old value
@@ -166,7 +166,7 @@ inline int __test_and_set_bit(int nr, volatile unsigned long *addr);
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
-inline int test_and_clear_bit(int nr, volatile unsigned long *addr);
+inline int test_and_clear_bit(int, volatile unsigned long *);
 
 /*
  * __test_and_clear_bit - Clear a bit and return its old value
@@ -177,10 +177,10 @@ inline int test_and_clear_bit(int nr, volatile unsigned long *addr);
  * If two examples of this operation race, one can appear to succeed
  * but actually fail.  You must protect multiple accesses with a lock.
  */
-inline int __test_and_clear_bit(int nr, volatile unsigned long *addr);
+inline int __test_and_clear_bit(int, volatile unsigned long *);
 
 /* WARNING: non atomic and it can be reordered! */
-inline int __test_and_change_bit(int nr, volatile unsigned long *addr);
+inline int __test_and_change_bit(int, volatile unsigned long *);
 
 /*
  * test_and_change_bit - Change a bit and return its old value
@@ -190,11 +190,11 @@ inline int __test_and_change_bit(int nr, volatile unsigned long *addr);
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
-inline int test_and_change_bit(int nr, volatile unsigned long *addr);
+inline int test_and_change_bit(int, volatile unsigned long *);
 
-inline int constant_test_bit(unsigned int nr,
-    const volatile unsigned long *addr);
-inline int variable_test_bit(int nr, volatile const unsigned long *addr);
+inline int constant_test_bit(unsigned int,
+    const volatile unsigned long *);
+inline int variable_test_bit(int, volatile const unsigned long *);
 
 /*
  * test_bit - Determine whether a bit is set
@@ -213,7 +213,7 @@ inline int variable_test_bit(int nr, volatile const unsigned long *addr);
  *
  * Undefined if no bit exists, so code should check against 0 first.
  */
-inline unsigned long __ffs(unsigned long word);
+inline unsigned long __ffs(unsigned long);
 
 /*
  * ffz - find first zero bit in word
@@ -221,7 +221,7 @@ inline unsigned long __ffs(unsigned long word);
  *
  * Undefined if no zero exists, so code should check against ~0UL first.
  */
-inline unsigned long ffz(unsigned long word);
+inline unsigned long ffz(unsigned long);
 
 /*
  * __fls: find last set bit in word
@@ -229,7 +229,7 @@ inline unsigned long ffz(unsigned long word);
  *
  * Undefined if no set bit exists, so code should check against 0 first.
  */
-inline unsigned long __fls(unsigned long word);
+inline unsigned long __fls(unsigned long);
 
 #ifdef __KERNEL__
 /*
@@ -243,7 +243,7 @@ inline unsigned long __fls(unsigned long word);
  * set bit if value is nonzero. The first (least significant) bit
  * is at position 1.
  */
-inline int ffs(int x);
+inline int ffs(int);
 
 /*
  * fls - find last set bit in word
@@ -256,7 +256,7 @@ inline int ffs(int x);
  * set bit if value is nonzero. The last (most significant) bit is
  * at position 32.
  */
-inline int fls(int x);
+inline int fls(int);
 
 #endif /* __KERNEL__ */
 
