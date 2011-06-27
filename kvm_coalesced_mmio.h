@@ -1,5 +1,5 @@
 #ifndef __KVM_COALESCED_MMIO_H__
-#define __KVM_COALESCED_MMIO_H__
+#define	__KVM_COALESCED_MMIO_H__
 
 /*
  * KVM coalesced MMIO
@@ -11,7 +11,7 @@
  */
 #include "kvm_iodev.h"
 
-#define KVM_COALESCED_MMIO_ZONE_MAX 100
+#define	KVM_COALESCED_MMIO_ZONE_MAX 100
 
 /* for KVM_REGISTER_COALESCED_MMIO / KVM_UNREGISTER_COALESCED_MMIO */
 
