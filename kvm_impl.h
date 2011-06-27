@@ -77,6 +77,7 @@ typedef struct kvm_stats {
        kstat_named_t kvmks_mmu_recycled;       /* recycles from free list */
        kstat_named_t kvmks_remote_tlb_flush;   /* remote TLB flushes */
        kstat_named_t kvmks_lpages;             /* large pages in use */
+	kstat_named_t kvmks_mmu_unsync_page;   /* number of unsynced pages */
 } kvm_stats_t;
 
 #define KVM_KSTAT_INIT(kvmp, field, name) \

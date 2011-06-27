@@ -59,5 +59,6 @@ extern void kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu);
 extern int kvm_mmu_reload(struct kvm_vcpu *vcpu);
 extern int is_present_gpte(unsigned long);
 extern int kvm_avlmmucmp(const void *arg1, const void *arg2);
+extern void mmu_destroy_caches(void);
 
 #endif

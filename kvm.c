@@ -749,6 +749,7 @@ kvm_create_vm(void)
 	KVM_KSTAT_INIT(kvmp, kvmks_mmu_recycled, "mmu-recycled");
 	KVM_KSTAT_INIT(kvmp, kvmks_remote_tlb_flush, "remote-tlb-flush");
 	KVM_KSTAT_INIT(kvmp, kvmks_lpages, "lpages");
+	KVM_KSTAT_INIT(kvmp, kvmks_mmu_unsync_page, "mmu-unsync-page");
 
 	kstat_install(kvmp->kvm_kstat);
 
@@ -2070,6 +2071,7 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	kmem_free(bad_page_kma, PAGESIZE);
 
 	vmx_fini();
+	mmu_destroy_caches();
 	mutex_destroy(&kvm_lock);
 	ddi_soft_state_fini(&kvm_state);
 
@@ -2107,6 +2109,16 @@ kvm_open(dev_t *devp, int flag, int otype, cred_t *credp)
 	minor_t minor;
 	kvm_devstate_t *ksp;
 
+
+	minor = (minor_t)(uintptr_t)vmem_alloc(kvm_minor,
+	    1, VM_BESTFIT | VM_SLEEP);
+
+	ksp = ddi_get_soft_state(kvm_state, minor);
+	if (!ksp) {
+		vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
+		return (ENXIO);
+	}
+
 	if (flag & FEXCL || flag & FNDELAY)
 		return (EINVAL);
 
@@ -2125,17 +2137,12 @@ kvm_open(dev_t *devp, int flag, int otype, cred_t *credp)
 	if (getminor(*devp) != kvm_base_minor)
 		return (ENXIO);
 
-	minor = (minor_t)(uintptr_t)vmem_alloc(kvm_minor,
-	    1, VM_BESTFIT | VM_SLEEP);
-
 	if (ddi_soft_state_zalloc(kvm_state, minor) != 0) {
 		vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
 		return (ENXIO);
 	}
 
 	*devp = makedevice(getmajor(*devp), minor);
-	ksp = ddi_get_soft_state(kvm_state, minor);
-	VERIFY(ksp != NULL);
 
 	return (0);
 }

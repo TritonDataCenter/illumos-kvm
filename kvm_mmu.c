@@ -225,12 +225,7 @@ pse36_gfn_delta(uint32_t gpte)
 static void
 __set_spte(uint64_t *sptep, uint64_t spte)
 {
-#ifdef XXX
-	set_64bit((unsigned long *)sptep, spte);
-#else
-	XXX_KVM_PROBE;
 	*sptep = spte;
-#endif
 }
 
 static int
@@ -682,16 +677,8 @@ rmap_write_protect(struct kvm *kvm, uint64_t gfn)
 static void
 kvm_mmu_free_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 {
-#ifdef XXX
-	ASSERT(is_empty_shadow_page(sp->spt));
-	list_del(&sp->link);
-	__free_page(virt_to_page(sp->spt));
-	__free_page(virt_to_page(sp->gfns));
-#else
 	kmem_free(sp->sptkma, PAGESIZE);
 	kmem_free(sp->gfnskma, PAGESIZE);
-	XXX_KVM_PROBE;
-#endif
 
 	mutex_enter(&kvm->kvm_avllock);
 	avl_remove(&kvm->kvm_avlmp, sp);
@@ -739,12 +726,7 @@ kvm_mmu_alloc_page(struct kvm_vcpu *vcpu, uint64_t *parent_pte)
 	mutex_exit(&vcpu->kvm->kvm_avllock);
 
 	list_insert_head(&vcpu->kvm->arch.active_mmu_pages, sp);
-#ifdef XXX
-	/* XXX don't see this used anywhere */
-	INIT_LIST_HEAD(&sp->oos_link);
-#else
-	XXX_KVM_PROBE;
-#endif
+
 	bitmap_zero(sp->slot_bitmap, KVM_MEMORY_SLOTS + KVM_PRIVATE_MEM_SLOTS);
 	sp->multimapped = 0;
 	sp->parent_pte = parent_pte;
@@ -1044,7 +1026,7 @@ static void
 kvm_unlink_unsync_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 {
 	sp->unsync = 0;
-	/* XXX There used to be stats here */
+	KVM_KSTAT_DEC(kvm, kvmks_mmu_unsync_page);
 }
 
 
@@ -1118,11 +1100,10 @@ mmu_pages_clear_parents(struct mmu_page_path *parents)
 			return;
 
 		--sp->unsync_children;
-#ifdef XXX
-		WARN_ON((int)sp->unsync_children < 0);
-#else
-		XXX_KVM_PROBE;
-#endif
+		if ((int)sp->unsync_children < 0)
+			cmn_err(CE_WARN,
+			    "mmu_pages_clear_parents: unsync_children (%d)\n",
+			    (int)sp->unsync_children);
 		__clear_bit(idx, sp->unsync_child_bitmap);
 		level++;
 	} while (level < PT64_ROOT_LEVEL-1 && !sp->unsync_children);
@@ -1158,16 +1139,9 @@ mmu_sync_children(struct kvm_vcpu *vcpu, struct kvm_mmu_page *parent)
 			kvm_sync_page(vcpu, sp);
 			mmu_pages_clear_parents(&parents);
 		}
-#ifdef XXX
-		cond_resched_lock(&vcpu->mutex);
-#else
-		XXX_KVM_SYNC_PROBE;
 		mutex_enter(&vcpu->kvm->mmu_lock);
-#endif
 		kvm_mmu_pages_init(parent, &parents, &pages);
-#ifndef XXX
 		mutex_exit(&vcpu->kvm->mmu_lock);
-#endif
 	}
 }
 
@@ -1270,15 +1244,9 @@ shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator,
 	}
 
 	iterator->index = SHADOW_PT_INDEX(iterator->addr, iterator->level);
-#ifdef XXX
-	iterator->sptep	= ((uint64_t *)__va(iterator->shadow_addr)) +
-	    iterator->index;
-#else
-	XXX_KVM_PROBE;
 	iterator->sptep =
 	    (uint64_t *)page_address(pfn_to_page((iterator->shadow_addr) >>
 	    PAGESHIFT)) + iterator->index;
-#endif
 
 	return (1);
 }
@@ -1327,12 +1295,8 @@ kvm_mmu_reset_last_pte_updated(struct kvm *kvm)
 	int i;
 	struct kvm_vcpu *vcpu;
 
-#ifdef XXX
 	kvm_for_each_vcpu(i, vcpu, kvm)
 		vcpu->arch.last_pte_updated = NULL;
-#else
-	XXX_KVM_PROBE;
-#endif
 }
 
 static void
@@ -1340,7 +1304,6 @@ kvm_mmu_unlink_parents(struct kvm *kvm, struct kvm_mmu_page *sp)
 {
 	uint64_t *parent_pte;
 
-#ifndef XXX
 	while (sp->multimapped || sp->parent_pte) {
 		if (!sp->multimapped)
 			parent_pte = sp->parent_pte;
@@ -1355,32 +1318,6 @@ kvm_mmu_unlink_parents(struct kvm *kvm, struct kvm_mmu_page *sp)
 		kvm_mmu_put_page(sp, parent_pte);
 		__set_spte(parent_pte, shadow_trap_nonpresent_pte);
 	}
-#else
-	XXX_KVM_PROBE;
-
-	while (sp->multimapped || sp->parent_pte) {
-		if (!sp->multimapped) {
-			parent_pte = sp->parent_pte;
-			kvm_mmu_put_page(sp, parent_pte);
-			__set_spte(parent_pte, shadow_trap_nonpresent_pte);
-		} else {
-			struct kvm_pte_chain *chain;
-			int i;
-			for (chain = list_head(&sp->parent_ptes); chain != NULL;
-			    chain = list_next(&sp->parent_ptes, chain)) {
-				for (i = 0; i < NR_PTE_CHAIN_ENTRIES; i++) {
-					if (chain->parent_ptes[i] == 0)
-						continue;
-
-					parent_pte = chain->parent_ptes[i];
-					kvm_mmu_put_page(sp, parent_pte);
-					__set_spte(parent_pte,
-					    shadow_trap_nonpresent_pte);
-				}
-			}
-		}
-	}
-#endif
 }
 
 static int
@@ -1500,13 +1437,7 @@ kvm_mmu_unprotect_page(struct kvm *kvm, gfn_t gfn)
 	for (sp = list_head(bucket); sp; sp = list_next(bucket, sp)) {
 		if (sp->gfn == gfn && !sp->role.direct) {
 			r = 1;
-#ifdef XXX
-			if (kvm_mmu_zap_page(kvm, sp))
-				n = bucket->first;
-#else
-			XXX_KVM_PROBE;
 			kvm_mmu_zap_page(kvm, sp);
-#endif
 		}
 	}
 	return (r);
@@ -1654,6 +1585,7 @@ kvm_unsync_page(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp)
 		if (s->role.word != sp->role.word)
 			return (1);
 	}
+	KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_unsync_page);
 	sp->unsync = 1;
 
 	kvm_mmu_mark_parents_unsync(vcpu, sp);
@@ -1841,14 +1773,10 @@ mmu_set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep, unsigned pt_access,
 		else
 			kvm_release_pfn_clean(pfn);
 	}
-#ifdef XXX
 	if (speculative) {
 		vcpu->arch.last_pte_updated = sptep;
 		vcpu->arch.last_pte_gfn = gfn;
 	}
-#else
-	XXX_KVM_PROBE;
-#endif
 }
 
 static void
@@ -2047,12 +1975,7 @@ mmu_alloc_roots(struct kvm_vcpu *vcpu)
 			return (1);
 			sp = kvm_mmu_get_page(vcpu, root_gfn, i << 30,
 			    PT32_ROOT_LEVEL, direct, ACC_ALL, NULL);
-#ifdef XXX
-		root = __pa(sp->spt);
-#else
-		XXX_KVM_PROBE;
 		root = kvm_va2pa((caddr_t)sp->spt);
-#endif
 		++sp->root_count;
 		vcpu->arch.mmu.pae_root[i] = root | PT_PRESENT_MASK;
 	}
@@ -2638,20 +2561,12 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 	if (guest_initiated) {
 		if (gfn == vcpu->arch.last_pt_write_gfn &&
 		    !last_updated_pte_accessed(vcpu)) {
-#ifdef XXX
 			++vcpu->arch.last_pt_write_count;
 			if (vcpu->arch.last_pt_write_count >= 3)
 				flooded = 1;
-#else
-			XXX_KVM_PROBE;
-#endif
 		} else {
 			vcpu->arch.last_pt_write_gfn = gfn;
-#ifdef XXX
 			vcpu->arch.last_pt_write_count = 1;
-#else
-			XXX_KVM_PROBE;
-#endif
 			vcpu->arch.last_pte_updated = NULL;
 		}
 	}
@@ -2677,13 +2592,7 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 			 * forking, in which case it is better to unmap the
 			 * page.
 			 */
-#ifdef XXX
-			if (kvm_mmu_zap_page(vcpu->kvm, sp))
-				n = bucket->first;
-#else
-			XXX_KVM_PROBE;
 			kvm_mmu_zap_page(vcpu->kvm, sp);
-#endif
 			KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_flooded);
 			continue;
 		}
@@ -2850,11 +2759,6 @@ alloc_mmu_pages(struct kvm_vcpu *vcpu)
 
 	vcpu->arch.mmu.pae_root = (uint64_t *)page_address(page);
 
-	/* XXX - why only 4?  must be physical address extension */
-	/* which is used for 32-bit guest virtual with 36-bit physical, */
-	/* and 32-bit on 64-bit hardware */
-	/* unclear what happens for 64bit guest on 64 bit hw */
-
 	for (i = 0; i < 4; ++i)
 		vcpu->arch.mmu.pae_root[i] = INVALID_PAGE;
 
@@ -2978,7 +2882,7 @@ kvm_mmu_zap_all(struct kvm *kvm)
 	kvm_flush_remote_tlbs(kvm);
 }
 
-static void
+void
 mmu_destroy_caches(void)
 {
 	if (pte_chain_cache)

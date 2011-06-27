@@ -3627,21 +3627,29 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 			}
 		}
 
+		KVM_TRACE3(vcpu__run, char *, __FILE__, int, __LINE__, int, r);
 		if (r <= 0)
 			break;
 
 		clear_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
-		if (kvm_cpu_has_pending_timer(vcpu))
+		if (kvm_cpu_has_pending_timer(vcpu)) {
+			KVM_TRACE3(vcpu__run, char *, __FILE__, int, __LINE__,
+			    uint64_t, vcpu);
 			kvm_inject_pending_timer_irqs(vcpu);
+		}
 
 		if (dm_request_for_irq_injection(vcpu)) {
 			r = -EINTR;
+			KVM_TRACE3(vcpu__run, char *, __FILE__, int, __LINE__,
+			    uint64_t, vcpu);
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
 			KVM_VCPU_KSTAT_INC(vcpu, kvmvs_irq_exits);
 		}
 
 		if (issig(JUSTLOOKING)) {
 			r = -EINTR;
+			KVM_TRACE3(vcpu__run, char *, __FILE__, int, __LINE__,
+			    uint64_t, vcpu);
 			vcpu->run->exit_reason = KVM_EXIT_INTR;
 			KVM_VCPU_KSTAT_INC(vcpu, kvmvs_signal_exits);
 		}
@@ -3651,6 +3659,8 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 #else
 	XXX_KVM_SYNC_PROBE;
 #endif
+	KVM_TRACE3(vcpu__run, char *, __FILE__, int, __LINE__,
+	    uint64_t, vcpu);
 	post_kvm_run_save(vcpu);
 	vapic_exit(vcpu);
 
