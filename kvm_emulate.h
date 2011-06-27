@@ -1,4 +1,4 @@
-/******************************************************************************
+/*
  * x86_emulate.h
  *
  * Generic x86 (32-bit and 64-bit) instruction decoder and emulator.
@@ -9,7 +9,7 @@
  */
 
 #ifndef _ASM_X86_KVM_X86_EMULATE_H
-#define _ASM_X86_KVM_X86_EMULATE_H
+#define	_ASM_X86_KVM_X86_EMULATE_H
 
 struct x86_emulate_ctxt;
 #ifdef _KERNEL
@@ -44,73 +44,77 @@ struct x86_emulate_ctxt;
  *  4. The emulator cannot handle 64-bit mode emulation on an x86/32 system.
  */
 /* Access completed successfully: continue emulation as normal. */
-#define X86EMUL_CONTINUE        0
+#define	X86EMUL_CONTINUE	0
 /* Access is unhandleable: bail from emulation and return error to caller. */
-#define X86EMUL_UNHANDLEABLE    1
+#define	X86EMUL_UNHANDLEABLE	1
 /* Terminate emulation but return success to the caller. */
-#define X86EMUL_PROPAGATE_FAULT 2 /* propagate a generated fault to guest */
-#define X86EMUL_RETRY_INSTR     2 /* retry the instruction for some reason */
-#define X86EMUL_CMPXCHG_FAILED  2 /* cmpxchg did not see expected value */
+/*
+ * X86EMUL_PROPAGATE_FAULT: propagate a generated fault to guest
+ * X86EMUL_RETRY_INSTR:	retry the instruction for some reason
+ * X86EMUL_CMPXCHG_FAILD: cmpxchg did not see expected value
+ */
+#define	X86EMUL_PROPAGATE_FAULT	2
+#define	X86EMUL_RETRY_INSTR	2
+#define	X86EMUL_CMPXCHG_FAILED	2
+
 typedef struct x86_emulate_ops {
 	/*
-	 * read_std: Read bytes of standard (non-emulated/special) memory.
-	 *           Used for descriptor reading.
+	 * read_std: Read bytes of standard (non-emulated/special) memory. Used
+	 * for descriptor reading.
+	 *
 	 *  @addr:  [IN ] Linear address from which to read.
 	 *  @val:   [OUT] Value read from memory, zero-extended to 'u_long'.
 	 *  @bytes: [IN ] Number of bytes to read from memory.
 	 */
-	int (*read_std)(unsigned long addr, void *val,
-			unsigned int bytes, struct kvm_vcpu *vcpu, uint32_t *error);
+	int (*read_std)(unsigned long, void *,
+	    unsigned int, struct kvm_vcpu *, uint32_t *);
 
 	/*
-	 * fetch: Read bytes of standard (non-emulated/special) memory.
-	 *        Used for instruction fetch.
+	 * fetch: Read bytes of standard (non-emulated/special) memory. Used for
+	 * instruction fetch.
+	 *
 	 *  @addr:  [IN ] Linear address from which to read.
 	 *  @val:   [OUT] Value read from memory, zero-extended to 'u_long'.
 	 *  @bytes: [IN ] Number of bytes to read from memory.
 	 */
-	int (*fetch)(unsigned long addr, void *val,
-			unsigned int bytes, struct kvm_vcpu *vcpu, uint32_t *error);
+	int (*fetch)(unsigned long, void *,
+	    unsigned int, struct kvm_vcpu *, uint32_t *);
 
 	/*
 	 * read_emulated: Read bytes from emulated/special memory area.
+	 *
 	 *  @addr:  [IN ] Linear address from which to read.
 	 *  @val:   [OUT] Value read from memory, zero-extended to 'u_long'.
 	 *  @bytes: [IN ] Number of bytes to read from memory.
 	 */
-	int (*read_emulated)(unsigned long addr,
-			     void *val,
-			     unsigned int bytes,
-			     struct kvm_vcpu *vcpu);
+	int (*read_emulated)(unsigned long, void *, unsigned int,
+	    struct kvm_vcpu *);
 
 	/*
 	 * write_emulated: Write bytes to emulated/special memory area.
+	 *
 	 *  @addr:  [IN ] Linear address to which to write.
 	 *  @val:   [IN ] Value to write to memory (low-order bytes used as
-	 *                required).
+	 *		  required).
 	 *  @bytes: [IN ] Number of bytes to write to memory.
 	 */
-	int (*write_emulated)(unsigned long addr,
-			      const void *val,
-			      unsigned int bytes,
-			      struct kvm_vcpu *vcpu);
+	int (*write_emulated)(unsigned long, const void *, unsigned int,
+	    struct kvm_vcpu *);
 
 	/*
 	 * cmpxchg_emulated: Emulate an atomic (LOCKed) CMPXCHG operation on an
-	 *                   emulated/special memory area.
+	 * emulated/special memory area.
+	 *
 	 *  @addr:  [IN ] Linear address to access.
 	 *  @old:   [IN ] Value expected to be current at @addr.
 	 *  @new:   [IN ] Value to write to @addr.
 	 *  @bytes: [IN ] Number of bytes to access using CMPXCHG.
 	 */
-	int (*cmpxchg_emulated)(unsigned long addr,
-				const void *old,
-				const void *new,
-				unsigned int bytes,
-				struct kvm_vcpu *vcpu);
+	int (*cmpxchg_emulated)(unsigned long, const void *, const void *,
+	    unsigned int, struct kvm_vcpu *);
 
 } x86_emulate_ops_t;
-#endif /*_KERNEL*/
+#endif /* _KERNEL */
 
 /* Type, address-of, and value of an instruction's operand. */
 typedef struct operand {
@@ -154,8 +158,8 @@ typedef struct decode_cache {
 	struct fetch_cache fetch;
 } decode_cache_t;
 
-#define X86_SHADOW_INT_MOV_SS  1
-#define X86_SHADOW_INT_STI     2
+#define	X86_SHADOW_INT_MOV_SS	1
+#define	X86_SHADOW_INT_STI	2
 
 typedef struct x86_emulate_ctxt {
 	/* Register state before/after emulation. */
@@ -174,23 +178,23 @@ typedef struct x86_emulate_ctxt {
 } x86_emulate_ctxt_t;
 
 /* Repeat String Operation Prefix */
-#define REPE_PREFIX	1
-#define REPNE_PREFIX	2
+#define	REPE_PREFIX	1
+#define	REPNE_PREFIX	2
 
 /* Execution mode, passed to the emulator. */
-#define X86EMUL_MODE_REAL     0	/* Real mode.             */
-#define X86EMUL_MODE_VM86     1	/* Virtual 8086 mode.     */
-#define X86EMUL_MODE_PROT16   2	/* 16-bit protected mode. */
-#define X86EMUL_MODE_PROT32   4	/* 32-bit protected mode. */
-#define X86EMUL_MODE_PROT64   8	/* 64-bit (long) mode.    */
+#define	X86EMUL_MODE_REAL	0	/* Real mode. */
+#define	X86EMUL_MODE_VM86	1	/* Virtual 8086 mode. */
+#define	X86EMUL_MODE_PROT16	2	/* 16-bit protected mode. */
+#define	X86EMUL_MODE_PROT32	4	/* 32-bit protected mode. */
+#define	X86EMUL_MODE_PROT64	8	/* 64-bit (long) mode. */
 
 /* Host execution mode. */
-#define X86EMUL_MODE_HOST X86EMUL_MODE_PROT64
+#define	X86EMUL_MODE_HOST X86EMUL_MODE_PROT64
 
 #ifdef _KERNEL
-int x86_decode_insn(struct x86_emulate_ctxt *ctxt,
-		    struct x86_emulate_ops *ops);
-int x86_emulate_insn(struct x86_emulate_ctxt *ctxt,
-		     struct x86_emulate_ops *ops);
-#endif /*_KERNEL*/
+extern int x86_decode_insn(struct x86_emulate_ctxt *,
+    struct x86_emulate_ops *);
+extern int x86_emulate_insn(struct x86_emulate_ctxt *,
+    struct x86_emulate_ops *);
+#endif /* _KERNEL */
 #endif /* _ASM_X86_KVM_X86_EMULATE_H */
