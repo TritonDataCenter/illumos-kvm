@@ -3205,7 +3205,8 @@ handle_external_interrupt(struct kvm_vcpu *vcpu)
 	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_irq_exits);
 	if (CPU->cpu_runrun || CPU->cpu_kprunrun) {
 		vcpu->run->exit_reason = KVM_EXIT_INTR;
-		vcpu->run->hw.hardware_exit_reason = EXIT_REASON_EXTERNAL_INTERRUPT;
+		vcpu->run->hw.hardware_exit_reason =
+		    EXIT_REASON_EXTERNAL_INTERRUPT;
 		return (0);
 	} else {
 		return (1);
