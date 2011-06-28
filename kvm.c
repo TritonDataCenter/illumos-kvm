@@ -321,7 +321,6 @@
 #include "kvm_host.h"
 #include "kvm_lapic.h"
 #include "processor-flags.h"
-#include "kvm_cpuid.h"
 #include "hyperv.h"
 #include "kvm_apicdef.h"
 #include "kvm_iodev.h"
@@ -2896,7 +2895,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		mp->b_datap->db_type = M_SETOPTS;
 		stropt = (struct stroptions *)mp->b_rptr;
 		stropt->so_flags = SO_HIWAT;
-		stropt->so_hiwat = 0x100042;
+		stropt->so_hiwat = kvm_hiwat;
 		q = WR(fp->f_vnode->v_stream->sd_wrq);
 		q = RD(q->q_next);
 		putnext(q, mp);
@@ -2905,6 +2904,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 
 		rval = 0;
 		*rv = 0;
+		break;
 	}
 	default:
 #ifndef XXX
