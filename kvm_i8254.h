@@ -1,5 +1,5 @@
 #ifndef __KVM_I8254_H
-#define __KVM_I8254_H
+#define	__KVM_I8254_H
 
 #include "kvm_iodev.h"
 #include "kvm_timer.h"
@@ -43,12 +43,12 @@ typedef struct kvm_pit {
 	struct kvm_irq_mask_notifier mask_notifier;
 } kvm_pit_t;
 
-#define KVM_PIT_BASE_ADDRESS	    0x40
-#define KVM_SPEAKER_BASE_ADDRESS    0x61
-#define KVM_PIT_MEM_LENGTH	    4
-#define KVM_PIT_FREQ		    1193181
-#define KVM_MAX_PIT_INTR_INTERVAL   HZ / 100
-#define KVM_PIT_CHANNEL_MASK	    0x3
+#define	KVM_PIT_BASE_ADDRESS	    0x40
+#define	KVM_SPEAKER_BASE_ADDRESS    0x61
+#define	KVM_PIT_MEM_LENGTH	    4
+#define	KVM_PIT_FREQ		    1193181
+#define	KVM_MAX_PIT_INTR_INTERVAL   HZ / 100
+#define	KVM_PIT_CHANNEL_MASK	    0x3
 
 extern void kvm_inject_pit_timer_irqs(struct kvm_vcpu *);
 extern void kvm_pit_load_count(struct kvm *, int, uint32_t, boolean_t);
