@@ -311,6 +311,7 @@
 #include <sys/strsubr.h>
 #include <sys/stream.h>
 #include <sys/machparam.h>
+#include <sys/xc_levels.h>
 #include <asm/cpu.h>
 
 #include "kvm_bitops.h"
@@ -2037,8 +2038,8 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 		return (DDI_FAILURE);
 	}
 
-	/* 15 should be XC_HI_PIL from i86pc/sys/xc_levels.h */
-	mutex_init(&cpus_hardware_enabled_mp, NULL, MUTEX_DRIVER, (void *)15);
+	mutex_init(&cpus_hardware_enabled_mp, NULL, MUTEX_DRIVER,
+	    (void *)XC_HI_PIL);
 	if (hardware_enable_all() != 0) {
 		ddi_soft_state_fini(&kvm_state);
 		ddi_remove_minor_node(dip, NULL);
