@@ -366,6 +366,7 @@ static minor_t kvm_base_minor;	/* The only minor device that can be opened */
 static int kvmid;		/* monotonically increasing, unique per vm */
 static int largepages_enabled = 1;
 static cpuset_t cpus_hardware_enabled;
+static kmutex_t cpus_hardware_enabled_mp;
 static volatile uint32_t hardware_enable_failed;
 static int kvm_usage_count;
 static list_t vm_list;
@@ -1634,15 +1635,21 @@ hardware_enable(void *junk)
 
 	cpu = curthread->t_cpu->cpu_id;
 
-	if (CPU_IN_SET(cpus_hardware_enabled, cpu))
+	mutex_enter(&cpus_hardware_enabled_mp);
+	if (CPU_IN_SET(cpus_hardware_enabled, cpu)) {
+		mutex_exit(&cpus_hardware_enabled_mp);
 		return;
+	}
 
 	CPUSET_ADD(cpus_hardware_enabled, cpu);
+	mutex_exit(&cpus_hardware_enabled_mp);
 
 	r = kvm_arch_hardware_enable(NULL);
 
 	if (r) {
+		mutex_enter(&cpus_hardware_enabled_mp);
 		CPUSET_DEL(cpus_hardware_enabled, cpu);
+		mutex_exit(&cpus_hardware_enabled_mp);
 		atomic_inc_32(&hardware_enable_failed);
 		cmn_err(CE_WARN, "kvm: enabling virtualization CPU%d failed\n",
 			cpu);
@@ -1654,10 +1661,14 @@ hardware_disable(void *junk)
 {
 	int cpu = curthread->t_cpu->cpu_id;
 
-	if (!CPU_IN_SET(cpus_hardware_enabled, cpu))
+	mutex_enter(&cpus_hardware_enabled_mp);
+	if (!CPU_IN_SET(cpus_hardware_enabled, cpu)) {
+		mutex_exit(&cpus_hardware_enabled_mp);
 		return;
+	}
 
 	CPUSET_DEL(cpus_hardware_enabled, cpu);
+	mutex_exit(&cpus_hardware_enabled_mp);
 	kvm_arch_hardware_disable(NULL);
 }
 
@@ -2026,10 +2037,13 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 		return (DDI_FAILURE);
 	}
 
+	/* 15 should be XC_HI_PIL from i86pc/sys/xc_levels.h */
+	mutex_init(&cpus_hardware_enabled_mp, NULL, MUTEX_DRIVER, (void *)15);
 	if (hardware_enable_all() != 0) {
 		ddi_soft_state_fini(&kvm_state);
 		ddi_remove_minor_node(dip, NULL);
 		mutex_destroy(&kvm_lock);
+		mutex_destroy(&cpus_hardware_enabled_mp);
 		vmx_fini();
 		return (DDI_FAILURE);
 	}
@@ -2071,6 +2085,7 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 
 	vmx_fini();
 	mmu_destroy_caches();
+	mutex_destroy(&cpus_hardware_enabled_mp);
 	mutex_destroy(&kvm_lock);
 	ddi_soft_state_fini(&kvm_state);
 
