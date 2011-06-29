@@ -20,7 +20,7 @@
  */
 
 #ifndef __IRQ_H
-#define __IRQ_H
+#define	__IRQ_H
 
 #include <sys/mutex.h>
 #include "kvm_host.h"
@@ -29,8 +29,8 @@
 #include "kvm_ioapic.h"
 #include "kvm_lapic.h"
 
-#define PIC_NUM_PINS 16
-#define SELECT_PIC(irq) \
+#define	PIC_NUM_PINS 16
+#define	SELECT_PIC(irq) \
 	((irq) < 8 ? KVM_IRQCHIP_PIC_MASTER : KVM_IRQCHIP_PIC_SLAVE)
 
 struct kvm;
@@ -72,26 +72,26 @@ typedef struct kvm_pic {
 	unsigned long irq_states[16];
 } kvm_pic_t;
 
-struct kvm_pic *kvm_create_pic(struct kvm *kvm);
-void kvm_destroy_pic(struct kvm *kvm);
-int kvm_pic_read_irq(struct kvm *kvm);
-void kvm_pic_update_irq(struct kvm_pic *s);
-void kvm_pic_clear_isr_ack(struct kvm *kvm);
+extern struct kvm_pic *kvm_create_pic(struct kvm *kvm);
+extern void kvm_destroy_pic(struct kvm *kvm);
+extern int kvm_pic_read_irq(struct kvm *kvm);
+extern void kvm_pic_update_irq(struct kvm_pic *s);
+extern void kvm_pic_clear_isr_ack(struct kvm *kvm);
 
-struct kvm_pic *pic_irqchip(struct kvm *kvm);
-int irqchip_in_kernel(struct kvm *kvm);
+extern struct kvm_pic *pic_irqchip(struct kvm *kvm);
+extern int irqchip_in_kernel(struct kvm *kvm);
 
-void kvm_pic_reset(struct kvm_kpic_state *s);
-void kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu);
+extern void kvm_pic_reset(struct kvm_kpic_state *s);
+extern void kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu);
 
-void kvm_inject_pending_timer_irqs(struct kvm_vcpu *vcpu);
-void kvm_inject_apic_timer_irqs(struct kvm_vcpu *vcpu);
-void kvm_apic_nmi_wd_deliver(struct kvm_vcpu *vcpu);
-void __kvm_migrate_apic_timer(struct kvm_vcpu *vcpu);
-void __kvm_migrate_pit_timer(struct kvm_vcpu *vcpu);
-void __kvm_migrate_timers(struct kvm_vcpu *vcpu);
+extern void kvm_inject_pending_timer_irqs(struct kvm_vcpu *);
+extern void kvm_inject_apic_timer_irqs(struct kvm_vcpu *);
+extern void kvm_apic_nmi_wd_deliver(struct kvm_vcpu *);
+extern void __kvm_migrate_apic_timer(struct kvm_vcpu *);
+extern void __kvm_migrate_pit_timer(struct kvm_vcpu *);
+extern void __kvm_migrate_timers(struct kvm_vcpu *);
 
-int pit_has_pending_timer(struct kvm_vcpu *vcpu);
-int apic_has_pending_timer(struct kvm_vcpu *vcpu);
+extern int pit_has_pending_timer(struct kvm_vcpu *);
+extern int apic_has_pending_timer(struct kvm_vcpu *);
 
 #endif
