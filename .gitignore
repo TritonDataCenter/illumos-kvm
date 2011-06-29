@@ -54,3 +54,4 @@ pc-bios/optionrom/multiboot.raw
 .stgit-*
 cscope.*
 \#*
+kvm.so
