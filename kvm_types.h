@@ -15,9 +15,9 @@
  */
 
 #ifndef __KVM_TYPES_H__
-#define __KVM_TYPES_H__
+#define	__KVM_TYPES_H__
 
-#include <sys/types.h>
+#include <sys/stdint.h>
 
 /*
  * Address types:
@@ -30,13 +30,13 @@
  *  hfn - host frame number
  */
 
-typedef unsigned long  gva_t;
-typedef uint64_t       gpa_t;
-typedef unsigned long  gfn_t;
+typedef unsigned long	gva_t;
+typedef uint64_t	gpa_t;
+typedef unsigned long	gfn_t;
 
-typedef unsigned long  hva_t;
-typedef uint64_t       hpa_t;
-typedef unsigned long  hfn_t;
+typedef unsigned long	hva_t;
+typedef uint64_t	hpa_t;
+typedef unsigned long	hfn_t;
 
 union kvm_ioapic_redirect_entry {
 	uint64_t bits;
