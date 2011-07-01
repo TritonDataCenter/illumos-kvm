@@ -15,6 +15,8 @@ CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 -DDEBUG -c -g -DCONFIG_SOLARIS -O2 -fident 
 INCLUDEDIR= -I $(KERNEL_SOURCE)/usr/src/uts/intel -I $(KERNEL_SOURCE)/usr/src/uts/i86pc -I $(KERNEL_SOURCE)/usr/src/uts/common
 CSTYLE=$(KERNEL_SOURCE)/usr/src/tools/scripts/cstyle
 HDRCHK=tools/hdrchk
+HDRCHK_USRFLAG="gcc"
+HDRCHK_SYSFLAG="gcc -D_KERNEL"
 
 all: kvm kvm.so
 
@@ -39,7 +41,30 @@ HEADERS=			\
 	kvm_tss.h		\
 	kvm_types.h		\
 	kvm_vmx.h		\
-	kvm_x86.h		\
+	kvm_x86host.h		\
+	kvm_x86impl.h		\
+	kvm_x86.h		
+
+HDRCHK_USRHDRS= 		\
+	kvm.h			\
+	kvm_types.h		\
+	kvm_x86.h
+
+HDRCHK_SYSHDRS=			\
+	kvm_bitops.h		\
+	kvm_cache_regs.h	\
+	kvm_cpuid.h		\
+	kvm_host.h		\
+	kvm_impl.h		\
+	kvm_ioapic.h		\
+	kvm_iodev.h		\
+	kvm_irq.h		\
+	kvm_msidef.h		\
+	kvm_mmu.h		\
+	kvm_timer.h		\
+	kvm_tss.h		\
+	kvm_types.h		\
+	kvm_vmx.h		\
 	kvm_x86host.h		\
 	kvm_x86impl.h
 
@@ -90,21 +115,8 @@ install: kvm
 check:
 	@$(CSTYLE) kvm.c kvm_mdb.c kvm_emulate.c kvm_x86.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS)
 	@./tools/xxxcheck kvm_x86.c kvm.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c
-	@$(HDRCHK) gcc kvm.h			
-	@$(HDRCHK) gcc kvm_bitops.h		
-	@$(HDRCHK) gcc kvm_cpuid.h		
-	@$(HDRCHK) gcc kvm_impl.h		
-	@$(HDRCHK) gcc kvm_iodev.h		
-	@$(HDRCHK) gcc kvm_msidef.h		
-	@$(HDRCHK) gcc kvm_mmu.h		
-	@$(HDRCHK) gcc kvm_timer.h		
-	@$(HDRCHK) gcc kvm_tss.h		
-	@$(HDRCHK) gcc kvm_types.h		
-	@$(HDRCHK) gcc kvm_vmx.h		
-	@$(HDRCHK) gcc kvm_x86.h		
-	@$(HDRCHK) gcc kvm_x86host.h		
-
-
+	@$(HDRCHK) $(HDRCHK_USRFLAG) $(HDRCHK_USRHDRS)
+	@$(HDRCHK) $(HDRCHK_SYSFLAG) $(HDRCHK_SYSHDRS)
 
 load: install
 	@echo "==> Loading kvm module"

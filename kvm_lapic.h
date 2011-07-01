@@ -1,6 +1,8 @@
 #ifndef __KVM_X86_LAPIC_H
 #define	__KVM_X86_LAPIC_H
 
+#include <vm/page.h>
+
 #include "kvm_iodev.h"
 #include "kvm_timer.h"
 

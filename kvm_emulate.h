@@ -11,6 +11,9 @@
 #ifndef _ASM_X86_KVM_X86_EMULATE_H
 #define	_ASM_X86_KVM_X86_EMULATE_H
 
+#include <sys/stdint.h>
+
+struct kvm_vcpu;
 struct x86_emulate_ctxt;
 #ifdef _KERNEL
 /*

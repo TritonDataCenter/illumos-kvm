@@ -9,6 +9,8 @@
  *  Author: Laurent Vivier <Laurent.Vivier@bull.net>
  *
  */
+#include <sys/mutex.h>
+
 #include "kvm_iodev.h"
 
 #define	KVM_COALESCED_MMIO_ZONE_MAX 100
