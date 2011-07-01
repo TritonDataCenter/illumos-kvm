@@ -1,5 +1,5 @@
 #ifndef __TSS_SEGMENT_H
-#define __TSS_SEGMENT_H
+#define	__TSS_SEGMENT_H
 
 typedef struct tss_segment_32 {
 	uint32_t prev_task_link;
