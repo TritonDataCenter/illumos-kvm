@@ -1,6 +1,8 @@
 #ifndef __TSS_SEGMENT_H
 #define	__TSS_SEGMENT_H
 
+#include <sys/stdint.h>
+
 typedef struct tss_segment_32 {
 	uint16_t	prev_task_link;	/* 16-bit prior TSS selector */
 	uint16_t	rsvd0;	/* reserved, ignored */

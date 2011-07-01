@@ -1,6 +1,10 @@
 #ifndef __KVM_X86_MMU_H
 #define	__KVM_X86_MMU_H
 
+#include <sys/stdint.h>
+
+struct kvm_vcpu;
+
 #define	PT64_PT_BITS 9
 #define	PT64_ENT_PER_PAGE (1 << PT64_PT_BITS)
 #define	PT32_PT_BITS 10

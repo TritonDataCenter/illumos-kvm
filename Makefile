@@ -96,7 +96,9 @@ check:
 	@$(HDRCHK) gcc kvm_impl.h		
 	@$(HDRCHK) gcc kvm_iodev.h		
 	@$(HDRCHK) gcc kvm_msidef.h		
+	@$(HDRCHK) gcc kvm_mmu.h		
 	@$(HDRCHK) gcc kvm_timer.h		
+	@$(HDRCHK) gcc kvm_tss.h		
 	@$(HDRCHK) gcc kvm_types.h		
 	@$(HDRCHK) gcc kvm_vmx.h		
 	@$(HDRCHK) gcc kvm_x86.h		
