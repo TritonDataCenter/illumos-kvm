@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# This checks that each header file can be compiled on its own.
+#
+
+sh_cc=
+sh_dir=
+sh_base=${0##*/}
+sh_tmpfile=/tmp/$sh_base-$USER.$$.c
+sh_outfile=$sh_tmpfile.out
+
+cd ${0%/*}
+sh_dir=${PWD%/*}
+
+function fail
+{
+	local msg="$*"
+	[[ -z "$msg" ]] && msg="failed"
+	echo "$sh_base: $msg" >&2
+	exit 1
+}
+
+function check_file
+{
+	local file res
+	file=$1
+
+	cat > $sh_tmpfile <<EOF
+#include "$sh_dir/$file"
+
+int
+main(void)
+{
+	return (0);
+}
+EOF
+	[[ $? -eq 0 ]] || fail "can't write to temporary file"
+	$sh_cc -o $sh_outfile $sh_tmpfile
+	res=$?
+	rm $sh_tmpfile $sh_outfile
+	[[ $? -eq 0 ]] || fail "$file is not clean"
+}
+
+if [[ $# -lt 2 ]]; then
+	echo "$sh_base: <compiler> <file 0> [file 1] [file n]"
+fi
+sh_cc=$1
+shift
+
+for file in "$@"; do
+	check_file $file
+done
