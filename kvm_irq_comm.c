@@ -149,24 +149,15 @@ kvm_set_irq(struct kvm *kvm, int irq_source_id, uint32_t irq, int level)
 	 * IOAPIC.  So set the bit in both. The guest will ignore
 	 * writes to the unused one.
 	 */
-#ifdef XXX
-	rcu_read_lock();
-	irq_rt = rcu_dereference(kvm->irq_routing);
-#else
-	XXX_KVM_SYNC_PROBE;
+	mutex_enter(&kvm->irq_lock);
 	irq_rt = kvm->irq_routing;
-#endif
 	if (irq < irq_rt->nr_rt_entries) {
 		for (e = list_head(&irq_rt->map[irq]); e != NULL;
 		    e = list_next(&irq_rt->map[irq], e)) {
 			irq_set[i++] = *e;
 		}
 	}
-#ifdef XXX
-	rcu_read_unlock();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
+	mutex_exit(&kvm->irq_lock);
 
 	while (i--) {
 		int r;
@@ -189,13 +180,7 @@ kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin)
 
 	KVM_TRACE2(ack__irq, unsigned int, irqchip, unsigned int, pin);
 
-#ifdef XXX
-	rcu_read_lock();
-
-	gsi = rcu_dereference(kvm->irq_routing)->chip[irqchip][pin];
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
+	mutex_enter(&kvm->irq_lock);
 	gsi = (kvm->irq_routing)->chip[irqchip][pin];
 
 	if (gsi != -1) {
@@ -206,11 +191,7 @@ kvm_notify_acked_irq(struct kvm *kvm, unsigned irqchip, unsigned pin)
 				kian->irq_acked(kian);
 		}
 	}
-#ifdef XXX
-	rcu_read_unlock();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
+	mutex_exit(&kvm->irq_lock);
 }
 
 void
@@ -308,23 +289,14 @@ kvm_fire_mask_notifiers(struct kvm *kvm, int irq, int mask)
 {
 	struct kvm_irq_mask_notifier *kimn;
 
-#ifdef XXX
-	rcu_read_lock();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
-
+	mutex_enter(&kvm->irq_lock);
 	for (kimn = list_head(&kvm->mask_notifier_list); kimn != NULL;
 	    kimn = list_next(&kvm->mask_notifier_list, kimn)) {
 		if (kimn->irq == irq)
 			kimn->func(kimn, mask);
 	}
 
-#ifdef XXX
-	rcu_read_unlock();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
+	mutex_exit(&kvm->irq_lock);
 }
 
 static int
@@ -463,19 +435,9 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 	mutex_enter(&kvm->irq_lock);
 	old = kvm->irq_routing;
 	oldsz = kvm->irq_routing_sz;
-#ifdef XXX
-	rcu_assign_pointer(kvm->irq_routing, new);
-#else
-	XXX_KVM_SYNC_PROBE;
 	kvm->irq_routing = new;
 	kvm->irq_routing_sz = newsz;
-#endif
 	mutex_exit(&kvm->irq_lock);
-#ifdef XXX
-	synchronize_rcu();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 
 	new = old;
 	newsz = oldsz;
