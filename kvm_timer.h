@@ -4,7 +4,7 @@
  */
 
 #ifndef __KVM_TIMER_H__
-#define __KVM_TIMER_H__
+#define	__KVM_TIMER_H__
 
 #include <sys/types.h>
 #include <sys/cyclic.h>
@@ -25,7 +25,7 @@ typedef struct kvm_timer {
 } kvm_timer_t;
 
 typedef struct kvm_timer_ops {
-        int (*is_periodic)(struct kvm_timer *);
+	int (*is_periodic)(struct kvm_timer *);
 } kvm_timer_ops_t;
 
 extern void kvm_timer_fire(void *);
