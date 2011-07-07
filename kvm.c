@@ -648,6 +648,7 @@ kvm_destroy_vm(struct kvm *kvmp)
 		continue;
 	avl_destroy(&kvmp->kvm_avlmp);
 	mutex_destroy(&kvmp->kvm_avllock);
+	mutex_destroy(&kvmp->memslots_lock);
 	mutex_destroy(&kvmp->slots_lock);
 	mutex_destroy(&kvmp->irq_lock);
 	mutex_destroy(&kvmp->lock);
@@ -718,6 +719,7 @@ kvm_create_vm(void)
 #endif
 
 	mutex_init(&kvmp->lock, NULL, MUTEX_DRIVER, NULL);
+	mutex_init(&kvmp->memslots_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->irq_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->slots_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->kvm_avllock, NULL, MUTEX_DRIVER, NULL);
@@ -1073,15 +1075,20 @@ gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
 	struct kvm_memslots *slots = rcu_dereference(kvm->memslots);
 #else
 	struct kvm_memslots *slots = kvm->memslots;
+
+	mutex_enter(&kvm->memslots_lock);
 #endif
 
 	for (i = 0; i < slots->nmemslots; ++i) {
 		struct kvm_memory_slot *memslot = &slots->memslots[i];
 
 		if (gfn >= memslot->base_gfn &&
-		    gfn < memslot->base_gfn + memslot->npages)
+		    gfn < memslot->base_gfn + memslot->npages) {
+			mutex_exit(&kvm->memslots_lock);
 			return (memslot);
+		}
 	}
+	mutex_exit(&kvm->memslots_lock);
 	return (NULL);
 }
 
@@ -1104,6 +1111,8 @@ kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn)
 
 	gfn = unalias_gfn_instantiation(kvm, gfn);
 
+	mutex_enter(&kvm->memslots_lock);
+
 	for (i = 0; i < KVM_MEMORY_SLOTS; ++i) {
 		struct kvm_memory_slot *memslot = &slots->memslots[i];
 
@@ -1112,10 +1121,12 @@ kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn)
 
 		if (gfn >= memslot->base_gfn &&
 		    gfn < memslot->base_gfn + memslot->npages) {
+			mutex_exit(&kvm->memslots_lock);
 			return (1);
 		}
 	}
 
+	mutex_exit(&kvm->memslots_lock);
 	return (0);
 }
 
@@ -1160,6 +1171,7 @@ memslot_id(struct kvm *kvm, gfn_t gfn)
 	struct kvm_memory_slot *memslot = NULL;
 
 	gfn = unalias_gfn(kvm, gfn);
+	mutex_enter(&kvm->memslots_lock);
 	for (i = 0; i < slots->nmemslots; ++i) {
 		memslot = &slots->memslots[i];
 
@@ -1168,6 +1180,7 @@ memslot_id(struct kvm *kvm, gfn_t gfn)
 			break;
 	}
 
+	mutex_exit(&kvm->memslots_lock);
 	return (memslot - slots->memslots);
 }
 

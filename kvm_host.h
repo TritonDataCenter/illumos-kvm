@@ -188,6 +188,7 @@ typedef struct kvm {
 	kmutex_t slots_lock;
 	struct as *mm; /* userspace tied to this vm */
 	struct kvm_memslots *memslots;
+	kmutex_t memslots_lock; /* linux uses rcu for this */
 	/* the following was a read-copy update mechanism */
 	/* we'll use a reader-writer lock, for now */
 	krwlock_t kvm_rwlock;

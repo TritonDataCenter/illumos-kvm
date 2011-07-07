@@ -1653,14 +1653,12 @@ rmode_tss_base(struct kvm *kvm)
 		struct kvm_memslots *slots;
 		gfn_t base_gfn;
 
-#ifdef XXX
-		slots = rcu_dereference(kvm->memslots);
-#else
-		XXX_KVM_PROBE;
+		mutex_enter(&kvm->memslots_lock);
 		slots = kvm->memslots;
-#endif
+
 		base_gfn = kvm->memslots->memslots[0].base_gfn +
 		    kvm->memslots->memslots[0].npages - 3;
+		mutex_exit(&kvm->memslots_lock);
 		return (base_gfn << PAGESHIFT);
 	}
 
