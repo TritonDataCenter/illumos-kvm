@@ -1074,9 +1074,10 @@ gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
 #ifdef XXX_KVM_DECLARATION
 	struct kvm_memslots *slots = rcu_dereference(kvm->memslots);
 #else
-	struct kvm_memslots *slots = kvm->memslots;
+	struct kvm_memslots *slots;
 
 	mutex_enter(&kvm->memslots_lock);
+	slots = kvm->memslots;
 #endif
 
 	for (i = 0; i < slots->nmemslots; ++i) {
