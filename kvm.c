@@ -995,14 +995,10 @@ skip_lpage:
 	}
 
 	slots->memslots[mem->slot] = new;
+	mutex_enter(&kvmp->memslots_lock);
 	old_memslots = kvmp->memslots;
-#ifdef XXX
-	rcu_assign_pointer(kvmp->memslots, slots);
-	synchronize_srcu_expedited(&kvmp->srcu);
-#else
-	XXX_KVM_SYNC_PROBE;
 	kvmp->memslots = slots;
-#endif
+	mutex_exit(&kvmp->memslots_lock);
 
 	kvm_arch_commit_memory_region(kvmp, mem, old, user_alloc);
 

@@ -2314,14 +2314,10 @@ kvm_vm_ioctl_get_dirty_log(struct kvm *kvm, struct kvm_dirty_log *log)
 		memcpy(slots, kvm->memslots, sizeof (struct kvm_memslots));
 		slots->memslots[log->slot].dirty_bitmap = dirty_bitmap;
 
+		mutex_enter(&kvm->memslots_lock);
 		old_slots = kvm->memslots;
-#ifdef XXX
-		rcu_assign_pointer(kvm->memslots, slots);
-		kvm_synchronize_srcu_expedited(&kvm->srcu);
-#else
 		kvm->memslots = slots;
-		XXX_KVM_SYNC_PROBE;
-#endif
+		mutex_exit(&kvm->memslots_lock);
 		dirty_bitmap = old_slots->memslots[log->slot].dirty_bitmap;
 		kmem_free(old_slots, sizeof (struct kvm_memslots));
 	}
