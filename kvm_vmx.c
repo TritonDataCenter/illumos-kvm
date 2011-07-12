@@ -22,6 +22,7 @@
 #include <sys/mach_mmu.h>
 #include <asm/cpu.h>
 #include <sys/x86_archext.h>
+#include <sys/xc_levels.h>
 
 #include "kvm_bitops.h"
 #include "msr.h"
@@ -1322,9 +1323,15 @@ vmclear_local_vcpus(void)
 	 *   local_vcpus_link)
 	 *	__vcpu_clear(vmx);
 	 */
-	for (vmx = list_head(vcpus_on_cpu[cpu]); vmx;
-	    vmx = list_next(vcpus_on_cpu[cpu], vmx))
+	vmx = list_head(vcpus_on_cpu[cpu]);
+	if (vmx)
+		n = list_next(vcpus_on_cpu[cpu], vmx);
+	while (vmx) {
 		__vcpu_clear(vmx);
+		vmx = n;
+		if (vmx)
+			n = list_next(vcpus_on_cpu[cpu], vmx);
+	}
 }
 
 /*

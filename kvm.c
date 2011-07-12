@@ -953,14 +953,11 @@ skip_lpage:
 			slots->nmemslots = mem->slot + 1;
 		slots->memslots[mem->slot].flags |= KVM_MEMSLOT_INVALID;
 
+		mutex_enter(&kvmp->memslots_lock);
 		old_memslots = kvmp->memslots;
-#ifdef XXX
-		rcu_assign_pointer(kvmp->memslots, slots);
-		synchronize_srcu_expedited(&kvm->srcu);
-#else
-		XXX_KVM_SYNC_PROBE;
 		kvmp->memslots = slots;
-#endif
+		mutex_exit(&kvmp->memslots_lock);
+
 		/*
 		 * From this point no new shadow pages pointing to a deleted
 		 * memslot will be created.
@@ -1002,7 +999,10 @@ skip_lpage:
 
 	kvm_arch_commit_memory_region(kvmp, mem, old, user_alloc);
 
+	mutex_enter(&kvmp->memslots_lock);
 	kvm_free_physmem_slot(&old, &new);
+	mutex_exit(&kvmp->memslots_lock);
+
 	kmem_free(old_memslots, sizeof (struct kvm_memslots));
 
 	if (flush_shadow)
@@ -2186,8 +2186,8 @@ kvm_close(dev_t dev, int flag, int otyp, cred_t *cred)
 			kvmp->kvm_clones--;
 			mutex_exit(&kvm_lock);
 		} else {
-			mutex_exit(&kvm_lock);
 			kvm_destroy_vm(kvmp);
+			mutex_exit(&kvm_lock);
 		}
 	}
 

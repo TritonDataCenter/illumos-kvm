@@ -2939,10 +2939,11 @@ kvm_mmu_calculate_mmu_pages(struct kvm *kvm)
 	unsigned int  nr_pages = 0;
 	struct kvm_memslots *slots;
 
+	mutex_enter(&kvm->memslots_lock);
 	slots = kvm->memslots;
 	for (i = 0; i < slots->nmemslots; i++)
 		nr_pages += slots->memslots[i].npages;
-
+	mutex_exit(&kvm->memslots_lock);
 	nr_mmu_pages = nr_pages * KVM_PERMILLE_MMU_PAGES / 1000;
 	nr_mmu_pages = MAX(nr_mmu_pages, (unsigned int)KVM_MIN_ALLOC_MMU_PAGES);
 
