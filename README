@@ -1,40 +1,50 @@
-Work toward making a "Linux KVM" /dev/kvm compatible device for Solaris.
+ _                     
+| | ____   ___ __ ___  
+| |/ /\ \ / / '_ ` _ \ 
+|   <  \ V /| | | | | |
+|_|\_\  \_/ |_| |_| |_|
 
-To build the kvm kernel module, run make.
-(Hopefully there are no hardcoded path names, but if so,
-they are coming from solaris source.)
-This will result in a file, kvm.
 
-To install:
-=================
+BUILDING
 
-#!/bin/sh
-cp kvm /tmp
-psradm -f 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15  # shouldn't need this...
-ln -s /tmp/kvm /kernel/drv/amd64/kvm
-cat > /kernel/drv/kvm.conf <<EOF
-name="kvm" parent="pseudo";
-EOF
+Building the kvm driver is pretty easy and compared to building O/N it will
+finish in a snap.
+
+Preparation:
+
+Edit the Makefile and appropriately set the path for the KERNEL_SOURCE
+directory that points to the root of a checked out and built illumos directory.
+
+Verify that gcc is installed and the version you'd like to use is in your path.
+Note that this has only been tested against the SFW version of gcc -- version
+3.4.
+
+Verify that you either have SUNWmake or GNU make installed.
+
+Building and Development:
+
+To build, simply use the default make target:
+
+$ make
+
+To check style, header files, and other various nits:
+
+$ make check
+
+
+INSTALLING
+
+There are two mandatory artifacts to install and one optional component:
+
+kvm		The driver
+kvm.so		The mdb module
+kvm.conf	The driver configuration file
+
+On the target machine:
+Place kvm in /kernel/drv/amd64
+Place kvm.conf in /kernel/drv
 add_drv kvm
 ln -s /devices/pseudo/kvm@0:kvm /dev/kvm
 
-=========================
-
-I have been re-enabling a processor after it is installed (psradm -n 1).
-To run user level qemu:
-
-# pbind -b 0 $$
-# qemu-system-x86_64 -enable-kvm -kernel kvm.vmlinuz -initrd kvm.initrd -nographic -boot d -m 512 -net nic,model=virtio,name=virtio.0 -net user -vnc 0.0.0.0:0 -no-acpi -no-hpet
-
-Instead of -kernel and -initrd options, you can specify an iso image (I think at the end of the line).
-Currently, there are just a few messages printed out (most of the debug output is
-currently ifdef-ed out).  If you forget to do the pbind, count on getting a panic very quickly.
-
-NOTE:  Currently, you can run qemu/kvm 1 time for a given boot session.  In other
-words, 2 or more instances of qemu/kvm running at the same time is not supported, and neither
-is exiting one instance and starting another without a reboot in between.  This should not
-be too difficult to fix, but I think getting it to come up is more important right now.
-
-
-
-
+That's all there is too it. Good luck, make sure you have a dump device, and
+don't panic!
