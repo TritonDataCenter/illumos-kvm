@@ -106,25 +106,11 @@ kvm.so: kvm_mdb.c
 	gcc -m64 -shared \
 	    -fPIC $(CFLAGS) $(INCLUDEDIR) -I/usr/include -o $@ kvm_mdb.c
 
-install: kvm
-	@echo "==> Installing kvm module"
-	@pfexec cp kvm /tmp
-	@pfexec ln -sf /tmp/kvm /usr/kernel/drv/amd64/kvm
-	@pfexec cp kvm.conf /usr/kernel/drv
-
 check:
 	@$(CSTYLE) kvm.c kvm_mdb.c kvm_emulate.c kvm_x86.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS)
 	@./tools/xxxcheck kvm_x86.c kvm.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c
 	@$(HDRCHK) $(HDRCHK_USRFLAG) $(HDRCHK_USRHDRS)
 	@$(HDRCHK) $(HDRCHK_SYSFLAG) $(HDRCHK_SYSHDRS)
-
-load: install
-	@echo "==> Loading kvm module"
-	@pfexec rem_drv kvm || /bin/true
-	@pfexec add_drv -v -i 'kvm' -m '* 0660 root sys' -c kvm kvm
-	@grep "^type=ddi_pseudo;name=kvm" /etc/devlink.tab >/dev/null \
-        || printf "type=ddi_pseudo;name=kvm\t\\D\n" | pfexec tee -a /etc/devlink.tab >/dev/null
-	@pfexec devfsadm -v -u
 
 clean:
 	@pfexec rm -f *.o kvm
