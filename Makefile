@@ -43,7 +43,7 @@ HEADERS=			\
 	kvm_vmx.h		\
 	kvm_x86host.h		\
 	kvm_x86impl.h		\
-	kvm_x86.h		
+	kvm_x86.h
 
 HDRCHK_USRHDRS= 		\
 	kvm.h			\
@@ -105,6 +105,14 @@ kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h msr.h kvm_bitops.h kvm_ir
 kvm.so: kvm_mdb.c
 	gcc -m64 -shared \
 	    -fPIC $(CFLAGS) $(INCLUDEDIR) -I/usr/include -o $@ kvm_mdb.c
+
+install: kvm
+	@echo "==> Installing kvm module (to $(DESTDIR)/)"
+	@mkdir -p $(DESTDIR)/usr/kernel/drv/amd64
+	@cp kvm $(DESTDIR)/usr/kernel/drv/amd64/kvm
+	@cp kvm.conf $(DESTDIR)/usr/kernel/drv
+	@mkdir -p $(DESTDIR)/usr/lib/mdb/kvm/amd64
+	@cp kvm.so $(DESTDIR)/usr/lib/mdb/kvm/amd64
 
 check:
 	@$(CSTYLE) kvm.c kvm_mdb.c kvm_emulate.c kvm_x86.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS)
