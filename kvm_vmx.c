@@ -434,6 +434,8 @@ __invvpid(int ext, uint16_t vpid, gva_t gva)
 		uint64_t gva;
 	} operand = { vpid, 0, gva };
 
+	DTRACE_PROBE2(kvm__vmx__invvpid, int, vpid, uint64_t, gva);
+
 	/* BEGIN CSTYLED */
 	__asm__ volatile (ASM_VMX_INVVPID
 		  /* CF==1 or ZF==1 --> rc = -1 */
@@ -448,6 +450,8 @@ __invept(int ext, uint64_t eptp, gpa_t gpa)
 	struct {
 		uint64_t eptp, gpa;
 	} operand = {eptp, gpa};
+
+	DTRACE_PROBE2(kvm__vmx__invept, uint64_t, eptp, uint64_t, gpa);
 
 	/* BEGIN CSTYLED */
 	__asm__ volatile (ASM_VMX_INVEPT
@@ -473,6 +477,8 @@ static void
 vmcs_clear(uint64_t vmcs_pa)
 {
 	unsigned char error;
+
+	DTRACE_PROBE1(kvm__vmx__vmclear, uint64_t, vmcs_pa);
 
 	/*CSTYLED*/
 	__asm__ volatile (__ex(ASM_VMX_VMCLEAR_RAX) "\n\tsetna %0\n"
@@ -555,6 +561,8 @@ vmcs_readl(unsigned long field)
 	__asm__ volatile (ASM_VMX_VMREAD_RDX_RAX
 	    : "=a"(value) : "d"(field) : "cc");
 
+	DTRACE_PROBE2(kvm__vmx__vmread, long, field, long, value);
+
 	return (value);
 }
 
@@ -587,6 +595,8 @@ static void
 __vmwrite(unsigned long field, unsigned long value)
 {
 	uint8_t err = 0;
+
+	DTRACE_PROBE2(kvm__vmx__vmwrite, long, field, long, value);
 
 	/*CSTYLED*/
 	__asm__ volatile ( ASM_VMX_VMWRITE_RAX_RDX "\n\t" "setna %0"
@@ -830,6 +840,8 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		uint8_t error;
 
 		current_vmcs[cpu] = vmx->vmcs;
+
+		DTRACE_PROBE1(kvm__vmx__vmptrld, uint64_t, phys_addr);
 
 		/*CSTYLED*/
 		__asm__ volatile (ASM_VMX_VMPTRLD_RAX "; setna %0"
@@ -1300,6 +1312,8 @@ vmx_hardware_enable(void *garbage)
 		    FEATURE_CONTROL_VMXON_ENABLED);
 	}
 
+	DTRACE_PROBE1(kvm__vmx__vmxon, uint64_t, phys_addr);
+
 	setcr4(getcr4() | X86_CR4_VMXE); /* FIXME: not cpu hotplug safe */
 	/* BEGIN CSTYLED */
 	__asm__ volatile (ASM_VMX_VMXON_RAX
@@ -1341,6 +1355,8 @@ vmclear_local_vcpus(void)
 static void
 kvm_cpu_vmxoff(void)
 {
+	DTRACE_PROBE(kvm__vmx__vmxoff);
+
 	/* BEGIN CSTYLED */
 	__asm__ volatile ((ASM_VMX_VMXOFF) : : : "cc");
 	/* END CSTYLED */
@@ -4162,6 +4178,12 @@ vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	 * Loading guest fpu may have cleared host cr0.ts
 	 */
 	vmcs_writel(HOST_CR0, read_cr0());
+
+	if (vmx->launched) {
+		DTRACE_PROBE1(kvm__vmx__vmresume, struct vcpu_vmx *, vmx);
+	} else {
+		DTRACE_PROBE1(kvm__vmx__vmlaunch, struct vcpu_vmx *, vmx);
+	}
 
 	__asm__(
 	    /* Store host registers */
