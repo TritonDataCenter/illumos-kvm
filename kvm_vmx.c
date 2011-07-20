@@ -596,14 +596,15 @@ __vmwrite(unsigned long field, unsigned long value)
 {
 	uint8_t err = 0;
 
-	DTRACE_PROBE2(kvm__vmx__vmwrite, long, field, long, value);
-
 	/*CSTYLED*/
 	__asm__ volatile ( ASM_VMX_VMWRITE_RAX_RDX "\n\t" "setna %0"
 	    /* XXX: CF==1 or ZF==1 --> crash (ud2) */
 	    /* "ja 1f ; ud2 ; 1:\n" */
 	    : "=q"(err) : "a" (value), "d" (field)
 	    : "cc", "memory");
+
+	DTRACE_PROBE3(kvm__vmx__vmwrite, long, field,
+	    long, value, uint8_t, err);
 
 	/* XXX the following should be ifdef debug... */
 	if (err) {
@@ -4329,6 +4330,8 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 
 	if (!vmx)
 		return (NULL);
+
+	bzero(vmx, sizeof (struct vcpu_vmx));
 
 	allocate_vpid(vmx);
 	err = kvm_vcpu_init(&vmx->vcpu, kvm, id);
