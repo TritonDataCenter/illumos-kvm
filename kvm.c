@@ -517,22 +517,16 @@ vcpu_put(struct kvm_vcpu *vcpu)
 	mutex_exit(&vcpu->mutex);
 }
 
-static void
-ack_flush(void *_completed)
-{
-}
-
 int
 make_all_cpus_request(struct kvm *kvm, unsigned int req)
 {
 	int i;
-	cpuset_t set;
 	processorid_t me, cpu;
 	struct kvm_vcpu *vcpu;
 
-	CPUSET_ZERO(set);
-
 	mutex_enter(&kvm->requests_lock);
+
+	kpreempt_disable();
 	me = curthread->t_cpu->cpu_id;
 	for (i = 0; i < kvm->online_vcpus; i++) {
 		vcpu = kvm->vcpus[i];
@@ -542,16 +536,11 @@ make_all_cpus_request(struct kvm *kvm, unsigned int req)
 			continue;
 		cpu = vcpu->cpu;
 		if (cpu != -1 && cpu != me)
-			CPUSET_ADD(set, cpu);
+			poke_cpu(cpu);
 	}
-	if (CPUSET_ISNULL(set))
-		kvm_xcall(KVM_CPUALL, ack_flush, NULL);
-	else {
-		kpreempt_disable();
-		xc_sync((xc_arg_t) ack_flush, (xc_arg_t) NULL,
-			0, CPUSET2BV(set), (xc_func_t) kvm_xcall_func);
-		kpreempt_enable();
-	}
+
+	kpreempt_enable();
+
 	mutex_exit(&kvm->requests_lock);
 
 	return (1);
