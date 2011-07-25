@@ -20,7 +20,6 @@
 #include "kvm_vmx.h"
 #include "msr-index.h"
 #include "msr.h"
-#include "irqflags.h"
 #include "kvm_host.h"
 #include "kvm_lapic.h"
 #include "processor-flags.h"
