@@ -55,3 +55,4 @@ pc-bios/optionrom/multiboot.raw
 cscope.*
 \#*
 kvm.so
+JOY_kvm_link.so

@@ -18,7 +18,7 @@ HDRCHK=tools/hdrchk
 HDRCHK_USRFLAG="gcc"
 HDRCHK_SYSFLAG="gcc -D_KERNEL"
 
-all: kvm kvm.so
+all: kvm kvm.so JOY_kvm_link.so
 
 HEADERS=			\
 	kvm.h			\
@@ -68,7 +68,7 @@ HDRCHK_SYSHDRS=			\
 	kvm_x86host.h		\
 	kvm_x86impl.h
 
-kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h msr.h kvm_bitops.h kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS)
+kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h msr.h kvm_bitops.h kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS) 
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_emulate.c
@@ -106,6 +106,10 @@ kvm.so: kvm_mdb.c
 	gcc -m64 -shared \
 	    -fPIC $(CFLAGS) $(INCLUDEDIR) -I/usr/include -o $@ kvm_mdb.c
 
+JOY_kvm_link.so: kvm_link.c
+	/opt/SUNWspro/bin/cc -O -xspace -Xa  -xildoff -errtags=yes -errwarn=%all -erroff=E_EMPTY_TRANSLATION_UNIT -erroff=E_STATEMENT_NOT_REACHED -xc99=%none    -W0,-xglobalstatic -v -K pic -DTEXT_DOMAIN=\"SUNW_OST_OSCMD\" -D_TS_ERRNO  -I/root/src/illumos-live/proto/usr/include    -D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT -I/root/src/illumos-live/projects/illumos/usr/src/cmd/devfsadm/ -I/root/src/illumos-live/projects/illumos/usr/src/cmd/devfsadm/../../uts/common -I/root/src/illumos-live/projects/illumos/usr/src/cmd/devfsadm/../modload -c -o  kvm_link.o kvm_link.c		
+	/opt/SUNWspro/bin/cc -o JOY_kvm_link.so -G -ztext -zdefs -Bdirect -M/root/src/illumos-live/projects/illumos/usr/src/cmd/devfsadm/mapfile-vers -M/root/src/illumos-live/projects/illumos/usr/src/common/mapfiles/common/map.pagealign -M/root/src/illumos-live/projects/illumos/usr/src/common/mapfiles/common/map.noexdata -h JOY_kvm_link.so kvm_link.o -L/root/src/illumos-live/proto/lib -L/root/src/illumos-live/proto/usr/lib -ldevinfo -lc	
+
 install: kvm
 	@echo "==> Installing kvm module (to $(DESTDIR)/)"
 	@mkdir -p $(DESTDIR)/usr/kernel/drv/amd64
@@ -113,15 +117,16 @@ install: kvm
 	@cp kvm.conf $(DESTDIR)/usr/kernel/drv
 	@mkdir -p $(DESTDIR)/usr/lib/mdb/kvm/amd64
 	@cp kvm.so $(DESTDIR)/usr/lib/mdb/kvm/amd64
+	@cp JOY_kvm_link.so $(DESTDIR)/usr/lib/devfsadm/linkmod
 
 check:
-	@$(CSTYLE) kvm.c kvm_mdb.c kvm_emulate.c kvm_x86.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS)
+	@$(CSTYLE) kvm.c kvm_mdb.c kvm_emulate.c kvm_x86.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS) kvm_link.c
 	@./tools/xxxcheck kvm_x86.c kvm.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c
 	@$(HDRCHK) $(HDRCHK_USRFLAG) $(HDRCHK_USRHDRS)
 	@$(HDRCHK) $(HDRCHK_SYSFLAG) $(HDRCHK_SYSHDRS)
 
 clean:
-	@pfexec rm -f *.o kvm
+	@pfexec rm -f *.o kvm kvm.so JOY_kvm_link.so
 
 uninstall:
 	@pfexec rem_drv kvm || /bin/true
