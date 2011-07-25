@@ -56,3 +56,4 @@ cscope.*
 \#*
 kvm.so
 JOY_kvm_link.so
+kvm
