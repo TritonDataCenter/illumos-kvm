@@ -74,7 +74,6 @@ __attribute__((__aligned__(PAGESIZE)))static unsigned long
 
 static struct vmcs **vmxarea;  /* 1 per cpu */
 static struct vmcs **current_vmcs;
-static list_t **vcpus_on_cpu;
 static uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
 
 #define	KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
@@ -486,8 +485,7 @@ vmcs_clear(uint64_t vmcs_pa)
 	    : "cc", "memory");
 
 	if (error)
-		cmn_err(CE_PANIC, "kvm: vmclear fail: %lx\n",
-			vmcs_pa);
+		cmn_err(CE_PANIC, "kvm: vmclear fail: %lx\n", vmcs_pa);
 }
 
 static void
@@ -504,8 +502,6 @@ __vcpu_clear(void *arg)
 	if (current_vmcs[cpu] == vmx->vmcs)
 		current_vmcs[cpu] = NULL;
 	rdtscll(vmx->vcpu.arch.host_tsc);
-
-	list_remove(vcpus_on_cpu[cpu], vmx);
 
 	vmx->vcpu.cpu = -1;
 	vmx->launched = 0;
@@ -832,9 +828,6 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		vcpu_clear(vmx);
 		kvm_migrate_timers(vcpu);
 		set_bit(KVM_REQ_TLB_FLUSH, &vcpu->requests);
-		kpreempt_disable();
-		list_insert_head(vcpus_on_cpu[cpu], vmx);
-		kpreempt_enable();
 	}
 
 	if (current_vmcs[cpu] != vmx->vmcs) {
@@ -1300,11 +1293,6 @@ vmx_hardware_enable(void *garbage)
 	if (getcr4() & X86_CR4_VMXE)
 		return (DDI_FAILURE);
 
-#ifdef XXX
-	INIT_LIST_HEAD(&per_cpu(vcpus_on_cpu, cpu));
-#else
-	XXX_KVM_PROBE;
-#endif
 	rdmsrl(MSR_IA32_FEATURE_CONTROL, old);
 	if ((old & (FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_VMXON_ENABLED)) !=
 	    (FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_VMXON_ENABLED)) {
@@ -1327,28 +1315,6 @@ vmx_hardware_enable(void *garbage)
 	return (0);
 }
 
-static void
-vmclear_local_vcpus(void)
-{
-	int cpu = CPU->cpu_id;
-	struct vcpu_vmx *vmx, *n;
-
-	/*
-	 * list_for_each_entry_safe(vmx, n, &per_cpu(vcpus_on_cpu, cpu),
-	 *   local_vcpus_link)
-	 *	__vcpu_clear(vmx);
-	 */
-	vmx = list_head(vcpus_on_cpu[cpu]);
-	if (vmx)
-		n = list_next(vcpus_on_cpu[cpu], vmx);
-	while (vmx) {
-		__vcpu_clear(vmx);
-		vmx = n;
-		if (vmx)
-			n = list_next(vcpus_on_cpu[cpu], vmx);
-	}
-}
-
 /*
  * Just like cpu_vmxoff(), but with the __kvm_handle_fault_on_reboot()
  * tricks.
@@ -1366,7 +1332,6 @@ kvm_cpu_vmxoff(void)
 
 static void vmx_hardware_disable(void *garbage)
 {
-	vmclear_local_vcpus();
 	kvm_cpu_vmxoff();
 }
 
@@ -1530,7 +1495,6 @@ alloc_kvm_area(void)
 	current_vmcs = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
 	shared_msrs = kmem_alloc(ncpus * sizeof (struct kvm_shared_msrs *),
 	    KM_SLEEP);
-	vcpus_on_cpu = kmem_zalloc(ncpus * sizeof (list_t *), KM_SLEEP);
 
 	for (i = 0; i < ncpus; i++) {
 		struct vmcs *vmcs;
@@ -1546,9 +1510,6 @@ alloc_kvm_area(void)
 			((uint64_t)vmxarea[i] & PAGEOFFSET);
 		shared_msrs[i] = kmem_zalloc(sizeof (struct kvm_shared_msrs),
 		    KM_SLEEP);
-		vcpus_on_cpu[i] = kmem_zalloc(sizeof (list_t), KM_SLEEP);
-		list_create(vcpus_on_cpu[i], sizeof (struct vcpu_vmx),
-			    offsetof(struct vcpu_vmx, local_vcpus_link));
 	}
 
 	return (0);
