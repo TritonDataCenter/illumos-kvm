@@ -828,6 +828,17 @@ enum {
 #define	HF_IRET_MASK		(1 << 4)
 
 /*
+ * These definitions used to exist in asm.h. However because most of the file
+ * was unnecessary, they have been moved into here.
+ */
+#define	__ASM_FORM(x)	" " #x " "
+
+#define	__ASM_SEL(a,b) __ASM_FORM(b)
+
+#define	__ASM_SIZE(inst)	__ASM_SEL(inst##l, inst##q)
+#define	_ASM_PTR	__ASM_SEL(.long, .quad)
+
+/*
  * Hardware virtualization extension instructions may fault if a
  * reboot turns off virtualization while processes are running.
  * Trap the fault and ignore the instruction if that happens.

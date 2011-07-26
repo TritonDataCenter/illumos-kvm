@@ -11,7 +11,6 @@
 
 #ifdef _KERNEL
 
-#include "asm.h"
 #include <sys/ontrap.h>
 #include <sys/errno.h>
 
