@@ -850,18 +850,19 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		vcpu->cpu = cpu;
 
 		/*
-		 * Linux uses per-cpu TSS and GDT, so set these when switching
-		 * processors.
+		 * We have a per-CPU TSS, GDT and GSBASE -- so we reset these
+		 * in the VMCS when switching CPUs.
 		 */
 		vmcs_writel(HOST_TR_BASE, kvm_read_tr_base()); /* 22.2.4 */
 		kvm_get_gdt(&dt);
 		vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 22.2.4 */
+		vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
 
 		rdmsrl(MSR_IA32_SYSENTER_ESP, sysenter_esp);
 		vmcs_writel(HOST_IA32_SYSENTER_ESP, sysenter_esp); /* 22.2.3 */
 
 		/*
-		 * Make sure the time stamp counter is monotonous.
+		 * Make sure the time stamp counter is monotonic.
 		 */
 		rdtscll(tsc_this);
 		if (tsc_this < vcpu->arch.host_tsc) {
