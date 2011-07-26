@@ -4,6 +4,7 @@
 
 # Use the gcc compiler and Sun linker.
 KERNEL_SOURCE=$(PWD)/../../illumos
+PROTO_AREA=$(PWD)/../../../proto
 CC=gcc -m64 -mcmodel=kernel
 LD=/usr/bin/ld
 CTFBINDIR=$(KERNEL_SOURCE)/usr/src/tools/proto/*/opt/onbld/bin/i386
@@ -107,8 +108,8 @@ kvm.so: kvm_mdb.c
 	    -fPIC $(CFLAGS) $(INCLUDEDIR) -I/usr/include -o $@ kvm_mdb.c
 
 JOY_kvm_link.so: kvm_link.c
-	/opt/SUNWspro/bin/cc -O -xspace -Xa  -xildoff -errtags=yes -errwarn=%all -erroff=E_EMPTY_TRANSLATION_UNIT -erroff=E_STATEMENT_NOT_REACHED -xc99=%none    -W0,-xglobalstatic -v -K pic -DTEXT_DOMAIN=\"SUNW_OST_OSCMD\" -D_TS_ERRNO  -I/root/src/illumos-live/proto/usr/include    -D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT -I/root/src/illumos-live/projects/illumos/usr/src/cmd/devfsadm/ -I/root/src/illumos-live/projects/illumos/usr/src/cmd/devfsadm/../../uts/common -I/root/src/illumos-live/projects/illumos/usr/src/cmd/devfsadm/../modload -c -o  kvm_link.o kvm_link.c		
-	/opt/SUNWspro/bin/cc -o JOY_kvm_link.so -G -ztext -zdefs -Bdirect -M/root/src/illumos-live/projects/illumos/usr/src/cmd/devfsadm/mapfile-vers -M/root/src/illumos-live/projects/illumos/usr/src/common/mapfiles/common/map.pagealign -M/root/src/illumos-live/projects/illumos/usr/src/common/mapfiles/common/map.noexdata -h JOY_kvm_link.so kvm_link.o -L/root/src/illumos-live/proto/lib -L/root/src/illumos-live/proto/usr/lib -ldevinfo -lc	
+	/opt/SUNWspro/bin/cc -O -xspace -Xa  -xildoff -errtags=yes -errwarn=%all -erroff=E_EMPTY_TRANSLATION_UNIT -erroff=E_STATEMENT_NOT_REACHED -xc99=%none    -W0,-xglobalstatic -v -K pic -DTEXT_DOMAIN=\"SUNW_OST_OSCMD\" -D_TS_ERRNO -D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT -I$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/ -I$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/../../uts/common -I$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/../modload -c -o  kvm_link.o kvm_link.c		
+	/opt/SUNWspro/bin/cc -o JOY_kvm_link.so -G -ztext -zdefs -Bdirect -M$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/mapfile-vers -M$(KERNEL_SOURCE)/usr/src/common/mapfiles/common/map.pagealign -M$(KERNEL_SOURCE)/usr/src/common/mapfiles/common/map.noexdata -h JOY_kvm_link.so kvm_link.o -L$(PROTO_AREA)/lib -L$(PROTO_AREA)/usr/lib -ldevinfo -lc
 
 install: kvm
 	@echo "==> Installing kvm module (to $(DESTDIR)/)"
