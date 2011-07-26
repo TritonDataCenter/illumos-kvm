@@ -833,7 +833,7 @@ enum {
  */
 #define	__ASM_FORM(x)	" " #x " "
 
-#define	__ASM_SEL(a,b) __ASM_FORM(b)
+#define	__ASM_SEL(a, b) __ASM_FORM(b)
 
 #define	__ASM_SIZE(inst)	__ASM_SEL(inst##l, inst##q)
 #define	_ASM_PTR	__ASM_SEL(.long, .quad)
