@@ -4134,24 +4134,24 @@ exception:
 static void
 save_state_to_tss32(struct kvm_vcpu *vcpu, struct tss_segment_32 *tss)
 {
-	tss->cr3 = vcpu->arch.cr3;
-	tss->eip = kvm_rip_read(vcpu);
-	tss->eflags = kvm_get_rflags(vcpu);
-	tss->eax = kvm_register_read(vcpu, VCPU_REGS_RAX);
-	tss->ecx = kvm_register_read(vcpu, VCPU_REGS_RCX);
-	tss->edx = kvm_register_read(vcpu, VCPU_REGS_RDX);
-	tss->ebx = kvm_register_read(vcpu, VCPU_REGS_RBX);
-	tss->esp = kvm_register_read(vcpu, VCPU_REGS_RSP);
-	tss->ebp = kvm_register_read(vcpu, VCPU_REGS_RBP);
-	tss->esi = kvm_register_read(vcpu, VCPU_REGS_RSI);
-	tss->edi = kvm_register_read(vcpu, VCPU_REGS_RDI);
-	tss->es = get_segment_selector(vcpu, VCPU_SREG_ES);
-	tss->cs = get_segment_selector(vcpu, VCPU_SREG_CS);
-	tss->ss = get_segment_selector(vcpu, VCPU_SREG_SS);
-	tss->ds = get_segment_selector(vcpu, VCPU_SREG_DS);
-	tss->fs = get_segment_selector(vcpu, VCPU_SREG_FS);
-	tss->gs = get_segment_selector(vcpu, VCPU_SREG_GS);
-	tss->ldt_selector = get_segment_selector(vcpu, VCPU_SREG_LDTR);
+	tss->tss_cr3 = vcpu->arch.cr3;
+	tss->tss_eip = kvm_rip_read(vcpu);
+	tss->tss_eflags = kvm_get_rflags(vcpu);
+	tss->tss_eax = kvm_register_read(vcpu, VCPU_REGS_RAX);
+	tss->tss_ecx = kvm_register_read(vcpu, VCPU_REGS_RCX);
+	tss->tss_edx = kvm_register_read(vcpu, VCPU_REGS_RDX);
+	tss->tss_ebx = kvm_register_read(vcpu, VCPU_REGS_RBX);
+	tss->tss_esp = kvm_register_read(vcpu, VCPU_REGS_RSP);
+	tss->tss_ebp = kvm_register_read(vcpu, VCPU_REGS_RBP);
+	tss->tss_esi = kvm_register_read(vcpu, VCPU_REGS_RSI);
+	tss->tss_edi = kvm_register_read(vcpu, VCPU_REGS_RDI);
+	tss->tss_es = get_segment_selector(vcpu, VCPU_SREG_ES);
+	tss->tss_cs = get_segment_selector(vcpu, VCPU_SREG_CS);
+	tss->tss_ss = get_segment_selector(vcpu, VCPU_SREG_SS);
+	tss->tss_ds = get_segment_selector(vcpu, VCPU_SREG_DS);
+	tss->tss_fs = get_segment_selector(vcpu, VCPU_SREG_FS);
+	tss->tss_gs = get_segment_selector(vcpu, VCPU_SREG_GS);
+	tss->tss_ldt = get_segment_selector(vcpu, VCPU_SREG_LDTR);
 }
 
 static void
@@ -4166,56 +4166,56 @@ kvm_load_segment_selector(struct kvm_vcpu *vcpu, uint16_t sel, int seg)
 static int
 load_state_from_tss32(struct kvm_vcpu *vcpu, struct tss_segment_32 *tss)
 {
-	kvm_set_cr3(vcpu, tss->cr3);
+	kvm_set_cr3(vcpu, tss->tss_cr3);
 
-	kvm_rip_write(vcpu, tss->eip);
-	kvm_set_rflags(vcpu, tss->eflags | 2);
+	kvm_rip_write(vcpu, tss->tss_eip);
+	kvm_set_rflags(vcpu, tss->tss_eflags | 2);
 
-	kvm_register_write(vcpu, VCPU_REGS_RAX, tss->eax);
-	kvm_register_write(vcpu, VCPU_REGS_RCX, tss->ecx);
-	kvm_register_write(vcpu, VCPU_REGS_RDX, tss->edx);
-	kvm_register_write(vcpu, VCPU_REGS_RBX, tss->ebx);
-	kvm_register_write(vcpu, VCPU_REGS_RSP, tss->esp);
-	kvm_register_write(vcpu, VCPU_REGS_RBP, tss->ebp);
-	kvm_register_write(vcpu, VCPU_REGS_RSI, tss->esi);
-	kvm_register_write(vcpu, VCPU_REGS_RDI, tss->edi);
+	kvm_register_write(vcpu, VCPU_REGS_RAX, tss->tss_eax);
+	kvm_register_write(vcpu, VCPU_REGS_RCX, tss->tss_ecx);
+	kvm_register_write(vcpu, VCPU_REGS_RDX, tss->tss_edx);
+	kvm_register_write(vcpu, VCPU_REGS_RBX, tss->tss_ebx);
+	kvm_register_write(vcpu, VCPU_REGS_RSP, tss->tss_esp);
+	kvm_register_write(vcpu, VCPU_REGS_RBP, tss->tss_ebp);
+	kvm_register_write(vcpu, VCPU_REGS_RSI, tss->tss_esi);
+	kvm_register_write(vcpu, VCPU_REGS_RDI, tss->tss_edi);
 
 	/*
 	 * SDM says that segment selectors are loaded before segment
 	 * descriptors
 	 */
-	kvm_load_segment_selector(vcpu, tss->ldt_selector, VCPU_SREG_LDTR);
-	kvm_load_segment_selector(vcpu, tss->es, VCPU_SREG_ES);
-	kvm_load_segment_selector(vcpu, tss->cs, VCPU_SREG_CS);
-	kvm_load_segment_selector(vcpu, tss->ss, VCPU_SREG_SS);
-	kvm_load_segment_selector(vcpu, tss->ds, VCPU_SREG_DS);
-	kvm_load_segment_selector(vcpu, tss->fs, VCPU_SREG_FS);
-	kvm_load_segment_selector(vcpu, tss->gs, VCPU_SREG_GS);
+	kvm_load_segment_selector(vcpu, tss->tss_ldt, VCPU_SREG_LDTR);
+	kvm_load_segment_selector(vcpu, tss->tss_es, VCPU_SREG_ES);
+	kvm_load_segment_selector(vcpu, tss->tss_cs, VCPU_SREG_CS);
+	kvm_load_segment_selector(vcpu, tss->tss_ss, VCPU_SREG_SS);
+	kvm_load_segment_selector(vcpu, tss->tss_ds, VCPU_SREG_DS);
+	kvm_load_segment_selector(vcpu, tss->tss_fs, VCPU_SREG_FS);
+	kvm_load_segment_selector(vcpu, tss->tss_gs, VCPU_SREG_GS);
 
 	/*
 	 * Now load segment descriptors. If fault happenes at this stage
 	 * it is handled in a context of new task
 	 */
 	if (kvm_load_segment_descriptor(vcpu,
-	    tss->ldt_selector, VCPU_SREG_LDTR))
+	    tss->tss_ldt, VCPU_SREG_LDTR))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->es, VCPU_SREG_ES))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_es, VCPU_SREG_ES))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->cs, VCPU_SREG_CS))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_cs, VCPU_SREG_CS))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->ss, VCPU_SREG_SS))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_ss, VCPU_SREG_SS))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->ds, VCPU_SREG_DS))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_ds, VCPU_SREG_DS))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->fs, VCPU_SREG_FS))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_fs, VCPU_SREG_FS))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->gs, VCPU_SREG_GS))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_gs, VCPU_SREG_GS))
 		return (1);
 
 	return (0);
@@ -4224,65 +4224,65 @@ load_state_from_tss32(struct kvm_vcpu *vcpu, struct tss_segment_32 *tss)
 static void
 save_state_to_tss16(struct kvm_vcpu *vcpu, struct tss_segment_16 *tss)
 {
-	tss->ip = kvm_rip_read(vcpu);
-	tss->flag = kvm_get_rflags(vcpu);
-	tss->ax = kvm_register_read(vcpu, VCPU_REGS_RAX);
-	tss->cx = kvm_register_read(vcpu, VCPU_REGS_RCX);
-	tss->dx = kvm_register_read(vcpu, VCPU_REGS_RDX);
-	tss->bx = kvm_register_read(vcpu, VCPU_REGS_RBX);
-	tss->sp = kvm_register_read(vcpu, VCPU_REGS_RSP);
-	tss->bp = kvm_register_read(vcpu, VCPU_REGS_RBP);
-	tss->si = kvm_register_read(vcpu, VCPU_REGS_RSI);
-	tss->di = kvm_register_read(vcpu, VCPU_REGS_RDI);
+	tss->tss_ip = kvm_rip_read(vcpu);
+	tss->tss_flag = kvm_get_rflags(vcpu);
+	tss->tss_ax = kvm_register_read(vcpu, VCPU_REGS_RAX);
+	tss->tss_cx = kvm_register_read(vcpu, VCPU_REGS_RCX);
+	tss->tss_dx = kvm_register_read(vcpu, VCPU_REGS_RDX);
+	tss->tss_bx = kvm_register_read(vcpu, VCPU_REGS_RBX);
+	tss->tss_sp = kvm_register_read(vcpu, VCPU_REGS_RSP);
+	tss->tss_bp = kvm_register_read(vcpu, VCPU_REGS_RBP);
+	tss->tss_si = kvm_register_read(vcpu, VCPU_REGS_RSI);
+	tss->tss_di = kvm_register_read(vcpu, VCPU_REGS_RDI);
 
-	tss->es = get_segment_selector(vcpu, VCPU_SREG_ES);
-	tss->cs = get_segment_selector(vcpu, VCPU_SREG_CS);
-	tss->ss = get_segment_selector(vcpu, VCPU_SREG_SS);
-	tss->ds = get_segment_selector(vcpu, VCPU_SREG_DS);
-	tss->ldt = get_segment_selector(vcpu, VCPU_SREG_LDTR);
+	tss->tss_es = get_segment_selector(vcpu, VCPU_SREG_ES);
+	tss->tss_cs = get_segment_selector(vcpu, VCPU_SREG_CS);
+	tss->tss_ss = get_segment_selector(vcpu, VCPU_SREG_SS);
+	tss->tss_ds = get_segment_selector(vcpu, VCPU_SREG_DS);
+	tss->tss_ldt = get_segment_selector(vcpu, VCPU_SREG_LDTR);
 }
 
 static int
 load_state_from_tss16(struct kvm_vcpu *vcpu, struct tss_segment_16 *tss)
 {
-	kvm_rip_write(vcpu, tss->ip);
-	kvm_set_rflags(vcpu, tss->flag | 2);
-	kvm_register_write(vcpu, VCPU_REGS_RAX, tss->ax);
-	kvm_register_write(vcpu, VCPU_REGS_RCX, tss->cx);
-	kvm_register_write(vcpu, VCPU_REGS_RDX, tss->dx);
-	kvm_register_write(vcpu, VCPU_REGS_RBX, tss->bx);
-	kvm_register_write(vcpu, VCPU_REGS_RSP, tss->sp);
-	kvm_register_write(vcpu, VCPU_REGS_RBP, tss->bp);
-	kvm_register_write(vcpu, VCPU_REGS_RSI, tss->si);
-	kvm_register_write(vcpu, VCPU_REGS_RDI, tss->di);
+	kvm_rip_write(vcpu, tss->tss_ip);
+	kvm_set_rflags(vcpu, tss->tss_flag | 2);
+	kvm_register_write(vcpu, VCPU_REGS_RAX, tss->tss_ax);
+	kvm_register_write(vcpu, VCPU_REGS_RCX, tss->tss_cx);
+	kvm_register_write(vcpu, VCPU_REGS_RDX, tss->tss_dx);
+	kvm_register_write(vcpu, VCPU_REGS_RBX, tss->tss_bx);
+	kvm_register_write(vcpu, VCPU_REGS_RSP, tss->tss_sp);
+	kvm_register_write(vcpu, VCPU_REGS_RBP, tss->tss_bp);
+	kvm_register_write(vcpu, VCPU_REGS_RSI, tss->tss_si);
+	kvm_register_write(vcpu, VCPU_REGS_RDI, tss->tss_di);
 
 	/*
 	 * SDM says that segment selectors are loaded before segment
 	 * descriptors
 	 */
-	kvm_load_segment_selector(vcpu, tss->ldt, VCPU_SREG_LDTR);
-	kvm_load_segment_selector(vcpu, tss->es, VCPU_SREG_ES);
-	kvm_load_segment_selector(vcpu, tss->cs, VCPU_SREG_CS);
-	kvm_load_segment_selector(vcpu, tss->ss, VCPU_SREG_SS);
-	kvm_load_segment_selector(vcpu, tss->ds, VCPU_SREG_DS);
+	kvm_load_segment_selector(vcpu, tss->tss_ldt, VCPU_SREG_LDTR);
+	kvm_load_segment_selector(vcpu, tss->tss_es, VCPU_SREG_ES);
+	kvm_load_segment_selector(vcpu, tss->tss_cs, VCPU_SREG_CS);
+	kvm_load_segment_selector(vcpu, tss->tss_ss, VCPU_SREG_SS);
+	kvm_load_segment_selector(vcpu, tss->tss_ds, VCPU_SREG_DS);
 
 	/*
 	 * Now load segment descriptors. If fault happenes at this stage
 	 * it is handled in a context of new task
 	 */
-	if (kvm_load_segment_descriptor(vcpu, tss->ldt, VCPU_SREG_LDTR))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_ldt, VCPU_SREG_LDTR))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->es, VCPU_SREG_ES))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_es, VCPU_SREG_ES))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->cs, VCPU_SREG_CS))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_cs, VCPU_SREG_CS))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->ss, VCPU_SREG_SS))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_ss, VCPU_SREG_SS))
 		return (1);
 
-	if (kvm_load_segment_descriptor(vcpu, tss->ds, VCPU_SREG_DS))
+	if (kvm_load_segment_descriptor(vcpu, tss->tss_ds, VCPU_SREG_DS))
 		return (1);
 
 	return (0);
@@ -4310,11 +4310,11 @@ kvm_task_switch_16(struct kvm_vcpu *vcpu, uint16_t tss_selector,
 		goto out;
 
 	if (old_tss_sel != 0xffff) {
-		tss_segment_16.prev_task_link = old_tss_sel;
+		tss_segment_16.tss_link = old_tss_sel;
 
 		if (kvm_write_guest(vcpu->kvm, get_tss_base_addr_write(vcpu,
-		    nseg_desc), &tss_segment_16.prev_task_link,
-		    sizeof (tss_segment_16.prev_task_link)))
+		    nseg_desc), &tss_segment_16.tss_link,
+		    sizeof (tss_segment_16.tss_link)))
 			goto out;
 	}
 
@@ -4348,11 +4348,11 @@ kvm_task_switch_32(struct kvm_vcpu *vcpu, uint16_t tss_selector,
 		goto out;
 
 	if (old_tss_sel != 0xffff) {
-		tss_segment_32.prev_task_link = old_tss_sel;
+		tss_segment_32.tss_link = old_tss_sel;
 
 		if (kvm_write_guest(vcpu->kvm, get_tss_base_addr_write(vcpu,
-		    nseg_desc), &tss_segment_32.prev_task_link,
-		    sizeof (tss_segment_32.prev_task_link)))
+		    nseg_desc), &tss_segment_32.tss_link,
+		    sizeof (tss_segment_32.tss_link)))
 			goto out;
 	}
 
