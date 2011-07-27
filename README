@@ -12,8 +12,10 @@ finish in a snap.
 
 Preparation:
 
-Edit the Makefile and appropriately set the path for the KERNEL_SOURCE
-directory that points to the root of a checked out and built illumos directory.
+Edit the Makefile and appropriately set the path for the KERNEL_SOURCE directory
+that points to the root of a checked out and built illumos directory.  As we
+have not had the chance to upstream a change to uts/intel/sys/tss.h ensure that
+line 19 of the Makfile, which adds the -D_NEED_KVM_TSS option, is uncommented.
 
 Verify that gcc is installed and the version you'd like to use is in your path.
 Note that this has only been tested against the SFW version of gcc -- version

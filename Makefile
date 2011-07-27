@@ -12,6 +12,11 @@ CTFCONVERT=$(CTFBINDIR)/ctfconvert
 CTFMERGE=$(CTFBINDIR)/ctfmerge
 DESTDIR=
 CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 -DDEBUG -c -g -DCONFIG_SOLARIS -O2 -fident -fno-inline -fno-inline-functions -fno-builtin -fno-asm -nodefaultlibs -D__sun -O -D_ASM_INLINES -ffreestanding -Wall -Wno-unknown-pragmas -Wpointer-arith -Wno-unused -gdwarf-2 -std=gnu99 -fno-dwarf2-indirect-strings -Werror -DDIS_MEM -D_KERNEL -ffreestanding -D_SYSCALL32 -D_DDI_STRICT -Di86pc -D_MACHDEP -DOPTERON_ERRATUM_88 -DOPTERON_ERRATUM_91 -DOPTERON_ERRATUM_93 -DOPTERON_ERRATUM_95 -DOPTERON_ERRATUM_99 -DOPTERON_ERRATUM_100 -DOPTERON_ERRATUM_101 -DOPTERON_ERRATUM_108 -DOPTERON_ERRATUM_109 -DOPTERON_ERRATUM_121 -DOPTERON_ERRATUM_122 -DOPTERON_ERRATUM_123 -DOPTERON_ERRATUM_131 -DOPTERON_WORKAROUND_6336786 -DOPTERON_WORKAROUND_6323525 -DOPTERON_ERRATUM_172 -DOPTERON_ERRATUM_298 -I$(KERNEL_SOURCE)/usr/src/uts/common -nostdinc -c -DUTS_RELEASE="5.11" -DUTS_VERSION="joyent.147" -DUTS_PLATFORM="i86pc" -mno-red-zone
+#
+# Uncomment this line if you don't have an updated uts/intel/sys/tss.h that
+# exposes the different tss definitions
+#
+#CFLAGS += -D_NEED_KVM_TSS
 
 INCLUDEDIR= -I $(KERNEL_SOURCE)/usr/src/uts/intel -I $(KERNEL_SOURCE)/usr/src/uts/i86pc -I $(KERNEL_SOURCE)/usr/src/uts/common
 CSTYLE=$(KERNEL_SOURCE)/usr/src/tools/scripts/cstyle

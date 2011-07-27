@@ -2,8 +2,19 @@
 #define	__TSS_SEGMENT_H
 
 #include <sys/stdint.h>
+#include <sys/tss.h>
 
-typedef struct tss_segment_32 {
+/*
+ * uts/intel/sys/tss.h now exposes the following definitions. In the past, it
+ * only exposed the single architecture specific tss structure depending on what
+ * you were compiling for. When the tss.h changes finally gets upstreamed, this
+ * file can be deleted and the includes replaced with <sys/tss.h> instead of
+ * kvm_tss.h.
+ */
+
+#ifdef _NEED_KVM_TSS
+
+struct tss32 {
 	uint16_t	tss_link;	/* 16-bit prior TSS selector */
 	uint16_t	tss_rsvd0;	/* reserved, ignored */
 	uint32_t	tss_esp0;
@@ -42,13 +53,13 @@ typedef struct tss_segment_32 {
 	uint16_t	tss_rsvd10;	/* reserved, ignored */
 	uint16_t	tss_rsvd11;	/* reserved, ignored */
 	uint16_t	tss_bitmapbase;	/* io permission bitmap base address */
-} tss_segment_32_t;
+};
 
 /*
  * Based on data from Intel Manual 3a, Intel 64 and IA-32 Architectures Software
  * Developer’s Manual Volume 3A: System Programming Guide, Part 1, Section 7.6
  */
-typedef struct tss_segment_16 {
+struct tss16 {
 	uint16_t	tss_link;
 	uint16_t	tss_sp0;
 	uint16_t	tss_ss0;
@@ -71,6 +82,8 @@ typedef struct tss_segment_16 {
 	uint16_t	tss_ss;
 	uint16_t	tss_ds;
 	uint16_t	tss_ldt;
-} tss_segment_16_t;
+};
+
+#endif /* _HAVE_KVM_TSS */
 
 #endif

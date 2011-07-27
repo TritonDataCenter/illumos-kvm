@@ -4132,7 +4132,7 @@ exception:
 }
 
 static void
-save_state_to_tss32(struct kvm_vcpu *vcpu, struct tss_segment_32 *tss)
+save_state_to_tss32(struct kvm_vcpu *vcpu, struct tss32 *tss)
 {
 	tss->tss_cr3 = vcpu->arch.cr3;
 	tss->tss_eip = kvm_rip_read(vcpu);
@@ -4164,7 +4164,7 @@ kvm_load_segment_selector(struct kvm_vcpu *vcpu, uint16_t sel, int seg)
 }
 
 static int
-load_state_from_tss32(struct kvm_vcpu *vcpu, struct tss_segment_32 *tss)
+load_state_from_tss32(struct kvm_vcpu *vcpu, struct tss32 *tss)
 {
 	kvm_set_cr3(vcpu, tss->tss_cr3);
 
@@ -4222,7 +4222,7 @@ load_state_from_tss32(struct kvm_vcpu *vcpu, struct tss_segment_32 *tss)
 }
 
 static void
-save_state_to_tss16(struct kvm_vcpu *vcpu, struct tss_segment_16 *tss)
+save_state_to_tss16(struct kvm_vcpu *vcpu, struct tss16 *tss)
 {
 	tss->tss_ip = kvm_rip_read(vcpu);
 	tss->tss_flag = kvm_get_rflags(vcpu);
@@ -4243,7 +4243,7 @@ save_state_to_tss16(struct kvm_vcpu *vcpu, struct tss_segment_16 *tss)
 }
 
 static int
-load_state_from_tss16(struct kvm_vcpu *vcpu, struct tss_segment_16 *tss)
+load_state_from_tss16(struct kvm_vcpu *vcpu, struct tss16 *tss)
 {
 	kvm_rip_write(vcpu, tss->tss_ip);
 	kvm_set_rflags(vcpu, tss->tss_flag | 2);
@@ -4292,33 +4292,33 @@ static int
 kvm_task_switch_16(struct kvm_vcpu *vcpu, uint16_t tss_selector,
     uint16_t old_tss_sel, uint32_t old_tss_base, struct desc_struct *nseg_desc)
 {
-	struct tss_segment_16 tss_segment_16;
+	struct tss16 tss16;
 	int ret = 0;
 
 	if (kvm_read_guest(vcpu->kvm, old_tss_base,
-	    &tss_segment_16, sizeof (tss_segment_16)))
+	    &tss16, sizeof (tss16)))
 		goto out;
 
-	save_state_to_tss16(vcpu, &tss_segment_16);
+	save_state_to_tss16(vcpu, &tss16);
 
 	if (kvm_write_guest(vcpu->kvm, old_tss_base,
-	    &tss_segment_16, sizeof (tss_segment_16)))
+	    &tss16, sizeof (tss16)))
 		goto out;
 
 	if (kvm_read_guest(vcpu->kvm, get_tss_base_addr_read(vcpu, nseg_desc),
-	    &tss_segment_16, sizeof (tss_segment_16)))
+	    &tss16, sizeof (tss16)))
 		goto out;
 
 	if (old_tss_sel != 0xffff) {
-		tss_segment_16.tss_link = old_tss_sel;
+		tss16.tss_link = old_tss_sel;
 
 		if (kvm_write_guest(vcpu->kvm, get_tss_base_addr_write(vcpu,
-		    nseg_desc), &tss_segment_16.tss_link,
-		    sizeof (tss_segment_16.tss_link)))
+		    nseg_desc), &tss16.tss_link,
+		    sizeof (tss16.tss_link)))
 			goto out;
 	}
 
-	if (load_state_from_tss16(vcpu, &tss_segment_16))
+	if (load_state_from_tss16(vcpu, &tss16))
 		goto out;
 
 	ret = 1;
@@ -4330,33 +4330,33 @@ static int
 kvm_task_switch_32(struct kvm_vcpu *vcpu, uint16_t tss_selector,
     uint16_t old_tss_sel, uint32_t old_tss_base, struct desc_struct *nseg_desc)
 {
-	struct tss_segment_32 tss_segment_32;
+	struct tss32 tss32;
 	int ret = 0;
 
 	if (kvm_read_guest(vcpu->kvm, old_tss_base,
-	    &tss_segment_32, sizeof (tss_segment_32)))
+	    &tss32, sizeof (tss32)))
 		goto out;
 
-	save_state_to_tss32(vcpu, &tss_segment_32);
+	save_state_to_tss32(vcpu, &tss32);
 
 	if (kvm_write_guest(vcpu->kvm, old_tss_base,
-	    &tss_segment_32, sizeof (tss_segment_32)))
+	    &tss32, sizeof (tss32)))
 		goto out;
 
 	if (kvm_read_guest(vcpu->kvm, get_tss_base_addr_read(vcpu, nseg_desc),
-	    &tss_segment_32, sizeof (tss_segment_32)))
+	    &tss32, sizeof (tss32)))
 		goto out;
 
 	if (old_tss_sel != 0xffff) {
-		tss_segment_32.tss_link = old_tss_sel;
+		tss32.tss_link = old_tss_sel;
 
 		if (kvm_write_guest(vcpu->kvm, get_tss_base_addr_write(vcpu,
-		    nseg_desc), &tss_segment_32.tss_link,
-		    sizeof (tss_segment_32.tss_link)))
+		    nseg_desc), &tss32.tss_link,
+		    sizeof (tss32.tss_link)))
 			goto out;
 	}
 
-	if (load_state_from_tss32(vcpu, &tss_segment_32))
+	if (load_state_from_tss32(vcpu, &tss32))
 		goto out;
 
 	ret = 1;
