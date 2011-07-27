@@ -2129,12 +2129,6 @@ kvm_open(dev_t *devp, int flag, int otype, cred_t *credp)
 	if (otype != OTYP_CHR)
 		return (EINVAL);
 
-	/*
-	 * XXX This should be its own privilage
-	 */
-	if (drv_priv(credp) != 0)
-		return (EPERM);
-
 	if (!(flag & FREAD && flag & FWRITE))
 		return (EINVAL);
 
