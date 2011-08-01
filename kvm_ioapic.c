@@ -112,11 +112,8 @@ update_handled_vectors(struct kvm_ioapic *ioapic)
 		__set_bit(ioapic->redirtbl[i].fields.vector, handled_vectors);
 	memcpy(ioapic->handled_vectors, handled_vectors,
 	    sizeof (handled_vectors));
-#ifdef XXX
+
 	smp_wmb();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 }
 
 static void
@@ -265,11 +262,7 @@ kvm_ioapic_update_eoi(struct kvm *kvm, int vector, int trigger_mode)
 {
 	struct kvm_ioapic *ioapic = kvm->arch.vioapic;
 
-#ifdef XXX
 	smp_rmb();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 
 	if (!test_bit(vector, ioapic->handled_vectors))
 		return;

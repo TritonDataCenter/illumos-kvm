@@ -72,11 +72,8 @@ coalesced_mmio_write(struct kvm_io_device *this, gpa_t addr,
 	ring->coalesced_mmio[ring->last].phys_addr = addr;
 	ring->coalesced_mmio[ring->last].len = len;
 	memcpy(ring->coalesced_mmio[ring->last].data, val, len);
-#ifdef XXX
+
 	smp_wmb();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 	ring->last = (ring->last + 1) % KVM_COALESCED_MMIO_MAX;
 	mutex_exit(&dev->lock);
 	return (0);

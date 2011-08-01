@@ -37,11 +37,7 @@ irqchip_in_kernel(struct kvm *kvm)
 	int ret;
 
 	ret = (pic_irqchip(kvm) != NULL);
-#ifdef XXX
 	smp_rmb();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 	return (ret);
 }
 

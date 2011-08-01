@@ -496,11 +496,7 @@ vcpu_load(struct kvm_vcpu *vcpu)
 struct kvm_vcpu *
 kvm_get_vcpu(struct kvm *kvm, int i)
 {
-#ifdef XXX
 	smp_rmb();
-#else
-	XXX_KVM_PROBE;
-#endif
 	return (kvm->vcpus[i]);
 }
 
@@ -1555,11 +1551,8 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p)
 	/* XXX need to protect online_vcpus */
 	kvm->vcpus[kvm->online_vcpus] = vcpu;
 
-#ifdef XXX
 	smp_wmb();
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
+
 	atomic_inc_32(&kvm->online_vcpus);
 
 	if (kvm->bsp_vcpu_id == id)
@@ -2438,17 +2431,11 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 			}
 		} else
 			goto create_irqchip_unlock;
-#ifdef XXX
+
 		smp_wmb();
-#else
-		XXX_KVM_SYNC_PROBE;
-#endif
 		kvmp->arch.vpic = vpic;
-#ifdef XXX
 		smp_wmb();
-#else
-		XXX_KVM_SYNC_PROBE;
-#endif
+
 		rval = kvm_setup_default_irq_routing(kvmp);
 		if (rval) {
 			mutex_enter(&kvmp->irq_lock);

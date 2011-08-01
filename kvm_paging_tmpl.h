@@ -471,8 +471,8 @@ FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	}
 #ifdef XXX
 	mmu_seq = vcpu->kvm->mmu_notifier_seq;
-	smp_rmb();
 #endif /* XXX */
+	smp_rmb();
 	pfn = gfn_to_pfn(vcpu->kvm, walker.gfn);
 
 	/* mmio */

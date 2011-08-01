@@ -1844,10 +1844,10 @@ nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, int write, gfn_t gfn)
 
 #ifdef XXX
 	mmu_seq = vcpu->kvm->mmu_notifier_seq;
-	smp_rmb();
 #else
 	XXX_KVM_PROBE;
 #endif
+	smp_rmb();
 	pfn = gfn_to_pfn(vcpu->kvm, gfn);
 
 	/* mmio */
@@ -2069,11 +2069,10 @@ tdp_page_fault(struct kvm_vcpu *vcpu, gva_t gpa, uint32_t error_code)
 
 #ifdef XXX
 	mmu_seq = vcpu->kvm->mmu_notifier_seq;
-	smp_rmb();
 #else
 	XXX_KVM_PROBE;
 #endif
-
+	smp_rmb();
 	pfn = gfn_to_pfn(vcpu->kvm, gfn);
 	if (is_error_pfn(pfn)) {
 		kvm_release_pfn_clean(pfn);
@@ -2508,10 +2507,10 @@ mmu_guess_page_from_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 
 #ifdef XXX
 	vcpu->arch.update_pte.mmu_seq = vcpu->kvm->mmu_notifier_seq;
-	smp_rmb();
 #else
 	XXX_KVM_PROBE;
 #endif
+	smp_rmb();
 	pfn = gfn_to_pfn(vcpu->kvm, gfn);
 
 	if (is_error_pfn(pfn)) {
