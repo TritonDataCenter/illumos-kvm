@@ -786,14 +786,26 @@ __vmx_load_host_state(struct vcpu_vmx *vmx)
 	if (vmx->host_state.fs_reload_needed)
 		kvm_load_fs(vmx->host_state.fs_sel);
 	if (vmx->host_state.gs_ldt_reload_needed) {
+		unsigned long gsbase;
+
 		kvm_load_ldt(vmx->host_state.ldt_sel);
 		/*
-		 * If we have to reload gs, we must take care to
-		 * preserve our gs base.
+		 * If we have to reload GS, we must take care to preserve our
+		 * GSBASE.  Note that between the kvm_load_gs() and the
+		 * completion of writing the MSR, GS is essentially in a
+		 * corrupt state -- we cannot allow code to be revectored
+		 * in this window.  In particular, this means that we not
+		 * hit a DTrace probe in this window (which will need the
+		 * intact GS to get to the CPU pointer).  Both kvm_load_gs()
+		 * and wrmsrl() turn into inlines or non-instrumentable
+		 * leaf routines, but vmcs_readl() has an SDT probe -- so we
+		 * call vmcs_readl() to get the HOST_GS_BASE before the call
+		 * to kvm_load_gs().
 		 */
 		cli();
+		gsbase = vmcs_readl(HOST_GS_BASE);
 		kvm_load_gs(vmx->host_state.gs_sel);
-		wrmsrl(MSR_GS_BASE, vmcs_readl(HOST_GS_BASE));
+		wrmsrl(MSR_GS_BASE, gsbase);
 		sti();
 	}
 	reload_tss();
