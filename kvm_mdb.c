@@ -22,7 +22,7 @@
 #include <sys/segments.h>
 #include <sys/mdb_modapi.h>
 
-#include "msr.h"
+#include "kvm_msr.h"
 #include "kvm_vmx.h"
 #include "kvm_iodev.h"
 #include "kvm_host.h"

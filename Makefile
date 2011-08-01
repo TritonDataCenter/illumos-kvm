@@ -42,6 +42,7 @@ HEADERS=			\
 	kvm_lapic.h		\
 	kvm_mmu.h		\
 	kvm_msidef.h		\
+	kvm_msr.h		\
 	kvm_paging_tmpl.h	\
 	kvm_timer.h		\
 	kvm_tss.h		\
@@ -74,7 +75,7 @@ HDRCHK_SYSHDRS=			\
 	kvm_x86host.h		\
 	kvm_x86impl.h
 
-kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h msr.h kvm_bitops.h kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS) 
+kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h kvm_msr.h kvm_bitops.h kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS) 
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_emulate.c

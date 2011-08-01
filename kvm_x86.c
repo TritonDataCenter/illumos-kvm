@@ -19,7 +19,7 @@
 #include "kvm_bitops.h"
 #include "kvm_vmx.h"
 #include "msr-index.h"
-#include "msr.h"
+#include "kvm_msr.h"
 #include "kvm_host.h"
 #include "kvm_lapic.h"
 #include "processor-flags.h"

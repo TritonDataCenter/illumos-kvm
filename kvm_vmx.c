@@ -25,7 +25,7 @@
 #include <sys/xc_levels.h>
 
 #include "kvm_bitops.h"
-#include "msr.h"
+#include "kvm_msr.h"
 #include "kvm_cpuid.h"
 #include "kvm_impl.h"
 #include "kvm_x86impl.h"

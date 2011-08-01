@@ -50,7 +50,7 @@
 
 #include "kvm_mmu.h"
 #include "msr-index.h"
-#include "msr.h"
+#include "kvm_msr.h"
 #include "processor-flags.h"
 #include "kvm_iodev.h"
 #include "kvm.h"

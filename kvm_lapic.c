@@ -22,7 +22,7 @@
 #include <sys/atomic.h>
 
 #include "kvm_bitops.h"
-#include "msr.h"
+#include "kvm_msr.h"
 #include "kvm_apicdef.h"
 #include "kvm_cpuid.h"
 #include "kvm_x86host.h"
