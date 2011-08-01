@@ -3428,10 +3428,6 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		goto out;
 
 	if (vcpu->requests) {
-		if (test_and_clear_bit(KVM_REQ_MIGRATE_TIMER,
-		    &vcpu->requests)) {
-			__kvm_migrate_timers(vcpu);
-		}
 		if (test_and_clear_bit(KVM_REQ_KVMCLOCK_UPDATE,
 		    &vcpu->requests)) {
 			kvm_write_guest_time(vcpu);

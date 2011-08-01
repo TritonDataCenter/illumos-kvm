@@ -826,7 +826,6 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 
 	if (vcpu->cpu != cpu) {
 		vcpu_clear(vmx);
-		kvm_migrate_timers(vcpu);
 		set_bit(KVM_REQ_TLB_FLUSH, &vcpu->requests);
 	}
 

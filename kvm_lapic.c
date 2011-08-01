@@ -1208,24 +1208,6 @@ kvm_apic_post_state_restore(struct kvm_vcpu *vcpu)
 }
 
 void
-__kvm_migrate_apic_timer(struct kvm_vcpu *vcpu)
-{
-#ifdef XXX
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	struct hrtimer *timer;
-
-	if (!apic)
-		return;
-
-	timer = &apic->lapic_timer.timer;
-	if (hrtimer_cancel_p(timer))
-		kvm_hrtimer_start_expires(timer, HRTIMER_MODE_ABS);
-#else
-	XXX_KVM_PROBE;
-#endif
-}
-
-void
 kvm_lapic_sync_from_vapic(struct kvm_vcpu *vcpu)
 {
 	uint32_t data;

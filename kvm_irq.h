@@ -87,9 +87,6 @@ extern void kvm_inject_pit_timer_irqs(struct kvm_vcpu *vcpu);
 extern void kvm_inject_pending_timer_irqs(struct kvm_vcpu *);
 extern void kvm_inject_apic_timer_irqs(struct kvm_vcpu *);
 extern void kvm_apic_nmi_wd_deliver(struct kvm_vcpu *);
-extern void __kvm_migrate_apic_timer(struct kvm_vcpu *);
-extern void __kvm_migrate_pit_timer(struct kvm_vcpu *);
-extern void __kvm_migrate_timers(struct kvm_vcpu *);
 
 extern int pit_has_pending_timer(struct kvm_vcpu *);
 extern int apic_has_pending_timer(struct kvm_vcpu *);

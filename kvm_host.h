@@ -27,7 +27,6 @@
  * vcpu->requests bit members
  */
 #define	KVM_REQ_TLB_FLUSH		0
-#define	KVM_REQ_MIGRATE_TIMER		1
 #define	KVM_REQ_REPORT_TPR_ACCESS	2
 #define	KVM_REQ_MMU_RELOAD		3
 #define	KVM_REQ_TRIPLE_FAULT		4
@@ -450,7 +449,6 @@ extern void kvm_free_irq_source_id(struct kvm *, int);
 
 extern void kvm_guest_enter(void);
 extern void kvm_guest_exit(void);
-extern void kvm_migrate_timers(struct kvm_vcpu *);
 
 #ifndef KVM_ARCH_HAS_UNALIAS_INSTANTIATION
 #define	unalias_gfn_instantiation unalias_gfn

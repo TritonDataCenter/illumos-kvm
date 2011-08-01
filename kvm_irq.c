@@ -108,10 +108,3 @@ kvm_inject_pending_timer_irqs(struct kvm_vcpu *vcpu)
 	kvm_inject_pit_timer_irqs(vcpu);
 	/* TODO: PIT, RTC etc. */
 }
-
-void
-__kvm_migrate_timers(struct kvm_vcpu *vcpu)
-{
-	__kvm_migrate_apic_timer(vcpu);
-	__kvm_migrate_pit_timer(vcpu);
-}

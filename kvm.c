@@ -449,12 +449,6 @@ kvm_ctx_restore(void *arg)
 	kvm_arch_vcpu_load(vcpu, cpu);
 }
 
-void
-kvm_migrate_timers(struct kvm_vcpu *vcpu)
-{
-	set_bit(KVM_REQ_MIGRATE_TIMER, &vcpu->requests);
-}
-
 #ifdef XXX_KVM_DECLARATION
 #define	pfn_valid(pfn) ((pfn < physmax) && (pfn != PFN_INVALID))
 #else

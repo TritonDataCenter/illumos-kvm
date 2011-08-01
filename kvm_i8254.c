@@ -798,21 +798,3 @@ kvm_free_pit(struct kvm *kvmp)
 	kmem_free(kvmp->arch.vpit, sizeof (struct kvm_pit));
 	kvmp->arch.vpit = NULL;
 }
-
-void
-__kvm_migrate_pit_timer(struct kvm_vcpu *vcpu)
-{
-#ifdef XXX
-	struct kvm_pit *pit = vcpu->kvm->arch.vpit;
-	struct hrtimer *timer;
-
-	if (!kvm_vcpu_is_bsp(vcpu) || !pit)
-		return;
-
-	timer = &pit->pit_state.pit_timer.timer;
-	if (hrtimer_cancel_p(timer))
-		kvm_hrtimer_start_expires(timer, HRTIMER_MODE_ABS);
-#else
-	XXX_KVM_PROBE;
-#endif
-}
