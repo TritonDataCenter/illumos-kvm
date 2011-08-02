@@ -627,7 +627,6 @@ kvm_destroy_vm(struct kvm *kvmp)
 	mutex_destroy(&kvmp->lock);
 	mutex_destroy(&kvmp->requests_lock);
 	mutex_destroy(&kvmp->mmu_lock);
-	kvmp->mm = NULL;
 	kvm_fini_mmu_notifier(kvmp);
 
 	for (ii = 0; ii < KVM_NR_BUSES; ii++)
@@ -678,11 +677,6 @@ kvm_create_vm(void)
 		return (NULL);
 	}
 
-	/*
-	 * XXX note that the as struct does not contain  a refcnt, may
-	 * have to go lower
-	 */
-	kvmp->mm = curproc->p_as;
 	mutex_init(&kvmp->mmu_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->requests_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->lock, NULL, MUTEX_DRIVER, NULL);
@@ -1090,30 +1084,7 @@ kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn)
 unsigned long
 kvm_host_page_size(struct kvm *kvm, gfn_t gfn)
 {
-	struct vm_area_struct *vma;
-	unsigned long addr, size;
-
-	size = PAGESIZE;
-
-	addr = gfn_to_hva(kvm, gfn);
-	if (kvm_is_error_hva(addr))
-		return (PAGESIZE);
-
-#ifdef XXX
-	down_read(&current->mm->mmap_sem);
-	vma = find_vma(current->mm, addr);
-	if (!vma)
-		goto out;
-
-	size = vma_kernel_pagesize(vma);
-
-out:
-	up_read(&current->mm->mmap_sem);
-	return (size);
-#else
-	XXX_KVM_PROBE;
 	return (PAGESIZE);
-#endif
 }
 
 int
@@ -1161,35 +1132,11 @@ hva_to_pfn(struct kvm *kvm, unsigned long addr)
 	proc_t *procp = ttoproc(curthread);
 	struct as *as = procp->p_as;
 
-#ifdef XXX
-
-	npages = get_user_pages_fast(addr, 1, 1, page);
-
-	if (unlikely(npages != 1)) {
-		struct vm_area_struct *vma;
-
-		down_read(&current->mm->mmap_sem);
-		vma = find_vma(current->mm, addr);
-
-		if (vma == NULL || addr < vma->vm_start ||
-		    !(vma->vm_flags & VM_PFNMAP)) {
-			up_read(&current->mm->mmap_sem);
-			get_page(bad_page);
-			return (page_to_pfn(bad_page));
-		}
-
-		pfn = ((addr - vma->vm_start) >> PAGESHIFT) + vma->vm_pgoff;
-		up_read(&current->mm->mmap_sem);
-		BUG_ON(!kvm_is_mmio_pfn(pfn));
-	} else
-		pfn = page_to_pfn(page[0]);
-#else
-	XXX_KVM_PROBE;
 	if (addr < kernelbase)
 		pfn = hat_getpfnum(as->a_hat, (caddr_t)addr);
 	else
 		pfn = hat_getpfnum(kas.a_hat, (caddr_t)addr);
-#endif
+
 	return (pfn);
 }
 

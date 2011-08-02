@@ -4994,22 +4994,7 @@ kvm_arch_prepare_memory_region(struct kvm *kvm,
 	 */
 	if (!user_alloc) {
 		if (npages && !old.rmap) {
-#ifdef XXX
-			unsigned long userspace_addr;
-
-			down_write(&current->mm->mmap_sem);
-			userspace_addr = do_mmap(NULL, 0, npages * PAGESIZE,
-			    PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS,
-			    0);
-			up_write(&current->mm->mmap_sem);
-
-			if (IS_ERR((void *)userspace_addr))
-				return (PTR_ERR((void *)userspace_addr));
-#else
-			int rval;
 			caddr_t userspace_addr = NULL;
-
-			XXX_KVM_PROBE;
 
 			userspace_addr = smmap64(NULL,
 			    (size_t)(npages * PAGESIZE),
@@ -5030,7 +5015,6 @@ kvm_arch_prepare_memory_region(struct kvm *kvm,
 					    "mmap page\n");
 				}
 			}
-#endif
 
 			memslot->userspace_addr =
 			    (unsigned long)userspace_addr;
@@ -5051,21 +5035,9 @@ kvm_arch_commit_memory_region(struct kvm *kvm,
 	if (!user_alloc && !old.user_alloc && old.rmap && !npages) {
 		int ret = 0;
 
-#ifdef XXX
-		down_write(&current->mm->mmap_sem);
-		ret = munmap(old.userspace_addr,
-				old.npages * PAGESIZE);
-		up_write(&current->mm->mmap_sem);
-#else
-		XXX_KVM_PROBE;
 		/* see comment in kvm_arch_prepare_memory_region */
-		/*
-		 * XXX this needs to be here, but I'm getting kernel heap
-		 * corruption panics with someone writing to a buffer after it
-		 * is freed
-		 */
 		kmem_free((caddr_t)old.userspace_addr, old.npages * PAGESIZE);
-#endif
+
 		if (ret < 0) {
 			cmn_err(CE_WARN, "kvm_vm_ioctl_set_memory_region: "
 			    "failed to munmap memory\n");
