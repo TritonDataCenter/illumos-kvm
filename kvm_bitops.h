@@ -76,57 +76,7 @@ extern inline void __set_bit(int, volatile unsigned long *);
  * in order to ensure changes are visible on other processors.
  */
 extern inline void clear_bit(int, volatile unsigned long *);
-
-/*
- * clear_bit_unlock - Clears a bit in memory
- * @nr: Bit to clear
- * @addr: Address to start counting from
- *
- * clear_bit() is atomic and implies release semantics before the memory
- * operation. It can be used for an unlock.
- */
-extern inline void clear_bit_unlock(unsigned, volatile unsigned long *);
-
 extern inline void __clear_bit(int, volatile unsigned long *);
-
-/*
- * __clear_bit_unlock - Clears a bit in memory
- * @nr: Bit to clear
- * @addr: Address to start counting from
- *
- * __clear_bit() is non-atomic and implies release semantics before the memory
- * operation. It can be used for an unlock if no other CPUs can concurrently
- * modify other bits in the word.
- *
- * No memory barrier is required here, because x86 cannot reorder stores past
- * older loads. Same principle as spin_unlock.
- */
-extern inline void __clear_bit_unlock(unsigned, volatile unsigned long *);
-
-#define	smp_mb__before_clear_bit()	barrier()
-#define	smp_mb__after_clear_bit()	barrier()
-
-/*
- * __change_bit - Toggle a bit in memory
- * @nr: the bit to change
- * @addr: the address to start counting from
- *
- * Unlike change_bit(), this function is non-atomic and may be reordered.
- * If it's called on the same region of memory simultaneously, the effect
- * may be that only one operation succeeds.
- */
-extern inline void __change_bit(int, volatile unsigned long *);
-
-/*
- * change_bit - Toggle a bit in memory
- * @nr: Bit to change
- * @addr: Address to start counting from
- *
- * change_bit() is atomic and may not be reordered.
- * Note that @nr may be almost arbitrarily large; this function is not
- * restricted to acting on a single-word quantity.
- */
-extern inline void change_bit(int, volatile unsigned long *);
 
 /*
  * test_and_set_bit - Set a bit and return its old value
@@ -137,15 +87,6 @@ extern inline void change_bit(int, volatile unsigned long *);
  * It also implies a memory barrier.
  */
 extern inline int test_and_set_bit(int, volatile unsigned long *);
-
-/*
- * test_and_set_bit_lock - Set a bit and return its old value for lock
- * @nr: Bit to set
- * @addr: Address to count from
- *
- * This is the same as test_and_set_bit on x86.
- */
-extern inline int test_and_set_bit_lock(int, volatile unsigned long *);
 
 /*
  * __test_and_set_bit - Set a bit and return its old value
@@ -178,19 +119,6 @@ extern inline int test_and_clear_bit(int, volatile unsigned long *);
  * but actually fail.  You must protect multiple accesses with a lock.
  */
 extern inline int __test_and_clear_bit(int, volatile unsigned long *);
-
-/* WARNING: non atomic and it can be reordered! */
-extern inline int __test_and_change_bit(int, volatile unsigned long *);
-
-/*
- * test_and_change_bit - Change a bit and return its old value
- * @nr: Bit to change
- * @addr: Address to count from
- *
- * This operation is atomic and cannot be reordered.
- * It also implies a memory barrier.
- */
-extern inline int test_and_change_bit(int, volatile unsigned long *);
 
 extern inline int constant_test_bit(unsigned int,
     const volatile unsigned long *);
