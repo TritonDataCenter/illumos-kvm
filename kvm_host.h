@@ -15,9 +15,6 @@
 #include "kvm_impl.h"
 #include "kvm_x86host.h"
 
-/*
- * XXX Do these really belong here?
- */
 #define	NSEC_PER_MSEC 1000000L
 #define	NSEC_PER_SEC 1000000000L
 

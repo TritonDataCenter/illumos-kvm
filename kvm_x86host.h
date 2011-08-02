@@ -24,7 +24,7 @@
 #define	KVM_MAX_VCPUS	64
 #define	KVM_MEMORY_SLOTS	32
 /* memory slots that are not exposted to userspace */
-#define	KVM_PRIVATE_MEM_SLOTS 4 /* XXX assumes x86 */
+#define	KVM_PRIVATE_MEM_SLOTS 4 /* x86 specific */
 
 #define	KVM_PIO_PAGE_OFFSET	1
 #define	KVM_COALESCED_MMIO_PAGE_OFFSET	2
@@ -784,7 +784,6 @@ extern struct kvm_memory_slot *gfn_to_memslot_unaliased(struct kvm *, gfn_t);
 
 extern struct kvm_mmu_page *page_header(struct kvm *, hpa_t);
 
-/* XXX Fold into kvm_subr.c */
 extern unsigned short kvm_read_fs(void);
 extern unsigned short kvm_read_gs(void);
 extern unsigned short kvm_read_ldt(void);
@@ -854,8 +853,6 @@ enum {
 	_ASM_PTR " 666b, 667b \n\t" \
 	".popsection \n\t"
 
-#define	KVM_ARCH_WANT_MMU_NOTIFIER
-
 int kvm_unmap_hva(struct kvm *kvm, unsigned long hva);
 int kvm_age_hva(struct kvm *kvm, unsigned long hva);
 void kvm_set_spte_hva(struct kvm *kvm, unsigned long hva, pte_t pte);
@@ -868,8 +865,6 @@ void kvm_define_shared_msr(unsigned index, uint32_t msr);
 void kvm_set_shared_msr(struct kvm_vcpu *, unsigned index, uint64_t val,
     uint64_t mask);
 
-/* XXX Readdress after kvm/kvm_x86.c refactor */
-extern int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rv);
 #define	NMI_VECTOR 0x02
 
 #endif

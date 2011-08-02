@@ -300,13 +300,11 @@ FNAME(update_pte)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *page,
 	pte_access = page->role.access & FNAME(gpte_access)(vcpu, gpte);
 	if (gpte_to_gfn(gpte) != vcpu->arch.update_pte.gfn)
 		return;
+
 	pfn = vcpu->arch.update_pte.pfn;
 	if (is_error_pfn(pfn))
 		return;
-#ifdef XXX
-	if (mmu_notifier_retry(vcpu, vcpu->arch.update_pte.mmu_seq))
-		return;
-#endif
+
 	kvm_get_pfn(vcpu, pfn);
 	/*
 	 * we call mmu_set_spte() with reset_host_protection = 1 beacuse that
@@ -316,19 +314,6 @@ FNAME(update_pte)(struct kvm_vcpu *vcpu, struct kvm_mmu_page *page,
 	    gpte & PT_DIRTY_MASK, NULL, PT_PAGE_TABLE_LEVEL,
 	    gpte_to_gfn(gpte), pfn, 1, 1);
 }
-
-
-extern struct kvm_mmu_page *kvm_mmu_get_page(struct kvm_vcpu *vcpu,
-    gfn_t gfn, gva_t gaddr, unsigned level, int direct, unsigned access,
-    uint64_t *parent_pte);
-extern int is_shadow_present_pte(uint64_t pte);
-extern void kvm_release_pfn_clean(pfn_t pfn);
-extern void kvm_mmu_put_page(struct kvm_mmu_page *sp, uint64_t *parent_pte);
-extern int set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep,
-    unsigned pte_access, int user_fault, int write_fault, int dirty, int level,
-    gfn_t gfn, pfn_t pfn, int speculative, int can_unsync,
-    int reset_host_protection);
-
 
 /*
  * Fetch a shadow pte for a specific level in the paging hierarchy.
@@ -437,12 +422,6 @@ FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	int level = PT_PAGE_TABLE_LEVEL;
 	unsigned long mmu_seq;
 
-#ifdef XXX
-	/* XXX -this is not needed, we have dtrace! */
-	pgprintk("%s: addr %lx err %x\n", __func__, addr, error_code);
-	kvm_mmu_audit(vcpu, "pre page fault");
-#endif /* XXX */
-
 	r = mmu_topup_memory_caches(vcpu);
 	if (r)
 		return (r);
@@ -469,9 +448,6 @@ FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 		level = MIN(walker.level, mapping_level(vcpu, walker.gfn));
 		walker.gfn = walker.gfn & ~(KVM_PAGES_PER_HPAGE(level) - 1);
 	}
-#ifdef XXX
-	mmu_seq = vcpu->kvm->mmu_notifier_seq;
-#endif /* XXX */
 	smp_rmb();
 	pfn = gfn_to_pfn(vcpu->kvm, walker.gfn);
 
@@ -485,17 +461,9 @@ FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	}
 
 	mutex_enter(&vcpu->kvm->mmu_lock);
-#ifdef XXX
-	if (mmu_notifier_retry(vcpu, mmu_seq))
-		goto out_unlock;
-#endif /* XXX */
 	kvm_mmu_free_some_pages(vcpu);
 	sptep = FNAME(fetch)(vcpu, addr, &walker, user_fault, write_fault,
 	    level, &write_pt, pfn);
-#ifdef DEBUG
-	cmn_err(CE_NOTE, "%s: shadow pte %p %lx ptwrite %d\n", __func__,
-	    sptep, *sptep, write_pt);
-#endif /* DEBUG */
 
 	if (!write_pt)
 		vcpu->arch.last_pt_write_count = 0; /* reset fork detector */
