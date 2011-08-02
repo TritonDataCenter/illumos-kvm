@@ -1068,7 +1068,7 @@ kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn)
 	gfn = unalias_gfn_instantiation(kvm, gfn);
 
 	mutex_enter(&kvm->memslots_lock);
- 	slots = kvm->memslots;
+	slots = kvm->memslots;
 
 	for (i = 0; i < KVM_MEMORY_SLOTS; ++i) {
 		struct kvm_memory_slot *memslot = &slots->memslots[i];
@@ -1126,7 +1126,7 @@ memslot_id(struct kvm *kvm, gfn_t gfn)
 	gfn = unalias_gfn(kvm, gfn);
 
 	mutex_enter(&kvm->memslots_lock);
- 	slots = kvm->memslots;
+	slots = kvm->memslots;
 	for (i = 0; i < slots->nmemslots; ++i) {
 		memslot = &slots->memslots[i];
 

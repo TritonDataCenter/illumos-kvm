@@ -725,7 +725,6 @@ kvm_set_time_scale(uint32_t tsc_khz, struct pvclock_vcpu_time_info *hv_clock)
 	hv_clock->tsc_to_system_mul = div_frac(nsecs, tps32);
 }
 
-/* XXX Expected to be per cpu */
 static uint64_t cpu_tsc_khz;
 /* XXX extern?! */
 extern uint64_t cpu_freq_hz;
@@ -747,12 +746,6 @@ kvm_write_guest_time(struct kvm_vcpu *v)
 		kvm_set_time_scale(this_tsc_khz, &vcpu->hv_clock);
 		vcpu->hv_clock_tsc_khz = this_tsc_khz;
 	}
-
-#ifdef XXX
-	put_cpu_var(cpu_tsc_khz);
-#else
-	XXX_KVM_PROBE;
-#endif
 
 #ifdef XXX
 	/* Keep irq disabled to prevent changes to the clock */
@@ -1621,22 +1614,10 @@ kvm_dev_ioctl_check_extension(long ext, int *rval_p)
 	return (r);
 }
 
-/* XXX Some part of kvm_ioctl goes here? */
-
 void
 kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	kvm_x86_ops->vcpu_load(vcpu, cpu);
-#ifdef XXX
-	if (unlikely(per_cpu(cpu_tsc_khz, cpu) == 0)) {
-		unsigned long khz = cpufreq_quick_get(cpu);
-		if (!khz)
-			khz = tsc_khz;
-		per_cpu(cpu_tsc_khz, cpu) = khz;
-	}
-#else
-	XXX_KVM_PROBE;
-#endif
 	kvm_request_guest_time_update(vcpu);
 }
 
@@ -1782,10 +1763,9 @@ do_cpuid_ent(struct kvm_cpuid_entry2 *entry, uint32_t function,
 		F(3DNOWPREFETCH) | 0 /* OSVW */ | 0 /* IBS */ | F(SSE5) |
 		0 /* SKINIT */ | 0 /* WDT */;
 
-	/* all calls to cpuid_count() should be made on the same cpu */
-	/* XXX - right now, system panics at ddi_exit_critical() */
-	/* XXX - to run everything on same cpu, bind qemu at startup */
-
+	/*
+	 * Keep us from migrating between cpuid calls.
+	 */
 	kpreempt_disable();
 
 	do_cpuid_1_ent(entry, function, index);
@@ -1861,11 +1841,7 @@ do_cpuid_ent(struct kvm_cpuid_entry2 *entry, uint32_t function,
 		entry->ecx &= kvm_supported_word6_x86_features;
 		break;
 	}
-	/*
-	 * XXX - see comment above for ddi_enter_critical()
-	 *
-	 * ddi_exit_critical(ddic);
-	 */
+
 	kpreempt_enable();
 }
 
@@ -2328,8 +2304,6 @@ out:
 	return (r);
 }
 
-/* XXX kvm_arch_vm_ioctl */
-
 static void
 kvm_init_msr_list(void)
 {
@@ -2629,13 +2603,6 @@ kvm_report_emulation_failure(struct kvm_vcpu *vcpu, const char *context)
 	unsigned long rip = kvm_rip_read(vcpu);
 	unsigned long rip_linear;
 
-#ifdef XXX
-	if (!printk_ratelimit())
-		return;
-#else
-	XXX_KVM_PROBE;
-#endif
-
 	rip_linear = rip + get_segment_base(vcpu, VCPU_SREG_CS);
 
 	kvm_read_guest_virt(rip_linear, (void *)opcodes, 4, vcpu, NULL);
@@ -2933,11 +2900,10 @@ kvm_timer_init(void)
 	int cpu;
 
 	/*
-	 * XXX We assume that any machine running solaris kvm
-	 * has constant time stamp counter increment rate.
-	 * This will be true for all but older machines.
+	 * We assume a constant time stamp counter increment rate, which
+	 * is true for all CPUs that support hardware virtualization
+	 * extensions.
 	 */
-	/* assume pi_clock in mhz */
 	cpu_tsc_khz = (cpu_freq_hz / 1000);
 }
 
