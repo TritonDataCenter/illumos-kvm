@@ -17,6 +17,7 @@
  *
  */
 #include <sys/sysmacros.h>
+#include <sys/atomic.h>
 
 /*
  * We need the mmu code to access both 32-bit and 64-bit guest ptes,
@@ -35,7 +36,7 @@
 #define	PT_LEVEL_MASK(level) PT64_LEVEL_MASK(level)
 #define	PT_LEVEL_BITS PT64_LEVEL_BITS
 #define	PT_MAX_FULL_LEVELS 4
-#define	CMPXCHG cmpxchg
+#define	CMPXCHG atomic_cas_64
 
 #elif PTTYPE == 32
 
@@ -49,7 +50,7 @@
 #define	PT_LEVEL_MASK(level) PT32_LEVEL_MASK(level)
 #define	PT_LEVEL_BITS PT32_LEVEL_BITS
 #define	PT_MAX_FULL_LEVELS 2
-#define	CMPXCHG cmpxchg
+#define	CMPXCHG atomic_cas_32
 
 #else
 
@@ -93,7 +94,7 @@ FNAME(cmpxchg_gpte)(struct kvm *kvm, gfn_t table_gfn, unsigned index,
 	page = gfn_to_page(kvm, table_gfn);
 
 	table = (pt_element_t *)page_address(page);
-#ifdef XXX
+#ifndef XXX
 	ret = CMPXCHG(&table[index], orig_pte, new_pte);
 	kvm_release_page_dirty(page);
 #else
@@ -143,19 +144,13 @@ FNAME(walk_addr)(struct guest_walker *walker, struct kvm_vcpu *vcpu,
 	gpa_t pte_gpa;
 	int rsvd_fault = 0;
 
-#ifdef XXX
-	trace_kvm_mmu_pagetable_walk(addr, write_fault, user_fault,
-	    fetch_fault);
-#endif /* XXX */
 walk:
 	walker->level = vcpu->arch.mmu.root_level;
 	pte = vcpu->arch.cr3;
 #if PTTYPE == 64
 	if (!is_long_mode(vcpu)) {
 		pte = kvm_pdptr_read(vcpu, (addr >> 30) & 3);
-#ifdef XXX
-		trace_kvm_mmu_paging_element(pte, walker->level);
-#endif /* XXX */
+
 		if (!is_present_gpte(pte))
 			goto not_present;
 		--walker->level;
@@ -178,10 +173,6 @@ walk:
 		if (kvm_read_guest(vcpu->kvm, pte_gpa, &pte, sizeof (pte)))
 			goto not_present;
 
-#ifdef XXX
-		trace_kvm_mmu_paging_element(pte, walker->level);
-#endif /* XXX */
-
 		if (!is_present_gpte(pte))
 			goto not_present;
 
@@ -202,10 +193,6 @@ walk:
 #endif
 
 		if (!(pte & PT_ACCESSED_MASK)) {
-#ifdef XXX
-			trace_kvm_mmu_set_accessed_bit(table_gfn, index,
-			    sizeof (pte));
-#endif /* XXX */
 			mark_page_dirty(vcpu->kvm, table_gfn);
 			if (FNAME(cmpxchg_gpte)(vcpu->kvm, table_gfn,
 			    index, pte, pte|PT_ACCESSED_MASK))
@@ -245,9 +232,6 @@ walk:
 	if (write_fault && !is_dirty_gpte(pte)) {
 		int ret;
 
-#ifdef XXX
-		trace_kvm_mmu_set_dirty_bit(table_gfn, index, sizeof (pte));
-#endif /* XXX */
 		mark_page_dirty(vcpu->kvm, table_gfn);
 		ret = FNAME(cmpxchg_gpte)(vcpu->kvm, table_gfn, index, pte,
 			    pte|PT_DIRTY_MASK);
@@ -277,9 +261,7 @@ err:
 		walker->error_code |= PFERR_FETCH_MASK;
 	if (rsvd_fault)
 		walker->error_code |= PFERR_RSVD_MASK;
-#ifdef XXX
-	trace_kvm_mmu_walker_error(walker->error_code);
-#endif /* XXX */
+
 	return (0);
 }
 
@@ -436,9 +418,6 @@ FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	 * The page is not mapped by the guest.  Let the guest handle it.
 	 */
 	if (!r) {
-#ifdef XXX
-		pgprintk("%s: guest page fault\n", __func__);
-#endif /* XXX */
 		inject_page_fault(vcpu, addr, walker.error_code);
 		vcpu->arch.last_pt_write_count = 0; /* reset fork detector */
 		return (0);
@@ -453,9 +432,6 @@ FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 
 	/* mmio */
 	if (is_error_pfn(pfn)) {
-#ifdef XXX
-		pgprintk("gfn %lx is mmio\n", walker.gfn);
-#endif /* XXX */
 		kvm_release_pfn_clean(pfn);
 		return (1);
 	}
@@ -468,10 +444,6 @@ FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	if (!write_pt)
 		vcpu->arch.last_pt_write_count = 0; /* reset fork detector */
 
-#ifdef XXX
-	++vcpu->stat.pf_fixed;
-	kvm_mmu_audit(vcpu, "post page fault (fixed)");
-#endif /* XXX */
 	mutex_exit(&vcpu->kvm->mmu_lock);
 
 	return (write_pt);
@@ -502,10 +474,6 @@ FNAME(invlpg)(struct kvm_vcpu *vcpu, gva_t gva)
 
 			if (is_shadow_present_pte(*sptep)) {
 				rmap_remove(vcpu->kvm, sptep);
-#ifdef XXX
-				if (is_large_pte(*sptep))
-					--vcpu->kvm->stat.lpages;
-#endif /* XXX */
 				need_flush = 1;
 			}
 			__set_spte(sptep, shadow_trap_nonpresent_pte);
