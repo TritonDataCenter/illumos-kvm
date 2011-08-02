@@ -557,11 +557,6 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
 	vcpu->cpu = -1;
 	vcpu->kvm = kvm;
 	vcpu->vcpu_id = id;
-#ifdef XXX
-	init_waitqueue_head(&vcpu->wq);
-#else
-	XXX_KVM_PROBE;
-#endif
 	vcpu->run = ddi_umem_alloc(PAGESIZE * 2, DDI_UMEM_SLEEP, &vcpu->cookie);
 
 	r = kvm_arch_vcpu_init(vcpu);
@@ -690,12 +685,6 @@ kvm_create_vm(void)
 	kvmp->mm = curproc->p_as;
 	mutex_init(&kvmp->mmu_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->requests_lock, NULL, MUTEX_DRIVER, NULL);
-#ifdef XXX
-	kvm_eventfd_init(kvmp);
-#else
-	XXX_KVM_PROBE;
-#endif
-
 	mutex_init(&kvmp->lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->memslots_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->irq_lock, NULL, MUTEX_DRIVER, NULL);
@@ -1045,14 +1034,10 @@ struct kvm_memory_slot *
 gfn_to_memslot_unaliased(struct kvm *kvm, gfn_t gfn)
 {
 	int i;
-#ifdef XXX_KVM_DECLARATION
-	struct kvm_memslots *slots = rcu_dereference(kvm->memslots);
-#else
 	struct kvm_memslots *slots;
 
 	mutex_enter(&kvm->memslots_lock);
 	slots = kvm->memslots;
-#endif
 
 	for (i = 0; i < slots->nmemslots; ++i) {
 		struct kvm_memory_slot *memslot = &slots->memslots[i];
@@ -1077,16 +1062,13 @@ gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
 int
 kvm_is_visible_gfn(struct kvm *kvm, gfn_t gfn)
 {
+	struct kvm_memslots *slots;
 	int i;
-#ifdef XXX_KVM_DECLARATION
-	struct kvm_memslots *slots = rcu_dereference(kvm->memslots);
-#else
-	struct kvm_memslots *slots = kvm->memslots;
-#endif
 
 	gfn = unalias_gfn_instantiation(kvm, gfn);
 
 	mutex_enter(&kvm->memslots_lock);
+ 	slots = kvm->memslots;
 
 	for (i = 0; i < KVM_MEMORY_SLOTS; ++i) {
 		struct kvm_memory_slot *memslot = &slots->memslots[i];
@@ -1138,15 +1120,13 @@ int
 memslot_id(struct kvm *kvm, gfn_t gfn)
 {
 	int i;
-#ifdef XXX_KVM_DECLARATION
-	struct kvm_memslots *slots = rcu_dereference(kvm->memslots);
-#else
-	struct kvm_memslots *slots = kvm->memslots;
-#endif
+	struct kvm_memslots *slots;
 	struct kvm_memory_slot *memslot = NULL;
 
 	gfn = unalias_gfn(kvm, gfn);
+
 	mutex_enter(&kvm->memslots_lock);
+ 	slots = kvm->memslots;
 	for (i = 0; i < slots->nmemslots; ++i) {
 		memslot = &slots->memslots[i];
 
@@ -1503,24 +1483,13 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p)
 	if (vcpu == NULL)
 		return (EINVAL);
 
-#ifdef XXX
-	preempt_notifier_init(&vcpu->preempt_notifier, &kvm_preempt_ops);
-#else
-	XXX_KVM_PROBE;
-#endif
-
 	r = kvm_arch_vcpu_setup(vcpu);
 	if (r)
 		return (r);
 
 	mutex_enter(&kvm->lock);
 
-#ifdef XXX
-	if (atomic_read(&kvm->online_vcpus) == KVM_MAX_VCPUS) {
-#else
-	XXX_KVM_SYNC_PROBE;
 	if (kvm->online_vcpus == KVM_MAX_VCPUS) {
-#endif
 		r = EINVAL;
 		goto vcpu_destroy;
 	}
@@ -1542,7 +1511,6 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p)
 	*rval_p = kvm->online_vcpus;  /* guarantee unique id */
 	vcpu->vcpu_id = *rval_p;
 
-	/* XXX need to protect online_vcpus */
 	kvm->vcpus[kvm->online_vcpus] = vcpu;
 
 	smp_wmb();
@@ -1820,107 +1788,25 @@ kvm_init(void *opaque)
 	bad_page = alloc_page(KM_SLEEP, &bad_page_kma);
 	bad_pfn = bad_page->p_pagenum;
 
-#ifdef XXX
-	if (!zalloc_cpumask_var(&cpus_hardware_enabled, GFP_KERNEL)) {
-		r = -ENOMEM;
-		goto out_free_0;
-	}
-#else
-	XXX_KVM_PROBE;
-#endif
 	r = kvm_arch_hardware_setup();
 
 	if (r != DDI_SUCCESS)
-		goto out_free_0a;
+		goto out_free;
 
-#ifdef XXX
-	for_each_online_cpu(cpu) {
-		smp_call_function_single(cpu,
-				kvm_arch_check_processor_compat,
-				&r, 1);
-		if (r < 0)
-			goto out_free_1;
-	}
-#else
 	r = 0;
 	kvm_xcall(KVM_CPUALL, kvm_arch_check_processor_compat, &r);
 	if (r < 0)
 		goto out_free_1;
-	XXX_KVM_PROBE;
-#endif
-
-
-#ifdef XXX
-	r = register_cpu_notifier(&kvm_cpu_notifier);
-	if (r)
-		goto out_free_2;
-	register_reboot_notifier(&kvm_reboot_notifier);
-
-	r = sysdev_class_register(&kvm_sysdev_class);
-	if (r)
-		goto out_free_3;
-
-	r = sysdev_register(&kvm_sysdev);
-	if (r)
-		goto out_free_4;
-#else
-	XXX_KVM_PROBE;
-#endif
-
-#ifdef XXX
-	kvm_chardev_ops.owner = module;
-	kvm_vm_fops.owner = module;
-	kvm_vcpu_fops.owner = module;
-
-	r = misc_register(&kvm_dev);
-	if (r) {
-		cmn_err(CE_WARN, "kvm: misc device register failed\n");
-		goto out_free;
-	}
-
-	/*
-	 * XXX - if kernel preemption occurs, we probably need
-	 * to implement these, and add hooks to the preemption code.
-	 * For right now, we'll make the totally unreasonable
-	 * assumption that we won't be preempted while in the
-	 * kernel, i.e., no realtime threads are running
-	 */
-	kvm_preempt_ops.sched_in = kvm_sched_in;
-	kvm_preempt_ops.sched_out = kvm_sched_out;
-
-	kvm_init_debug();
-#else
-	XXX_KVM_PROBE;
-#endif
 
 	return (0);
 
-out_free:
-out_free_5:
-#ifdef XXX
-	sysdev_unregister(&kvm_sysdev);
-out_free_4:
-	sysdev_class_unregister(&kvm_sysdev_class);
-out_free_3:
-	unregister_reboot_notifier(&kvm_reboot_notifier);
-	unregister_cpu_notifier(&kvm_cpu_notifier);
-#else
-	XXX_KVM_PROBE;
-#endif
-out_free_2:
 out_free_1:
 #ifdef XXX
 	kvm_arch_hardware_unsetup();
 #else
 	XXX_KVM_PROBE;
 #endif
-out_free_0a:
-#ifdef XXX
-	free_cpumask_var(cpus_hardware_enabled);
-#else
-	XXX_KVM_PROBE;
-#endif
-out_free_0:
+out_free:
 	kmem_free(bad_page_kma, PAGESIZE);
 out:
 #ifdef XXX

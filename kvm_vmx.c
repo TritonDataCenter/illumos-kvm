@@ -513,11 +513,6 @@ vcpu_clear(struct vcpu_vmx *vmx)
 	if (vmx->vcpu.cpu == -1)
 		return;
 
-	/*
-	 * XXX: commented out below?
-	 *
-	 * smp_call_function_single(vmx->vcpu.cpu, __vcpu_clear, vmx, 1);
-	 */
 	kvm_xcall(vmx->vcpu.cpu, __vcpu_clear, vmx);
 }
 
@@ -1549,11 +1544,8 @@ vmx_hardware_setup(void)
 {
 	if (setup_vmcs_config(&vmcs_config) != DDI_SUCCESS)
 		return (EIO);
-#ifdef XXX
-	if (boot_cpu_has(X86_FEATURE_NX))
-#else
-	XXX_KVM_PROBE;
-#endif
+
+	if (is_x86_feature(x86_featureset, X86FSET_NX))
 		kvm_enable_efer_bits(EFER_NX);
 
 	if (!cpu_has_vmx_vpid())
