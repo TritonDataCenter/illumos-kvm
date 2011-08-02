@@ -65,7 +65,7 @@ if [[ ! -d .git ]]; then
 	fatal "must be in the root directory of the repo"
 fi
 
-gmake clean
+make clean
 
 if ! git checkout master > /dev/null 2>&1 ; then
 	fatal "could not checkout master"
