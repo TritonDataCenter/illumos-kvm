@@ -106,8 +106,7 @@ kvm_coalesced_mmio_init(struct kvm *kvm)
 
 	ret = -ENOMEM;
 	dev = kmem_zalloc(sizeof (struct kvm_coalesced_mmio_dev), KM_SLEEP);
-	if (!dev)
-		goto out_free_page;
+
 	mutex_init(&dev->lock, NULL, MUTEX_DRIVER, 0);
 	kvm_iodevice_init(&dev->dev, &coalesced_mmio_ops);
 	dev->kvm = kvm;
@@ -123,12 +122,6 @@ kvm_coalesced_mmio_init(struct kvm *kvm)
 
 out_free_dev:
 	kmem_free(dev, sizeof (struct kvm_coalesced_mmio_dev));
-out_free_page:
-#ifdef XXX
-	kmem_free(page, PAGESIZE);
-#else
-	XXX_KVM_PROBE;
-#endif
 	ddi_umem_free(kvm->mmio_cookie);
 	return (ret);
 }

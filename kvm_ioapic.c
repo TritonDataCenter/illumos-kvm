@@ -100,11 +100,7 @@ ioapic_service(struct kvm_ioapic *ioapic, unsigned int idx)
 static void
 update_handled_vectors(struct kvm_ioapic *ioapic)
 {
-#ifdef XXX_KVM_DECLARATION
-	BITMAP_VECTORS(handled_vectors, 256);
-#else
 	unsigned long handled_vectors[4];
-#endif
 	int i;
 
 	memset(handled_vectors, 0, sizeof (handled_vectors));

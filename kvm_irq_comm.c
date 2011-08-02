@@ -242,15 +242,10 @@ kvm_free_irq_source_id(struct kvm *kvm, int irq_source_id)
 	ASSERT(irq_source_id != KVM_USERSPACE_IRQ_SOURCE_ID);
 
 	mutex_enter(&kvm->irq_lock);
-	if (irq_source_id < 0 ||
-	    irq_source_id >= BITS_PER_LONG) {
-#ifdef XXX
-		printk(KERN_ERR "kvm: IRQ source ID out of range!\n");
-#else
-		XXX_KVM_PROBE;
-#endif
+
+	if (irq_source_id < 0 || irq_source_id >= BITS_PER_LONG)
 		goto unlock;
-	}
+
 	clear_bit(irq_source_id, &kvm->arch.irq_sources_bitmap);
 	if (!irqchip_in_kernel(kvm))
 		goto unlock;
@@ -395,13 +390,6 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 
 	nr_rt_entries += 1;
 
-#ifdef XXX
-	new = kmem_zalloc(sizeof (*new) + (nr_rt_entries * sizeof (list_t)) +
-	    (nr * sz), KM_SLEEP);
-
-	new->rt_entries = (void *)&new->map[nr_rt_entries];
-#else
-	XXX_KVM_PROBE;
 	new = kmem_zalloc(sizeof (*new), KM_SLEEP);
 
 	for (i = 0; i < KVM_MAX_IRQ_ROUTES; i++) {
@@ -411,8 +399,6 @@ kvm_set_irq_routing(struct kvm *kvm, const struct kvm_irq_routing_entry *ue,
 
 	new->rt_entries = kmem_zalloc(sz * nr, KM_SLEEP);
 	newsz = sz * nr;
-
-#endif
 
 	new->nr_rt_entries = nr_rt_entries;
 	for (i = 0; i < 3; i++)
