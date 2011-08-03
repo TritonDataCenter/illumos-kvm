@@ -65,7 +65,9 @@ if [[ ! -d .git ]]; then
 	fatal "must be in the root directory of the repo"
 fi
 
-make clean
+if [[ `uname -s` == "SunOS" ]]; then
+	make clean
+fi
 
 if ! git checkout master > /dev/null 2>&1 ; then
 	fatal "could not checkout master"
