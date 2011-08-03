@@ -94,20 +94,8 @@ FNAME(cmpxchg_gpte)(struct kvm *kvm, gfn_t table_gfn, unsigned index,
 	page = gfn_to_page(kvm, table_gfn);
 
 	table = (pt_element_t *)page_address(page);
-#ifndef XXX
 	ret = CMPXCHG(&table[index], orig_pte, new_pte);
 	kvm_release_page_dirty(page);
-#else
-	/*
-	 * XXX - The following needs to be made atomic...
-	 */
-
-	ret = table[index];
-	if (table[index] == orig_pte)
-		table[index] = new_pte;
-
-	kvm_release_page_dirty(page);
-#endif /* XXX */
 
 	return (ret != orig_pte);
 }
