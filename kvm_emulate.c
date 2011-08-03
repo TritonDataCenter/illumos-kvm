@@ -54,35 +54,7 @@
 #include "processor-flags.h"
 #include "kvm_iodev.h"
 #include "kvm.h"
-
-/*
- * XXX These extern declarations shouldn't be necessary. We need proper header
- * file management
- */
-extern int kvm_load_segment_descriptor(struct kvm_vcpu *vcpu, uint16_t selector,
-    int seg);
-extern void kvm_get_segment(struct kvm_vcpu *vcpu,
-    struct kvm_segment *var, int seg);
-extern unsigned long kvm_get_rflags(struct kvm_vcpu *vcpu);
-extern ulong kvm_read_cr0(struct kvm_vcpu *vcpu);
-extern unsigned long kvm_get_cr8(struct kvm_vcpu *vcpu);
-extern void kvm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
-extern void kvm_set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3);
-extern void kvm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
-extern void kvm_set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8);
-extern void kvm_lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
-extern gpa_t kvm_mmu_gva_to_gpa_write(struct kvm_vcpu *vcpu, gva_t gva,
-    uint32_t *error);
-extern int kvm_get_msr(struct kvm_vcpu *vcpu, uint32_t msr_index,
-    uint64_t *pdata);
-extern int kvm_set_msr(struct kvm_vcpu *vcpu, uint32_t msr_index,
-    uint64_t data);
-extern int complete_pio(struct kvm_vcpu *vcpu);
-extern void kvm_queue_exception(struct kvm_vcpu *vcpu, unsigned nr);
-extern void kvm_inject_page_fault(struct kvm_vcpu *vcpu, unsigned long addr,
-    uint32_t);
-extern ulong kvm_read_cr0_bits(struct kvm_vcpu *, ulong);
-
+#include "kvm_cache_regs.h"
 
 /*
  * Indirect stringification.  Doing two levels allows the parameter to be a
