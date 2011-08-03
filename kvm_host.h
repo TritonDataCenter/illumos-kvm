@@ -194,6 +194,7 @@ typedef struct kvm {
 	struct list_node vm_list;
 	kmutex_t lock;
 	struct kvm_io_bus *buses[KVM_NR_BUSES];
+	kmutex_t buses_lock;
 	struct kstat *kvm_kstat;
 	kvm_stats_t kvm_stats;
 	struct kvm_arch arch;

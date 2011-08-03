@@ -627,6 +627,7 @@ kvm_destroy_vm(struct kvm *kvmp)
 	mutex_destroy(&kvmp->lock);
 	mutex_destroy(&kvmp->requests_lock);
 	mutex_destroy(&kvmp->mmu_lock);
+	mutex_destroy(&kvmp->buses_lock);
 	kvm_fini_mmu_notifier(kvmp);
 
 	for (ii = 0; ii < KVM_NR_BUSES; ii++)
@@ -684,6 +685,7 @@ kvm_create_vm(void)
 	mutex_init(&kvmp->irq_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->slots_lock, NULL, MUTEX_DRIVER, NULL);
 	mutex_init(&kvmp->kvm_avllock, NULL, MUTEX_DRIVER, NULL);
+	mutex_init(&kvmp->buses_lock, NULL, MUTEX_DRIVER, NULL);
 	avl_create(&kvmp->kvm_avlmp, kvm_avlmmucmp, sizeof (kvm_mmu_page_t),
 	    offsetof(kvm_mmu_page_t, kmp_avlnode));
 
@@ -1618,16 +1620,18 @@ kvm_io_bus_write(struct kvm *kvm, enum kvm_bus bus_idx, gpa_t addr,
     int len, const void *val)
 {
 	int i;
-#ifdef XXX_KVM_DECLARATION
-	struct kvm_io_bus *bus = rcu_dereference(kvm->buses[bus_idx]);
-#else
-	struct kvm_io_bus *bus = kvm->buses[bus_idx];
-#endif
+	struct kvm_io_bus *bus;
+
+	mutex_enter(&kvm->buses_lock);
+	bus = kvm->buses[bus_idx];
 
 	for (i = 0; i < bus->dev_count; i++) {
-		if (!kvm_iodevice_write(bus->devs[i], addr, len, val))
+		if (!kvm_iodevice_write(bus->devs[i], addr, len, val)) {
+			mutex_exit(&kvm->buses_lock);
 			return (0);
+		}
 	}
+	mutex_exit(&kvm->buses_lock);
 
 	return (-EOPNOTSUPP);
 }
@@ -1638,16 +1642,17 @@ kvm_io_bus_read(struct kvm *kvm, enum kvm_bus bus_idx, gpa_t addr,
     int len, void *val)
 {
 	int i;
-#ifdef XXX_KVM_DECLARATION
-	struct kvm_io_bus *bus = rcu_dereference(kvm->buses[bus_idx]);
-#else
-	struct kvm_io_bus *bus = kvm->buses[bus_idx];
-#endif
+	struct kvm_io_bus *bus;
 
+	mutex_enter(&kvm->buses_lock);
+	bus = kvm->buses[bus_idx];
 	for (i = 0; i < bus->dev_count; i++) {
-		if (!kvm_iodevice_read(bus->devs[i], addr, len, val))
+		if (!kvm_iodevice_read(bus->devs[i], addr, len, val)) {
+			mutex_exit(&kvm->buses_lock);
 			return (0);
+		}
 	}
+	mutex_exit(&kvm->buses_lock);
 
 	return (-EOPNOTSUPP);
 }
@@ -1659,22 +1664,24 @@ kvm_io_bus_register_dev(struct kvm *kvm,
 {
 	struct kvm_io_bus *new_bus, *bus;
 
-	bus = kvm->buses[bus_idx];
-	if (bus->dev_count > NR_IOBUS_DEVS-1)
-		return (-ENOSPC);
-
 	new_bus = kmem_zalloc(sizeof (struct kvm_io_bus), KM_SLEEP);
 	if (!new_bus)
 		return (-ENOMEM);
+
+	mutex_enter(&kvm->buses_lock);
+	bus = kvm->buses[bus_idx];
+	if (bus->dev_count > NR_IOBUS_DEVS-1) {
+		mutex_exit(&kvm->buses_lock);
+		kmem_free(new_bus, sizeof (struct kvm_io_bus));
+		return (-ENOSPC);
+	}
+
 	memcpy(new_bus, bus, sizeof (struct kvm_io_bus));
 	new_bus->devs[new_bus->dev_count++] = dev;
-#ifdef XXX
-	rcu_assign_pointer(kvm->buses[bus_idx], new_bus);
-	synchronize_srcu_expedited(&kvm->srcu);
-#else
-	XXX_KVM_PROBE;
+
 	kvm->buses[bus_idx] = new_bus;
-#endif
+	mutex_exit(&kvm->buses_lock);
+
 	if (bus)
 		kmem_free(bus, sizeof (struct kvm_io_bus));
 
@@ -1693,6 +1700,7 @@ kvm_io_bus_unregister_dev(struct kvm *kvm,
 	if (!new_bus)
 		return (-ENOMEM);
 
+	mutex_enter(&kvm->buses_lock);
 	bus = kvm->buses[bus_idx];
 	memcpy(new_bus, bus, sizeof (struct kvm_io_bus));
 
@@ -1706,17 +1714,14 @@ kvm_io_bus_unregister_dev(struct kvm *kvm,
 	}
 
 	if (r) {
+		mutex_exit(&kvm->buses_lock);
 		kmem_free(new_bus, sizeof (struct kvm_io_bus));
 		return (r);
 	}
 
-#ifdef XXX
-	rcu_assign_pointer(kvm->buses[bus_idx], new_bus);
-	synchronize_srcu_expedited(&kvm->srcu);
-#else
-	XXX_KVM_SYNC_PROBE;
 	kvm->buses[bus_idx] = new_bus;
-#endif
+	mutex_exit(&kvm->buses_lock);
+
 	kmem_free(bus, sizeof (struct kvm_io_bus));
 	return (r);
 }
