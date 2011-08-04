@@ -59,6 +59,7 @@ typedef struct kvm_vcpu_stats {
 	kstat_named_t kvmvs_pf_guest;		/* injected guest pagefaults */
 	kstat_named_t kvmvs_pf_fixed;		/* fixed pagefaults */
 	kstat_named_t kvmvs_hypercalls;		/* hypercalls (VMCALL instrn) */
+	kstat_named_t kvmvs_zonename;		/* vcpu zone name */
 } kvm_vcpu_stats_t;
 
 #define	KVM_VCPU_KSTAT_INIT(vcpu, field, name) \
@@ -78,6 +79,7 @@ typedef struct kvm_stats {
 	kstat_named_t kvmks_remote_tlb_flush;	/* remote TLB flushes */
 	kstat_named_t kvmks_lpages;		/* large pages in use */
 	kstat_named_t kvmks_mmu_unsync_page;	/* number of unsynced pages */
+	kstat_named_t kvmks_zonename;		/* zone this is running in */
 } kvm_stats_t;
 
 #define	KVM_KSTAT_INIT(kvmp, field, name) \

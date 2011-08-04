@@ -4685,6 +4685,8 @@ kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 
 	vcpu->kvcpu_kstat = kstat;
 	vcpu->kvcpu_kstat->ks_data = &vcpu->kvcpu_stats;
+	vcpu->kvcpu_kstat->ks_data_size +=
+	    strlen(curproc->p_zone->zone_name) + 1;
 
 	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_id, "id");
 	vcpu->kvcpu_stats.kvmvs_id.value.ui64 = kvm->kvmid;
@@ -4713,6 +4715,8 @@ kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_pf_guest, "pf-guest");
 	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_pf_fixed, "pf-fixed");
 	KVM_VCPU_KSTAT_INIT(vcpu, kvmvs_hypercalls, "hypercalls");
+	kstat_named_init(&(vcpu->kvcpu_stats.kvmvs_zonename), "zonename", KSTAT_DATA_STRING);
+	kstat_named_setstr(&(vcpu->kvcpu_stats.kvmvs_zonename), curproc->p_zone->zone_name);
 
 	kstat_install(vcpu->kvcpu_kstat);
 
