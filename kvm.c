@@ -718,8 +718,10 @@ kvm_create_vm(void)
 	KVM_KSTAT_INIT(kvmp, kvmks_remote_tlb_flush, "remote-tlb-flush");
 	KVM_KSTAT_INIT(kvmp, kvmks_lpages, "lpages");
 	KVM_KSTAT_INIT(kvmp, kvmks_mmu_unsync_page, "mmu-unsync-page");
-	kstat_named_init(&(kvmp->kvm_stats.kvmks_zonename), "zonename", KSTAT_DATA_STRING);
-	kstat_named_setstr(&(kvmp->kvm_stats.kvmks_zonename), curproc->p_zone->zone_name);
+	kstat_named_init(&(kvmp->kvm_stats.kvmks_zonename), "zonename",
+	    KSTAT_DATA_STRING);
+	kstat_named_setstr(&(kvmp->kvm_stats.kvmks_zonename),
+	    curproc->p_zone->zone_name);
 
 	kstat_install(kvmp->kvm_kstat);
 
