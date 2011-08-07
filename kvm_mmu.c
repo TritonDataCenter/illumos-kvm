@@ -1946,11 +1946,13 @@ mmu_alloc_roots(struct kvm_vcpu *vcpu)
 		if (mmu_check_root(vcpu, root_gfn))
 			return (1);
 
+		mutex_enter(&vcpu->kvm->mmu_lock);
 		sp = kvm_mmu_get_page(vcpu, root_gfn, 0, PT64_ROOT_LEVEL,
 		    direct, ACC_ALL, NULL);
 		root = kvm_va2pa((caddr_t)sp->spt);
 
 		++sp->root_count;
+		mutex_exit(&vcpu->kvm->mmu_lock);
 		vcpu->arch.mmu.root_hpa = root;
 		return (0);
 	}
@@ -1973,10 +1975,14 @@ mmu_alloc_roots(struct kvm_vcpu *vcpu)
 			root_gfn = 0;
 		if (mmu_check_root(vcpu, root_gfn))
 			return (1);
-			sp = kvm_mmu_get_page(vcpu, root_gfn, i << 30,
+
+		mutex_enter(&vcpu->kvm->mmu_lock);
+		sp = kvm_mmu_get_page(vcpu, root_gfn, i << 30,
 			    PT32_ROOT_LEVEL, direct, ACC_ALL, NULL);
 		root = kvm_va2pa((caddr_t)sp->spt);
 		++sp->root_count;
+		mutex_exit(&vcpu->kvm->mmu_lock);
+
 		vcpu->arch.mmu.pae_root[i] = root | PT_PRESENT_MASK;
 	}
 	vcpu->arch.mmu.root_hpa = kvm_va2pa((caddr_t)vcpu->arch.mmu.pae_root);
@@ -2373,8 +2379,11 @@ kvm_mmu_load(struct kvm_vcpu *vcpu)
 		goto out;
 	mutex_enter(&vcpu->kvm->mmu_lock);
 	kvm_mmu_free_some_pages(vcpu);
+	mutex_exit(&vcpu->kvm->mmu_lock);
+
 	r = mmu_alloc_roots(vcpu);
 
+	mutex_enter(&vcpu->kvm->mmu_lock);
 	mmu_sync_roots(vcpu);
 	mutex_exit(&vcpu->kvm->mmu_lock);
 	if (r)
