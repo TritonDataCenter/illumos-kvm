@@ -652,12 +652,18 @@ do_set_msr(struct kvm_vcpu *vcpu, unsigned index, uint64_t *data)
 static void
 kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 {
-	static int version;
+	int version;
 	struct pvclock_wall_clock wc;
 	struct timespec boot;
 
 	if (!wall_clock)
 		return;
+
+	if (kvm_read_guest(kvm, wall_clock, &version, sizeof (version)) != 0)
+		return;
+
+	if (version & 1)
+		version++;	/* first time write, random junk */
 
 	version++;
 
