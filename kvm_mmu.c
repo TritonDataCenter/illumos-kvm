@@ -1659,6 +1659,9 @@ set_spte(struct kvm_vcpu *vcpu, uint64_t *sptep, unsigned pte_access,
 
 		spte |= PT_WRITABLE_MASK;
 
+		if (!tdp_enabled && !(pte_access & ACC_WRITE_MASK))
+			spte &= ~PT_USER_MASK;
+
 		/*
 		 * Optimization: for pte sync, if spte was writable the hash
 		 * lookup is unnecessary (and expensive). Write protection
