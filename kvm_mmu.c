@@ -2328,6 +2328,7 @@ init_kvm_softmmu(struct kvm_vcpu *vcpu)
 		r = paging32_init_context(vcpu);
 
 	vcpu->arch.mmu.base_role.glevels = vcpu->arch.mmu.root_level;
+	vcpu->arch.mmu.base_role.cr0_wp = is_write_protection(vcpu);
 
 	return (r);
 }
