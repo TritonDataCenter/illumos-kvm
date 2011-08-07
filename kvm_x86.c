@@ -1674,13 +1674,19 @@ kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid)
 	int r;
 	struct kvm_cpuid_entry2 *entries = cpuid->entries;
 
+	vcpu_load(vcpu);
+
 	cpuid->nent = vcpu->arch.cpuid_nent;
 
-	if (cpuid->nent < vcpu->arch.cpuid_nent)
+	if (cpuid->nent < vcpu->arch.cpuid_nent) {
+		vcpu_put(vcpu);
 		return (E2BIG);
+	}
 
 	bcopy(&vcpu->arch.cpuid_entries, cpuid->entries,
 	    vcpu->arch.cpuid_nent * sizeof (struct kvm_cpuid_entry2));
+
+	vcpu_put(vcpu);
 
 	return (0);
 }
@@ -1958,6 +1964,7 @@ kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu, uint64_t *mcg_capp)
 	uint64_t mcg_cap = *mcg_capp;
 	unsigned bank_num = mcg_cap & 0xff, bank;
 
+	vcpu_load(vcpu);
 	rval = -EINVAL;
 	if (!bank_num || bank_num >= KVM_MAX_MCE_BANKS)
 		goto out;
@@ -1970,8 +1977,9 @@ kvm_vcpu_ioctl_x86_setup_mce(struct kvm_vcpu *vcpu, uint64_t *mcg_capp)
 		vcpu->arch.mcg_ctl = ~(uint64_t)0;
 	/* Init IA32_MCi_CTL to all 1s */
 	for (bank = 0; bank < bank_num; bank++)
-		vcpu->arch.mce_banks[bank*4] = ~(uint64_t)0;
+		vcpu->arch.mce_banks[bank * 4] = ~(uint64_t)0;
 out:
+	vcpu_put(vcpu);
 	return (rval);
 }
 
