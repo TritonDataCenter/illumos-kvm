@@ -6,6 +6,8 @@
  * Copyright (c) 2005 Keir Fraser
  *
  * From: xen-unstable 10676:af9809f51f81a3c43f276f00c81a52ef558afda4
+ *
+ * Copyright (c) 2011 Joyent, Inc.
  */
 
 #ifndef _ASM_X86_KVM_X86_EMULATE_H

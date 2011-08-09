@@ -17,6 +17,7 @@
  * Authors:
  *   Yaozu (Eddie) Dong <Eddie.dong@intel.com>
  *
+ * Copyright 2011 Joyent, Inc. All Rights Reserved.
  */
 
 #ifndef __IRQ_H

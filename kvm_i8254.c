@@ -28,7 +28,6 @@
  *   Sheng Yang <sheng.yang@intel.com>
  *   Based on QEMU and Xen.
  *
- * This has been ported to illumos by Joyent.
  * Copyright 2011 Joyent, Inc. All rights reserved.
  */
 

@@ -23,6 +23,7 @@
  *    Avi Kivity <avi@qumranet.com>
  *    Yaniv Kamay <yaniv@qumranet.com>
  *
+ * Copyright 2011 Joyent, Inc.
  */
 
 /*

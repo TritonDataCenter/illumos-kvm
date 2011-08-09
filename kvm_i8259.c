@@ -25,7 +25,6 @@
  *   Yaozu (Eddie) Dong <Eddie.dong@intel.com>
  *   Port from Qemu.
  *
- * Ported from Linux to illumos by Joyent.
  * Copyright 2011 Joyent, Inc. All Rights Reserved.
  */
 

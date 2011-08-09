@@ -5,7 +5,6 @@
  *
  *  Author: Laurent Vivier <Laurent.Vivier@bull.net>
  *
- * Ported to illumos by Joyent.
  * Copyright 2011 Joyent, Inc. All Rights Reserved.
  */
 

@@ -17,7 +17,6 @@
  * Authors:
  *   Yaozu (Eddie) Dong <Eddie.dong@intel.com>
  *
- * Ported to illumos by Joyent.
  * Copyright 2011 Joyent, Inc. All rights reserved.
  */
 

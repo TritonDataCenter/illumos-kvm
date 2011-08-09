@@ -1,6 +1,9 @@
 /*
  * This work is licensed under the terms of the GNU GPL, version 2. See the
  * COPYING file in the top-level directory.
+ *
+ * Copyright 2011 various Linux Kernel contributors.
+ * Copyright 2011 Joyent, Inc. All Rights Reserved.
  */
 
 #ifndef __KVM_HOST_H

@@ -14,7 +14,6 @@
  * the COPYING file in the top-level directory.
  *
  * Copyright 2011 Joyent, Inc. All Rights Reserved.
- *
  */
 
 #include <sys/sysmacros.h>

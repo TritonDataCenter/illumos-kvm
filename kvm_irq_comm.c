@@ -17,6 +17,7 @@
  * Authors:
  *   Yaozu (Eddie) Dong <Eddie.dong@intel.com>
  *
+ * Copyright 2011 Joyent, Inc. All rights reserved.
  */
 
 #include <sys/mutex.h>

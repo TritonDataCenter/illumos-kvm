@@ -15,6 +15,7 @@
  * This work is licensed under the terms of the GNU GPL, version 2.  See
  * the COPYING file in the top-level directory.
  *
+ * Copyright 2011 Joyent, Inc. All rights reserved.
  */
 #include <sys/sysmacros.h>
 #include <sys/atomic.h>
