@@ -2973,8 +2973,7 @@ vmx_interrupt_allowed(struct kvm_vcpu *vcpu)
 	    (GUEST_INTR_STATE_STI | GUEST_INTR_STATE_MOV_SS)));
 }
 
-/* XXX Should be static! */
-int
+static int
 vmx_set_tss_addr(struct kvm *kvmp, uintptr_t addr)
 {
 	int ret;

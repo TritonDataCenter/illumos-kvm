@@ -464,9 +464,6 @@ extern int kvm_vcpu_is_bsp(struct kvm_vcpu *);
 
 extern void kvm_sigprocmask(int how, sigset_t *, sigset_t *);
 
-/*
- * XXX Is this really necessary? There really isn't another way to do it?
- */
 #define	offset_in_page(p)	((unsigned long)(p) & ~PAGEMASK)
 
 #define	page_to_pfn(page) (page->p_pagenum)

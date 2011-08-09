@@ -451,16 +451,7 @@ kvm_ctx_restore(void *arg)
 inline int
 kvm_is_mmio_pfn(pfn_t pfn)
 {
-	if (pfn != PFN_INVALID) {
-#ifdef XXX
-		struct page *page = compound_head(pfn_to_page(pfn));
-		return (PageReserved(page));
-#else
-		XXX_KVM_PROBE;
-#endif
-		return (0);
-	} else
-		return (1);
+	return (pfn == PFN_INVALID);
 }
 
 /*
@@ -588,7 +579,6 @@ static void
 kvm_destroy_vm(struct kvm *kvmp)
 {
 	int ii;
-	void *cookie;
 
 	if (kvmp == NULL)
 		return;
@@ -605,13 +595,6 @@ kvm_destroy_vm(struct kvm *kvmp)
 	kvm_coalesced_mmio_free(kvmp);
 
 	list_remove(&vm_list, kvmp);
-	/*
-	 * XXX: The fact that we're cleaning these up here means that we aren't
-	 * properly cleaning them up somewhere else.
-	 */
-	cookie = NULL;
-	while (avl_destroy_nodes(&kvmp->kvm_avlmp, &cookie) != NULL)
-		continue;
 	avl_destroy(&kvmp->kvm_avlmp);
 	mutex_destroy(&kvmp->kvm_avllock);
 	mutex_destroy(&kvmp->memslots_lock);
@@ -2671,7 +2654,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		/*
-		 * XXX This really just shouldn't need to exist, etc. and we
+		 * This really just shouldn't need to exist, etc. and we
 		 * should really get the hiwat value more intelligently at least
 		 * a #define or a tunable god forbid. Oh well, as bmc said
 		 * earlier:
