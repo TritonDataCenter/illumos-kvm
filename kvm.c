@@ -449,16 +449,10 @@ kvm_ctx_restore(void *arg)
 	kvm_arch_vcpu_load(vcpu, cpu);
 }
 
-#ifdef XXX_KVM_DECLARATION
-#define	pfn_valid(pfn) ((pfn < physmax) && (pfn != PFN_INVALID))
-#else
-#define	pfn_valid(pfn) (pfn != PFN_INVALID)
-#endif
-
 inline int
 kvm_is_mmio_pfn(pfn_t pfn)
 {
-	if (pfn_valid(pfn)) {
+	if (pfn != PFN_INVALID) {
 #ifdef XXX
 		struct page *page = compound_head(pfn_to_page(pfn));
 		return (PageReserved(page));
@@ -936,8 +930,6 @@ skip_lpage:
 		 * 	- kvm_is_visible_gfn (mmu_check_roots)
 		 */
 		kvm_arch_flush_shadow(kvmp);
-
-		/* XXX: how many bytes to free??? */
 		kmem_free(old_memslots, sizeof (struct kvm_memslots));
 	}
 
@@ -1299,18 +1291,8 @@ kvm_read_guest_atomic(struct kvm *kvm, gpa_t gpa, void *data, unsigned long len)
 	if (kvm_is_error_hva(addr))
 		return (-EFAULT);
 
-#ifdef XXX
-	pagefault_disable();
-#else
-	XXX_KVM_PROBE;
-#endif
-
 	r = copyin((caddr_t)addr + offset, data, len);
-#ifdef XXX
-	pagefault_enable();
-#else
-	XXX_KVM_PROBE;
-#endif
+
 	if (r)
 		return (-EFAULT);
 
@@ -1329,7 +1311,6 @@ kvm_write_guest_page(struct kvm *kvm,
 	if (kvm_is_error_hva(addr))
 		return (-EFAULT);
 
-	/* XXX - addr could be user or kernel */
 	if (addr >= kernelbase) {
 		bcopy(data, (caddr_t)(addr + offset), len);
 	} else {
@@ -1778,25 +1759,15 @@ out_fail:
 
 
 void
-kvm_guest_exit(void)
+kvm_guest_exit(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX
-	account_system_vtime(current);
-	current->flags &= ~PF_VCPU;
-#else
-	XXX_KVM_PROBE;
-#endif
+	KVM_TRACE1(guest__exit, struct kvm_vcpu *, vcpu);
 }
 
 void
-kvm_guest_enter(void)
+kvm_guest_enter(struct kvm_vcpu *vcpu)
 {
-#ifdef XXX
-	account_system_vtime(current);
-	current->flags |= PF_VCPU;
-#else
-	XXX_KVM_PROBE;
-#endif
+	KVM_TRACE1(guest__entry, struct kvm_vcpu *, vcpu);
 }
 
 /*
@@ -2017,20 +1988,12 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 	minor_t minor;
 	kvm_devstate_t *ksp;
 	void *argp = (void *)arg;
+	struct kvm_pit_config pit;
 
 	minor = getminor(dev);
 	ksp = ddi_get_soft_state(kvm_state, minor);
 	if (ksp == NULL)
 		return (ENXIO);
-
-	union {
-		struct kvm_pit_state ps;
-		struct kvm_pit_state2 ps2;
-#ifdef XXX_KVM_DECLARATION
-		struct kvm_memory_alias alias;
-#endif
-		struct kvm_pit_config pit_config;
-	} u;
 
 	struct {
 		int cmd;		/* command */
@@ -2211,8 +2174,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		break;
 
 	case KVM_CREATE_PIT2:
-		if (copyin(argp, &u.pit_config,
-		    sizeof (struct kvm_pit_config)) != 0) {
+		if (copyin(argp, &pit, sizeof (struct kvm_pit_config)) != 0) {
 			rval = EFAULT;
 			break;
 		}
@@ -2227,7 +2189,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		if (cmd == KVM_CREATE_PIT) {
-			u.pit_config.flags = KVM_PIT_SPEAKER_DUMMY;
+			pit.flags = KVM_PIT_SPEAKER_DUMMY;
 		} else {
 			ASSERT(cmd == KVM_CREATE_PIT2);
 		}
@@ -2237,7 +2199,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		if (kvmp->arch.vpit != NULL) {
 			rval = EEXIST;
 		} else if ((kvmp->arch.vpit = kvm_create_pit(kvmp,
-		    u.pit_config.flags)) == NULL) {
+		    pit.flags)) == NULL) {
 			rval = ENOMEM;
 		}
 
@@ -2739,11 +2701,9 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		*rv = 0;
 		break;
 	}
+
 	default:
-#ifndef XXX
-		XXX_KVM_PROBE;
-		DTRACE_PROBE1(kvm__xxx__ioctl, int, cmd);
-#endif
+		KVM_TRACE1(bad__ioctl, int, cmd);
 		rval = EINVAL;  /* x64, others may do other things... */
 	}
 
@@ -2820,7 +2780,7 @@ kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off, size_t len,
 	    PAGESIZE*2, PROT_READ | PROT_WRITE | PROT_USER, DEVMAP_DEFAULTS,
 	    NULL);
 
-	*maplen = PAGESIZE*2;
+	*maplen = PAGESIZE * 2;
 
 	return (res);
 }

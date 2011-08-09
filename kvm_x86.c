@@ -37,12 +37,13 @@
 #include "kvm_mmu.h"
 #include "kvm_cache_regs.h"
 
-/* XXX These don't belong here! */
 extern caddr_t smmap64(caddr_t addr, size_t len, int prot, int flags,
     int fd, off_t pos);
 extern int lwp_sigmask(int, uint_t, uint_t, uint_t, uint_t);
+extern uint64_t cpu_freq_hz;
 
 static unsigned long empty_zero_page[PAGESIZE / sizeof (unsigned long)];
+static uint64_t cpu_tsc_khz;
 
 /*
  * Globals
@@ -725,10 +726,6 @@ kvm_set_time_scale(uint32_t tsc_khz, struct pvclock_vcpu_time_info *hv_clock)
 	hv_clock->tsc_shift = shift;
 	hv_clock->tsc_to_system_mul = div_frac(nsecs, tps32);
 }
-
-static uint64_t cpu_tsc_khz;
-/* XXX extern?! */
-extern uint64_t cpu_freq_hz;
 
 static void
 kvm_write_guest_time(struct kvm_vcpu *v)
@@ -1492,21 +1489,11 @@ __msr_io(struct kvm_vcpu *vcpu, struct kvm_msrs *msrs,
 
 	vcpu_load(vcpu);
 
-#ifdef XXX
-	idx = srcu_read_lock(&vcpu->kvm->srcu);
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 	for (i = 0; i < msrs->nmsrs; i++) {
 		if (do_msr(vcpu, entries[i].index, &entries[i].data))
 			break;
 	}
 
-#ifdef XXX
-	srcu_read_unlock(&vcpu->kvm->srcu, idx);
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 	vcpu_put(vcpu);
 
 	return (i);
@@ -3077,12 +3064,7 @@ kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		ret = 0;
 		break;
 	case KVM_HC_MMU_OP:
-#ifdef XXX
-		r = kvm_pv_mmu_op(vcpu, a0, hc_gpa(vcpu, a1, a2), &ret);
-#else
-		XXX_KVM_PROBE;
 		ret = -ENOSYS;
-#endif
 		break;
 	default:
 		ret = -ENOSYS;
@@ -3242,18 +3224,9 @@ vapic_exit(struct kvm_vcpu *vcpu)
 
 	if (!apic || !apic->vapic_addr)
 		return;
-#ifdef XXX
-	idx = srcu_read_lock(&vcpu->kvm->srcu);
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
+
 	kvm_release_page_dirty(apic->vapic_page);
 	mark_page_dirty(vcpu->kvm, apic->vapic_addr >> PAGESHIFT);
-#ifdef XXX
-	srcu_read_unlock(&vcpu->kvm->srcu, idx);
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 }
 
 static void
@@ -3442,11 +3415,6 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	cli();
 
 	clear_bit(KVM_REQ_KICK, &vcpu->requests);
-#ifdef XXX
-	smp_mb__after_clear_bit();
-#else
-	XXX_KVM_PROBE;
-#endif
 
 	if (vcpu->requests || issig(JUSTLOOKING)) {
 		set_bit(KVM_REQ_KICK, &vcpu->requests);
@@ -3468,12 +3436,8 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		update_cr8_intercept(vcpu);
 		kvm_lapic_sync_to_vapic(vcpu);
 	}
-#ifdef XXX
-	srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
-#else
-	XXX_KVM_PROBE;
-#endif
-	kvm_guest_enter();
+
+	kvm_guest_enter(vcpu);
 
 	if (vcpu->arch.switch_db_regs) {
 		set_debugreg(0, 7);
@@ -3503,30 +3467,10 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 	sti();
 
-#ifdef XXX
-	local_irq_enable();  /* XXX - should be ok with kpreempt_enable below */
-
-	barrier();
-#else
-	XXX_KVM_PROBE;
-#endif
 	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_exits);
-	kvm_guest_exit();
+	kvm_guest_exit(vcpu);
 
 	kpreempt_enable();
-#ifdef XXX
-	vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
-
-	/*
-	 * Profile KVM exit RIPs:
-	 */
-	if (unlikely(prof_on == KVM_PROFILING)) {
-		unsigned long rip = kvm_rip_read(vcpu);
-		profile_hit(KVM_PROFILING, (void *)rip);
-	}
-#else
-	XXX_KVM_PROBE;
-#endif
 	kvm_lapic_sync_from_vapic(vcpu);
 	r = kvm_x86_ops->handle_exit(vcpu);
 
@@ -3550,11 +3494,6 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 		vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 	}
 
-#ifdef XXX
-	vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 	vapic_enter(vcpu);
 
 	r = 1;
@@ -3562,17 +3501,8 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 		if (vcpu->arch.mp_state == KVM_MP_STATE_RUNNABLE)
 			r = vcpu_enter_guest(vcpu);
 		else {
-#ifdef XXX
-			srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
-#else
-			XXX_KVM_SYNC_PROBE;
-#endif
 			kvm_vcpu_block(vcpu);
-#ifdef XXX
-			vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
-#else
-			XXX_KVM_SYNC_PROBE;
-#endif
+
 			if (test_and_clear_bit(KVM_REQ_UNHALT,
 			    &vcpu->requests)) {
 				switch (vcpu->arch.mp_state) {
@@ -3616,11 +3546,7 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 			KVM_VCPU_KSTAT_INC(vcpu, kvmvs_signal_exits);
 		}
 	}
-#ifdef XXX
-	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
+
 	KVM_TRACE3(vcpu__run, char *, __FILE__, int, __LINE__,
 	    uint64_t, vcpu);
 	post_kvm_run_save(vcpu);
@@ -3653,36 +3579,18 @@ kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 		kvm_set_cr8(vcpu, kvm_run->cr8);
 
 	if (vcpu->arch.pio.cur_count) {
-#ifdef XXX
-		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
-#else
-		XXX_KVM_SYNC_PROBE;
-#endif
-		r = complete_pio(vcpu);
-#ifdef XXX
-		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
-#else
-		XXX_KVM_SYNC_PROBE;
-#endif
-		if (r)
+		if ((r = complete_pio(vcpu)) != 0)
 			goto out;
 	}
+
 	if (vcpu->mmio_needed) {
 		memcpy(vcpu->mmio_data, kvm_run->mmio.data, 8);
 		vcpu->mmio_read_completed = 1;
 		vcpu->mmio_needed = 0;
-#ifdef XXX
-		vcpu->srcu_idx = srcu_read_lock(&vcpu->kvm->srcu);
-#else
-		XXX_KVM_SYNC_PROBE;
-#endif
-		r = emulate_instruction(vcpu, vcpu->arch.mmio_fault_cr2, 0,
-					EMULTYPE_NO_DECODE);
-#ifdef XXX
-		srcu_read_unlock(&vcpu->kvm->srcu, vcpu->srcu_idx);
-#else
-		XXX_KVM_SYNC_PROBE;
-#endif
+
+		r = emulate_instruction(vcpu,
+		    vcpu->arch.mmio_fault_cr2, 0, EMULTYPE_NO_DECODE);
+
 		if (r == EMULATE_DO_MMIO) {
 			/*
 			 * Read-modify-write.  Back to userspace.
@@ -4598,18 +4506,8 @@ void
 fx_init(struct kvm_vcpu *vcpu)
 {
 	unsigned after_mxcsr_mask;
-#ifdef XXX
-	/*
-	 * Touch the fpu the first time in non atomic context as if
-	 * this is the first fpu instruction the exception handler
-	 * will fire before the instruction returns and it'll have to
-	 * allocate ram with GFP_KERNEL.
-	 */
-	if (!used_math())
-#else
-	XXX_KVM_PROBE;
-#endif
-		kvm_fx_save(&vcpu->arch.host_fx_image);
+
+	kvm_fx_save(&vcpu->arch.host_fx_image);
 
 	/* Initialize guest FPU by resetting ours and saving into guest's */
 	kpreempt_disable();
@@ -4809,10 +4707,6 @@ kvm_arch_hardware_unsetup(void)
 void
 kvm_arch_exit(void)
 {
-	/*
-	 * kvm_x86_ops = NULL;
-	 * XXX kvm_mmu_module_exit();
-	 */
 }
 
 void
@@ -4930,7 +4824,7 @@ kvm_free_vcpus(struct kvm *kvmp)
 	int ii, maxcpus;
 
 	maxcpus = kvmp->online_vcpus;
-	XXX_KVM_SYNC_PROBE;
+
 	for (ii = 0; ii < maxcpus; ii++)
 		kvm_unload_vcpu_mmu(kvmp->vcpus[ii]);
 
@@ -5244,7 +5138,7 @@ native_read_msr_safe(unsigned int msr, int *err)
 		ret = native_read_msr(msr);
 		*err = 0;
 	} else {
-		*err = EINVAL; /* XXX probably not right... */
+		*err = EINVAL;
 	}
 	no_trap();
 
@@ -5261,7 +5155,7 @@ native_write_msr_safe(unsigned int msr, unsigned low, unsigned high)
 	if (on_trap(&otd, OT_DATA_ACCESS) == 0) {
 		native_write_msr(msr, low, high);
 	} else {
-		err = EINVAL;  /* XXX probably not right... */
+		err = EINVAL;
 	}
 	no_trap();
 

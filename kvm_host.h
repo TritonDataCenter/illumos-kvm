@@ -444,8 +444,8 @@ extern void kvm_free_irq_source_id(struct kvm *, int);
 /* For vcpu->arch.iommu_flags */
 #define	KVM_IOMMU_CACHE_COHERENCY	0x1
 
-extern void kvm_guest_enter(void);
-extern void kvm_guest_exit(void);
+extern void kvm_guest_enter(struct kvm_vcpu *);
+extern void kvm_guest_exit(struct kvm_vcpu *);
 
 #ifndef KVM_ARCH_HAS_UNALIAS_INSTANTIATION
 #define	unalias_gfn_instantiation unalias_gfn

@@ -13,6 +13,9 @@
 #define	XXX_KVM_SYNC_PROBE DTRACE_PROBE2(kvm__xxx__sync, \
 	char *, __FILE__, int, __LINE__)
 
+#define	KVM_TRACE(name)							\
+	DTRACE_PROBE(kvm__##name);
+
 #define	KVM_TRACE1(name, type1, arg1)					\
 	DTRACE_PROBE1(kvm__##name, type1, arg1);
 

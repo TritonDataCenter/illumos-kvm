@@ -433,7 +433,7 @@ __invvpid(int ext, uint16_t vpid, gva_t gva)
 		uint64_t gva;
 	} operand = { vpid, 0, gva };
 
-	DTRACE_PROBE2(kvm__vmx__invvpid, int, vpid, uint64_t, gva);
+	KVM_TRACE2(vmx__invvpid, int, vpid, uint64_t, gva);
 
 	/* BEGIN CSTYLED */
 	__asm__ volatile (ASM_VMX_INVVPID
@@ -450,7 +450,7 @@ __invept(int ext, uint64_t eptp, gpa_t gpa)
 		uint64_t eptp, gpa;
 	} operand = {eptp, gpa};
 
-	DTRACE_PROBE2(kvm__vmx__invept, uint64_t, eptp, uint64_t, gpa);
+	KVM_TRACE2(vmx__invept, uint64_t, eptp, uint64_t, gpa);
 
 	/* BEGIN CSTYLED */
 	__asm__ volatile (ASM_VMX_INVEPT
@@ -477,7 +477,7 @@ vmcs_clear(uint64_t vmcs_pa)
 {
 	unsigned char error;
 
-	DTRACE_PROBE1(kvm__vmx__vmclear, uint64_t, vmcs_pa);
+	KVM_TRACE1(vmx__vmclear, uint64_t, vmcs_pa);
 
 	/*CSTYLED*/
 	__asm__ volatile (__ex(ASM_VMX_VMCLEAR_RAX) "\n\tsetna %0\n"
@@ -552,7 +552,7 @@ vmcs_readl(unsigned long field)
 	__asm__ volatile (ASM_VMX_VMREAD_RDX_RAX
 	    : "=a"(value) : "d"(field) : "cc");
 
-	DTRACE_PROBE2(kvm__vmx__vmread, long, field, long, value);
+	KVM_TRACE2(vmx__vmread, long, field, long, value);
 
 	return (value);
 }
@@ -594,7 +594,7 @@ __vmwrite(unsigned long field, unsigned long value)
 	    : "=q"(err) : "a" (value), "d" (field)
 	    : "cc", "memory");
 
-	DTRACE_PROBE3(kvm__vmx__vmwrite, long, field,
+	KVM_TRACE3(vmx__vmwrite, long, field,
 	    long, value, uint8_t, err);
 
 	/* XXX the following should be ifdef debug... */
@@ -841,7 +841,7 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 
 		current_vmcs[cpu] = vmx->vmcs;
 
-		DTRACE_PROBE1(kvm__vmx__vmptrld, uint64_t, phys_addr);
+		KVM_TRACE1(vmx__vmptrld, uint64_t, phys_addr);
 
 		/*CSTYLED*/
 		__asm__ volatile (ASM_VMX_VMPTRLD_RAX "; setna %0"
@@ -1308,7 +1308,7 @@ vmx_hardware_enable(void *garbage)
 		    FEATURE_CONTROL_VMXON_ENABLED);
 	}
 
-	DTRACE_PROBE1(kvm__vmx__vmxon, uint64_t, phys_addr);
+	KVM_TRACE1(vmx__vmxon, uint64_t, phys_addr);
 
 	setcr4(getcr4() | X86_CR4_VMXE); /* FIXME: not cpu hotplug safe */
 	/* BEGIN CSTYLED */
@@ -1329,7 +1329,7 @@ vmx_hardware_enable(void *garbage)
 static void
 kvm_cpu_vmxoff(void)
 {
-	DTRACE_PROBE(kvm__vmx__vmxoff);
+	KVM_TRACE(vmx__vmxoff);
 
 	/* BEGIN CSTYLED */
 	__asm__ volatile ((ASM_VMX_VMXOFF) : : : "cc");
@@ -3254,8 +3254,7 @@ handle_cr(struct kvm_vcpu *vcpu)
 	exit_qualification = vmcs_readl(EXIT_QUALIFICATION);
 	cr = exit_qualification & 15;
 	reg = (exit_qualification >> 8) & 15;
-	DTRACE_PROBE3(kvm__cr, int, cr, int, reg, int,
-	    (exit_qualification >> 4) & 3);
+	KVM_TRACE3(cr, int, cr, int, reg, int, (exit_qualification >> 4) & 3);
 	switch ((exit_qualification >> 4) & 3) {
 	case 0: /* mov to cr */
 		val = kvm_register_read(vcpu, reg);
@@ -3903,7 +3902,7 @@ vmx_handle_exit(struct kvm_vcpu *vcpu)
 
 	/* Always read the guest rip when exiting */
 	rip = vmcs_readl(GUEST_RIP);
-	DTRACE_PROBE2(kvm__vexit, unsigned long, rip, uint32_t, exit_reason);
+	KVM_TRACE2(vexit, unsigned long, rip, uint32_t, exit_reason);
 
 	/* If guest state is invalid, start emulating */
 	if (vmx->emulation_required && emulate_invalid_guest_state)
@@ -4128,7 +4127,7 @@ vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	if (test_bit(VCPU_REGS_RIP, (unsigned long *)&vcpu->arch.regs_dirty))
 		vmcs_writel(GUEST_RIP, vcpu->arch.regs[VCPU_REGS_RIP]);
 
-	DTRACE_PROBE1(kvm__vrun, unsigned long, vcpu->arch.regs[VCPU_REGS_RIP]);
+	KVM_TRACE1(vrun, unsigned long, vcpu->arch.regs[VCPU_REGS_RIP]);
 
 	/*
 	 * When single-stepping over STI and MOV SS, we must clear the
@@ -4146,9 +4145,9 @@ vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	vmcs_writel(HOST_CR0, read_cr0());
 
 	if (vmx->launched) {
-		DTRACE_PROBE1(kvm__vmx__vmresume, struct vcpu_vmx *, vmx);
+		KVM_TRACE1(vmx__vmresume, struct vcpu_vmx *, vmx);
 	} else {
-		DTRACE_PROBE1(kvm__vmx__vmlaunch, struct vcpu_vmx *, vmx);
+		KVM_TRACE1(vmx__vmlaunch, struct vcpu_vmx *, vmx);
 	}
 
 	__asm__(
