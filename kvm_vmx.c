@@ -2694,11 +2694,6 @@ vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	page_t *ptp;
 
 	vcpu->arch.regs_avail = ~((1 << VCPU_REGS_RIP) | (1 << VCPU_REGS_RSP));
-#ifdef XXX
-	idx = srcu_read_lock(&vcpu->kvm->srcu);
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 
 	if (!init_rmode(vmx->vcpu.kvm)) {
 		ret = -ENOMEM;
@@ -2820,11 +2815,6 @@ vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 	vmx->emulation_required = 0;
 
 out:
-#ifdef XXX
-	srcu_read_unlock(&vcpu->kvm->srcu, idx);
-#else
-	XXX_KVM_SYNC_PROBE;
-#endif
 	return (ret);
 }
 
@@ -4104,14 +4094,8 @@ vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 
 	/* Record the guest's net vcpu time for enforced NMI injections. */
-	if (!cpu_has_virtual_nmis() && vmx->soft_vnmi_blocked) {
-#ifdef XXX
-		vmx->entry_time = ktime_get();
-#else
+	if (!cpu_has_virtual_nmis() && vmx->soft_vnmi_blocked)
 		vmx->entry_time = gethrtime();
-		XXX_KVM_PROBE;
-#endif
-	}
 
 	/*
 	 * Don't enter VMX if guest state is invalid, let the exit handler

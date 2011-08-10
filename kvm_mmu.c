@@ -1455,7 +1455,6 @@ kvm_mmu_unprotect_page(struct kvm *kvm, gfn_t gfn)
 	index = kvm_page_table_hashfn(gfn);
 	bucket = &kvm->arch.mmu_page_hash[index];
 
-	/* XXX - need lock? */
 	for (sp = list_head(bucket); sp; sp = list_next(bucket, sp)) {
 		if (sp->gfn == gfn && !sp->role.direct) {
 			r = 1;
@@ -1858,7 +1857,6 @@ nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, int write, gfn_t gfn)
 	int r;
 	int level;
 	pfn_t pfn;
-	unsigned long mmu_seq;
 
 	level = mapping_level(vcpu, gfn);
 
@@ -1871,11 +1869,6 @@ nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, int write, gfn_t gfn)
 
 	gfn &= ~(KVM_PAGES_PER_HPAGE(level) - 1);
 
-#ifdef XXX
-	mmu_seq = vcpu->kvm->mmu_notifier_seq;
-#else
-	XXX_KVM_PROBE;
-#endif
 	smp_rmb();
 	pfn = gfn_to_pfn(vcpu->kvm, gfn);
 
@@ -1886,12 +1879,6 @@ nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, int write, gfn_t gfn)
 	}
 
 	mutex_enter(&vcpu->kvm->mmu_lock);
-#ifdef XXX
-	if (mmu_notifier_retry(vcpu, mmu_seq))
-		goto out_unlock;
-#else
-	XXX_KVM_PROBE;
-#endif
 	kvm_mmu_free_some_pages(vcpu);
 	r = __direct_map(vcpu, v, write, level, gfn, pfn);
 	mutex_exit(&vcpu->kvm->mmu_lock);
@@ -2089,7 +2076,6 @@ tdp_page_fault(struct kvm_vcpu *vcpu, gva_t gpa, uint32_t error_code)
 	int r;
 	int level;
 	gfn_t gfn = gpa >> PAGESHIFT;
-	unsigned long mmu_seq;
 
 	ASSERT(vcpu);
 	ASSERT(VALID_PAGE(vcpu->arch.mmu.root_hpa));
@@ -2102,11 +2088,6 @@ tdp_page_fault(struct kvm_vcpu *vcpu, gva_t gpa, uint32_t error_code)
 
 	gfn &= ~(KVM_PAGES_PER_HPAGE(level) - 1);
 
-#ifdef XXX
-	mmu_seq = vcpu->kvm->mmu_notifier_seq;
-#else
-	XXX_KVM_PROBE;
-#endif
 	smp_rmb();
 	pfn = gfn_to_pfn(vcpu->kvm, gfn);
 	if (is_error_pfn(pfn)) {
@@ -2114,12 +2095,7 @@ tdp_page_fault(struct kvm_vcpu *vcpu, gva_t gpa, uint32_t error_code)
 		return (1);
 	}
 	mutex_enter(&vcpu->kvm->mmu_lock);
-#ifdef XXX
-	if (mmu_notifier_retry(vcpu, mmu_seq))
-		goto out_unlock;
-#else
-	XXX_KVM_PROBE;
-#endif
+
 	kvm_mmu_free_some_pages(vcpu);
 	r = __direct_map(vcpu, gpa,
 	    error_code & PFERR_WRITE_MASK, level, gfn, pfn);
@@ -2544,11 +2520,6 @@ mmu_guess_page_from_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 
 	gfn = (gpte & PT64_BASE_ADDR_MASK) >> PAGESHIFT;
 
-#ifdef XXX
-	vcpu->arch.update_pte.mmu_seq = vcpu->kvm->mmu_notifier_seq;
-#else
-	XXX_KVM_PROBE;
-#endif
 	smp_rmb();
 	pfn = gfn_to_pfn(vcpu->kvm, gfn);
 
@@ -2611,7 +2582,6 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 	index = kvm_page_table_hashfn(gfn);
 	bucket = &vcpu->kvm->arch.mmu_page_hash[index];
 
-	/* XXX - need protection ?  I think not since mmu_lock held above... */
 	for (sp = list_head(bucket); sp; sp = list_next(bucket, sp)) {
 		if (sp->gfn != gfn || sp->role.direct || sp->role.invalid)
 			continue;
@@ -2949,16 +2919,6 @@ kvm_mmu_module_init(void)
 	    (void *)sizeof (struct kvm_mmu_page), NULL, 0)) == NULL)
 		goto nomem;
 
-#ifdef XXX
-	/*
-	 * this looks like a garbage collector/reaper.  Implement later if
-	 * needed
-	 */
-	register_shrinker(&mmu_shrinker);
-#else
-	XXX_KVM_PROBE;
-#endif
-
 	return (0);
 
 nomem:
@@ -3063,7 +3023,6 @@ kvm_avlmmucmp(const void *arg1, const void *arg2)
 inline page_t *
 compound_head(page_t *page)
 {
-	/* XXX - linux links page_t together. */
 	return (page);
 }
 
