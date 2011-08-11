@@ -1155,12 +1155,9 @@ gfn_to_page(struct kvm *kvm, gfn_t gfn)
 void
 kvm_release_pfn_clean(pfn_t pfn)
 {
-#ifdef XXX
-	if (!kvm_is_mmio_pfn(pfn))
-		put_page(pfn_to_page(pfn));
-#else
-	XXX_KVM_PROBE;
-#endif
+	/*
+	 * If we start paging guest memory, we may need something here.
+	 */
 }
 
 void
@@ -1179,26 +1176,11 @@ kvm_release_pfn_dirty(pfn_t pfn)
 void
 kvm_set_pfn_dirty(pfn_t pfn)
 {
-#ifdef XXX
-	if (!kvm_is_mmio_pfn(pfn)) {
-		struct page *page = pfn_to_page(pfn);
-		if (!PageReserved(page))
-			SetPageDirty(page); /* XXX - not defined in linux?! */
-	}
-#else
-	XXX_KVM_PROBE;
-#endif
 }
 
 void
 kvm_set_pfn_accessed(struct kvm *kvm, pfn_t pfn)
 {
-#ifdef XXX
-	if (!kvm_is_mmio_pfn(pfn))
-		mark_page_accessed(pfn_to_page(pfn));
-#else
-	XXX_KVM_PROBE;
-#endif
 }
 
 void
@@ -1274,7 +1256,6 @@ kvm_read_guest_atomic(struct kvm *kvm, gpa_t gpa, void *data, unsigned long len)
 		return (-EFAULT);
 
 	r = copyin((caddr_t)addr + offset, data, len);
-
 	if (r)
 		return (-EFAULT);
 
@@ -1402,8 +1383,10 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p)
 		return (EINVAL);
 
 	r = kvm_arch_vcpu_setup(vcpu);
-	if (r)
+	if (r) {
+		kvm_arch_vcpu_free(vcpu);
 		return (r);
+	}
 
 	mutex_enter(&kvm->lock);
 
@@ -1442,12 +1425,8 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p)
 	return (r);
 
 vcpu_destroy:
-#ifdef XXX
+	kvm_arch_vcpu_free(vcpu);
 	mutex_exit(&kvm->lock);
-	kvm_arch_vcpu_destroy(vcpu);
-#else
-	XXX_KVM_PROBE;
-#endif
 	return (r);
 }
 
@@ -1722,19 +1701,11 @@ kvm_init(void *opaque)
 	return (0);
 
 out_free_1:
-#ifdef XXX
 	kvm_arch_hardware_unsetup();
-#else
-	XXX_KVM_PROBE;
-#endif
 out_free:
 	kmem_free(bad_page_kma, PAGESIZE);
 out:
-#ifdef XXX
 	kvm_arch_exit();
-#else
-	XXX_KVM_PROBE;
-#endif
 out_fail:
 	return (r);
 }
