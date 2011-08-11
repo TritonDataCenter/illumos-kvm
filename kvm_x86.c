@@ -57,6 +57,7 @@
 
 extern caddr_t smmap64(caddr_t addr, size_t len, int prot, int flags,
     int fd, off_t pos);
+extern int memcntl(caddr_t, size_t, int, caddr_t, int, int);
 extern int lwp_sigmask(int, uint_t, uint_t, uint_t, uint_t);
 extern uint64_t cpu_freq_hz;
 
@@ -4924,6 +4925,10 @@ kvm_arch_prepare_memory_region(struct kvm *kvm,
 			 * pages in the map.  We'll touch the pages so they get
 			 * allocated here.
 			 */
+			i = memcntl(userspace_addr, (size_t)(npages * PAGESIZE),
+				    MC_LOCK, 0, PROT_READ | PROT_WRITE, 0);
+			if (i != 0)
+				return (i);
 			for (i = 0; i < npages; i++) {
 				if (copyout(empty_zero_page, userspace_addr +
 				    (i * PAGESIZE), sizeof (empty_zero_page))) {
