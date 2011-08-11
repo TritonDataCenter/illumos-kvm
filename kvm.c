@@ -991,7 +991,7 @@ kvm_disable_largepages(void)
 int
 is_error_pfn(pfn_t pfn)
 {
-	return (pfn == bad_pfn || pfn == 0xffffffffffffffff);
+	return (pfn == bad_pfn || pfn == PFN_INVALID);
 }
 
 static unsigned long
