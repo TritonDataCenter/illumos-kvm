@@ -74,6 +74,7 @@ __attribute__((__aligned__(PAGESIZE)))static unsigned long
 static struct vmcs **vmxarea;  /* 1 per cpu */
 static struct vmcs **current_vmcs;
 static uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
+static int vmx_has_kvm_support_override = 0;
 
 #define	KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
 	(X86_CR0_WP | X86_CR0_NE | X86_CR0_NW | X86_CR0_CD)
@@ -1277,6 +1278,26 @@ set_guest_debug(struct kvm_vcpu *vcpu, struct kvm_guest_debug *dbg)
 		vmcs_writel(GUEST_DR7, vcpu->arch.dr7);
 
 	update_exception_bitmap(vcpu);
+}
+
+/* BEGIN CSTYLED */
+#ifndef X86FSET_VMX
+#error X86FSET_VMX is not defined, likely because you are building against \
+an illumos (set by $KERNEL_SOURCE in the Makefile) that does not include \
+the fix for issue #1347; pull latest illumos and re-build.
+#endif
+/* END CSTYLED */
+
+static int
+vmx_has_kvm_support(void)
+{
+	if (vmx_has_kvm_support_override)
+		return (vmx_has_kvm_support_override > 0 ? 0 : -1);
+
+	if (is_x86_feature(x86_featureset, X86FSET_VMX))
+		return (0);
+
+	return (-1);
 }
 
 static int
@@ -4463,7 +4484,7 @@ vmx_cpuid_update(struct kvm_vcpu *vcpu)
 }
 
 struct kvm_x86_ops vmx_x86_ops = {
-	.cpu_has_kvm_support = nulldev, /* XXX: cpu_has_kvm_support? */
+	.cpu_has_kvm_support = vmx_has_kvm_support,
 	.disabled_by_bios = nulldev, /* XXX: vmx_disabled_by_bios? */
 
 	.hardware_enable = vmx_hardware_enable,
