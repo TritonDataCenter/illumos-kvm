@@ -28,6 +28,7 @@
 #include <sys/ddi.h>
 #include <sys/regset.h>
 #include <sys/fp.h>
+#include <sys/tss.h>
 
 #include <vm/page.h>
 #include <vm/hat.h>
@@ -48,7 +49,6 @@
 #include "kvm.h"
 #include "kvm_x86impl.h"
 #include "kvm_irq.h"
-#include "kvm_tss.h"
 #include "kvm_ioapic.h"
 #include "kvm_coalesced_mmio.h"
 #include "kvm_i8254.h"
