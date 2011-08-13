@@ -102,17 +102,22 @@ attach.
 
 ### Required binaries
 
-There are two mandatory artifacts to install, and one optional component:
+There are two mandatory artifacts to install, and two optional component:
 
 * `kvm` is the driver itself
 * `kvm.conf` is the driver configuration file
 * `kvm.so` is the mdb module
+* `JOY_kvm_link.so` is the devfsadm plugin
 
 On the target machine, place `kvm` in `/kernel/drv/amd64` and `kvm.conf`
-in `/kernel/drv` then:
+in `/kernel/drv`. Place `JOY_kvm_link.so` in `/usr/lib/devfsadm/linkmod` then:
 
     # add_drv kvm
-    # ln -s /devices/pseudo/kvm@0:kvm /dev/kvm
+
+You can verify that the driver installed and attached properly by checking for
+its presence in /dev.
+
+    # ls -l /dev/kvm
 
 Running illumos-kvm
 -------------------
