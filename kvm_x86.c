@@ -3183,12 +3183,6 @@ kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 		kvm_register_write(vcpu, VCPU_REGS_RDX, best->edx);
 	}
 	kvm_x86_ops->skip_emulated_instruction(vcpu);
-
-	KVM_TRACE5(cpuid, uint32_t, function,
-	    uint32_t, kvm_register_read(vcpu, VCPU_REGS_RAX),
-	    uint32_t, kvm_register_read(vcpu, VCPU_REGS_RBX),
-	    uint32_t, kvm_register_read(vcpu, VCPU_REGS_RCX),
-	    uint32_t, kvm_register_read(vcpu, VCPU_REGS_RDX));
 }
 
 static int
