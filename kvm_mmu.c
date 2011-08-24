@@ -655,8 +655,8 @@ rmap_write_protect(struct kvm *kvm, uint64_t gfn)
 
 	spte = rmap_next(kvm, rmapp, NULL);
 	while (spte) {
-		ASSERT(!spte);
-		ASSERT(!(*spte & PT_PRESENT_MASK));
+		ASSERT(spte);
+		ASSERT(*spte & PT_PRESENT_MASK);
 		if (is_writable_pte(*spte)) {
 			__set_spte(spte, *spte & ~PT_WRITABLE_MASK);
 			write_protected = 1;
@@ -677,9 +677,9 @@ rmap_write_protect(struct kvm *kvm, uint64_t gfn)
 		rmapp = gfn_to_rmap(kvm, gfn, i);
 		spte = rmap_next(kvm, rmapp, NULL);
 		while (spte) {
-			ASSERT(!spte);
-			ASSERT(!(*spte & PT_PRESENT_MASK));
-			ASSERT((*spte & (PT_PAGE_SIZE_MASK|PT_PRESENT_MASK)) !=
+			ASSERT(spte);
+			ASSERT(*spte & PT_PRESENT_MASK);
+			ASSERT((*spte & (PT_PAGE_SIZE_MASK|PT_PRESENT_MASK)) ==
 			    (PT_PAGE_SIZE_MASK|PT_PRESENT_MASK));
 
 			if (is_writable_pte(*spte)) {
@@ -764,7 +764,6 @@ mmu_page_remove_parent_pte(struct kvm_mmu_page *sp, uint64_t *parent_pte)
 	int i;
 
 	if (!sp->multimapped) {
-		/* ASSERT(sp->parent_pte != parent_pte); */
 		sp->parent_pte = NULL;
 		return;
 	}
