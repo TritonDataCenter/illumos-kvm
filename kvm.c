@@ -670,9 +670,10 @@ kvm_create_vm(void)
 	list_insert_tail(&vm_list, kvmp);
 	mutex_exit(&kvm_lock);
 
-	if ((kvmp->kvm_kstat = kstat_create("kvm", kvmp->kvmid, "vm",
+	if ((kvmp->kvm_kstat = kstat_create_zone("kvm", kvmp->kvmid, "vm",
 	    "misc", KSTAT_TYPE_NAMED, sizeof (kvm_stats_t) /
-	    sizeof (kstat_named_t), KSTAT_FLAG_VIRTUAL)) == NULL) {
+	    sizeof (kstat_named_t), KSTAT_FLAG_VIRTUAL, GLOBAL_ZONEID)) ==
+	    NULL) {
 		kvm_destroy_vm(kvmp);
 		return (NULL);
 	}

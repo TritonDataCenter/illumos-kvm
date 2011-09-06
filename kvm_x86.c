@@ -4585,9 +4585,9 @@ kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 
 	(void) snprintf(buf, sizeof (buf), "vcpu-%d", kvm->kvmid);
 
-	if ((kstat = kstat_create("kvm", id, buf, "misc", KSTAT_TYPE_NAMED,
+	if ((kstat = kstat_create_zone("kvm", id, buf, "misc", KSTAT_TYPE_NAMED,
 	    sizeof (kvm_vcpu_stats_t) / sizeof (kstat_named_t),
-	    KSTAT_FLAG_VIRTUAL)) == NULL) {
+	    KSTAT_FLAG_VIRTUAL, GLOBAL_ZONEID)) == NULL) {
 		return (NULL);
 	}
 
