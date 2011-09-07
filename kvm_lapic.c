@@ -1014,7 +1014,7 @@ kvm_lapic_reset(struct kvm_vcpu *vcpu)
 
 	vcpu->arch.apic_arb_prio = 0;
 
-	cmn_err(CE_NOTE, "%s: vcpu=%p, id=%d, base_msr= %lx PRIx64 "
+	cmn_err(CE_CONT, "!%s: vcpu=%p, id=%d, base_msr= %lx PRIx64 "
 	    "base_address=%lx\n", __func__, vcpu, kvm_apic_id(apic),
 	    vcpu->arch.apic_base, apic->base_address);
 }

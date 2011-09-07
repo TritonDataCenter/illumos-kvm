@@ -1782,7 +1782,7 @@ enter_lmode(struct kvm_vcpu *vcpu)
 
 	guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
 	if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
-		cmn_err(CE_NOTE, "%s: tss fixup for long mode. \n",
+		cmn_err(CE_CONT, "!%s: tss fixup for long mode. \n",
 		    __func__);
 		vmcs_write32(GUEST_TR_AR_BYTES,
 		    (guest_tr_ar & ~AR_TYPE_MASK) | AR_TYPE_BUSY_64_TSS);
@@ -3723,17 +3723,17 @@ ept_misconfig_inspect_spte(struct kvm_vcpu *vcpu, uint64_t spte, int level)
 
 	/* 010b (write-only) */
 	if ((spte & 0x7) == 0x2)
-		cmn_err(CE_CONT, "%s: spte is write-only\n", __func__);
+		cmn_err(CE_CONT, "!%s: spte is write-only\n", __func__);
 
 	/* 110b (write/execute) */
 	if ((spte & 0x7) == 0x6)
-		cmn_err(CE_CONT, "%s: spte is write-execute\n", __func__);
+		cmn_err(CE_CONT, "!%s: spte is write-execute\n", __func__);
 
 	/* 100b (execute-only) and value not supported by logical processor */
 	if (!cpu_has_vmx_ept_execute_only()) {
 		if ((spte & 0x7) == 0x4)
 			cmn_err(CE_CONT,
-			    "%s: spte is execute-only\n", __func__);
+			    "!%s: spte is execute-only\n", __func__);
 	}
 
 	/* not 000b */
@@ -3741,7 +3741,7 @@ ept_misconfig_inspect_spte(struct kvm_vcpu *vcpu, uint64_t spte, int level)
 		uint64_t rsvd_bits = spte & ept_rsvd_mask(spte, level);
 
 		if (rsvd_bits != 0) {
-			cmn_err(CE_CONT, "%s: rsvd_bits = 0x%lx\n",
+			cmn_err(CE_CONT, "!%s: rsvd_bits = 0x%lx\n",
 			    __func__, rsvd_bits);
 		}
 
@@ -3750,7 +3750,7 @@ ept_misconfig_inspect_spte(struct kvm_vcpu *vcpu, uint64_t spte, int level)
 
 			if (ept_mem_type == 2 || ept_mem_type == 3 ||
 			    ept_mem_type == 7) {
-				cmn_err(CE_CONT, "%s: ept_mem_type=0x%lx\n",
+				cmn_err(CE_CONT, "!%s: ept_mem_type=0x%lx\n",
 						__func__, ept_mem_type);
 			}
 		}
@@ -3767,7 +3767,7 @@ handle_ept_misconfig(struct kvm_vcpu *vcpu)
 	gpa = vmcs_read64(GUEST_PHYSICAL_ADDRESS);
 
 	cmn_err(CE_WARN, "EPT: Misconfiguration.\n");
-	cmn_err(CE_CONT, "EPT: GPA: 0x%lx\n", gpa);
+	cmn_err(CE_CONT, "!EPT: GPA: 0x%lx\n", gpa);
 	nr_sptes = kvm_mmu_get_spte_hierarchy(vcpu, gpa, sptes);
 
 	for (i = PT64_ROOT_LEVEL; i > PT64_ROOT_LEVEL - nr_sptes; --i)
@@ -4320,7 +4320,7 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 
 	cpu = curthread->t_cpu->cpu_seqid;
 
-	cmn_err(CE_NOTE, "vmcs revision_id = %x\n", vmcs_config.revision_id);
+	cmn_err(CE_CONT, "!vmcs revision_id = %x\n", vmcs_config.revision_id);
 	vmx->vmcs->revision_id = vmcs_config.revision_id;
 
 	vmcs_clear(vmx->vmcs_pa);

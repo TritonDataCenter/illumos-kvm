@@ -79,7 +79,8 @@ kvm_irq_delivery_to_apic(struct kvm *kvm, struct kvm_lapic *src,
 
 	if (irq->dest_mode == 0 && irq->dest_id == 0xff &&
 	    kvm_is_dm_lowest_prio(irq))
-		cmn_err(CE_NOTE, "kvm: apic: phys broadcast and lowest prio\n");
+		cmn_err(CE_CONT,
+		    "!kvm: apic: phys broadcast and lowest prio\n");
 
 	kvm_for_each_vcpu(i, vcpu, kvm) {
 		if (!kvm_apic_present(vcpu))

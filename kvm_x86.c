@@ -1123,14 +1123,14 @@ kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 	case MSR_K7_HWCR:
 		data &= ~(uint64_t)0x40; /* ignore flush filter disable */
 		if (data != 0) {
-			cmn_err(CE_NOTE,
-			    "unimplemented HWCR wrmsr: 0x%lx\n", data);
+			cmn_err(CE_CONT,
+			    "!unimplemented HWCR wrmsr: 0x%lx\n", data);
 			return (1);
 		}
 		break;
 	case MSR_FAM10H_MMIO_CONF_BASE:
 		if (data != 0) {
-			cmn_err(CE_NOTE, "unimplemented MMIO_CONF_BASE wrmsr: "
+			cmn_err(CE_CONT, "!unimplemented MMIO_CONF_BASE wrmsr: "
 				"0x%lx\n", data);
 			return (1);
 		}
@@ -1148,7 +1148,7 @@ kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 			 */
 			return (1);
 		}
-		cmn_err(CE_NOTE, "%s: MSR_IA32_DEBUGCTLMSR 0x%lx, nop\n",
+		cmn_err(CE_CONT, "!%s: MSR_IA32_DEBUGCTLMSR 0x%lx, nop\n",
 			__func__, data);
 		break;
 	case MSR_IA32_UCODE_REV:
@@ -1222,7 +1222,7 @@ kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 	case MSR_K7_EVNTSEL2:
 	case MSR_K7_EVNTSEL3:
 		if (data != 0)
-			cmn_err(CE_NOTE, "unimplemented perfctr wrmsr: "
+			cmn_err(CE_CONT, "!unimplemented perfctr wrmsr: "
 				"0x%x data 0x%lx\n", msr, data);
 		break;
 	/*
@@ -1235,7 +1235,7 @@ kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 	case MSR_K7_PERFCTR1:
 	case MSR_K7_PERFCTR2:
 	case MSR_K7_PERFCTR3:
-		cmn_err(CE_NOTE, "unimplemented perfctr wrmsr: "
+		cmn_err(CE_CONT, "!unimplemented perfctr wrmsr: "
 			"0x%x data 0x%lx\n", msr, data);
 		break;
 	case HV_X64_MSR_GUEST_OS_ID ... HV_X64_MSR_SINT15:
@@ -1252,11 +1252,11 @@ kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 		if (msr && (msr == vcpu->kvm->arch.xen_hvm_config.msr))
 			return (xen_hvm_config(vcpu, data));
 		if (!ignore_msrs) {
-			cmn_err(CE_NOTE, "unhandled wrmsr: 0x%x data %lx\n",
+			cmn_err(CE_CONT, "!unhandled wrmsr: 0x%x data %lx\n",
 				msr, data);
 			return (1);
 		} else {
-			cmn_err(CE_NOTE, "ignored wrmsr: 0x%x data %lx\n",
+			cmn_err(CE_CONT, "!ignored wrmsr: 0x%x data %lx\n",
 				msr, data);
 			break;
 		}
@@ -1481,10 +1481,10 @@ kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 		break;
 	default:
 		if (!ignore_msrs) {
-			cmn_err(CE_NOTE, "unhandled rdmsr: 0x%x\n", msr);
+			cmn_err(CE_CONT, "!unhandled rdmsr: 0x%x\n", msr);
 			return (1);
 		} else {
-			cmn_err(CE_NOTE, "ignored rdmsr: 0x%x\n", msr);
+			cmn_err(CE_CONT, "!ignored rdmsr: 0x%x\n", msr);
 			data = 0;
 		}
 		break;
@@ -3494,7 +3494,7 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 	struct kvm *kvm = vcpu->kvm;
 
 	if (vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED) {
-		cmn_err(CE_NOTE, "vcpu %d received sipi with vector # %x\n",
+		cmn_err(CE_CONT, "!vcpu %d received sipi with vector # %x\n",
 		    vcpu->vcpu_id, vcpu->arch.sipi_vector);
 		kvm_lapic_reset(vcpu);
 		r = kvm_arch_vcpu_reset(vcpu);

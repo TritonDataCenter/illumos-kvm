@@ -1953,7 +1953,7 @@ realmode_get_cr(struct kvm_vcpu *vcpu, int cr)
 		value = kvm_get_cr8(vcpu);
 		break;
 	default:
-		cmn_err(CE_NOTE, "%s: unexpected cr %u\n", __func__, cr);
+		cmn_err(CE_CONT, "!%s: unexpected cr %u\n", __func__, cr);
 		return (0);
 	}
 
@@ -1988,7 +1988,7 @@ realmode_set_cr(struct kvm_vcpu *vcpu,
 		kvm_set_cr8(vcpu, val & 0xfUL);
 		break;
 	default:
-		cmn_err(CE_NOTE, "%s: unexpected cr %u\n", __func__, cr);
+		cmn_err(CE_CONT, "!%s: unexpected cr %u\n", __func__, cr);
 	}
 }
 
@@ -2492,7 +2492,7 @@ xchg:
 		if (c->modrm_reg <= 5)
 			kvm_get_segment(ctxt->vcpu, &segreg, c->modrm_reg);
 		else {
-			cmn_err(CE_NOTE, "0x8c: Invalid segreg in "
+			cmn_err(CE_CONT, "!0x8c: Invalid segreg in "
 			    "modrm byte 0x%02x\n", c->modrm);
 			goto cannot_emulate;
 		}
