@@ -1303,6 +1303,18 @@ vmx_has_kvm_support(void)
 }
 
 static int
+vmx_disabled_by_bios(void)
+{
+	uint64_t msr;
+
+	rdmsrl(MSR_IA32_FEATURE_CONTROL, msr);
+	return (msr & (FEATURE_CONTROL_LOCKED |
+	    FEATURE_CONTROL_VMXON_ENABLED))
+	    == FEATURE_CONTROL_LOCKED;
+	/* locked but not enabled */
+}
+
+static int
 vmx_hardware_enable(void *garbage)
 {
 	int cpu = curthread->t_cpu->cpu_seqid;
@@ -4487,7 +4499,7 @@ vmx_cpuid_update(struct kvm_vcpu *vcpu)
 
 struct kvm_x86_ops vmx_x86_ops = {
 	.cpu_has_kvm_support = vmx_has_kvm_support,
-	.disabled_by_bios = nulldev, /* XXX: vmx_disabled_by_bios? */
+	.disabled_by_bios = vmx_disabled_by_bios,
 
 	.hardware_enable = vmx_hardware_enable,
 	.hardware_disable = vmx_hardware_disable,
