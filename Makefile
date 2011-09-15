@@ -5,7 +5,8 @@
 # Use the gcc compiler and Sun linker.
 KERNEL_SOURCE=$(PWD)/../../illumos
 PROTO_AREA=$(PWD)/../../../proto
-CC=gcc -m64 -mcmodel=kernel
+GCC=/usr/sfw/bin/gcc
+CC=$(GCC) -m64 -mcmodel=kernel
 LD=/usr/bin/ld
 CTFBINDIR=$(KERNEL_SOURCE)/usr/src/tools/proto/*/opt/onbld/bin/i386
 CTFCONVERT=$(CTFBINDIR)/ctfconvert
@@ -16,8 +17,8 @@ CFLAGS += -D_KERNEL -D_MACHDEP -Dx86 -DDEBUG -c -g -DCONFIG_SOLARIS -O2 -fident 
 INCLUDEDIR= -I $(KERNEL_SOURCE)/usr/src/uts/intel -I $(KERNEL_SOURCE)/usr/src/uts/i86pc -I $(KERNEL_SOURCE)/usr/src/uts/common
 CSTYLE=$(KERNEL_SOURCE)/usr/src/tools/scripts/cstyle
 HDRCHK=tools/hdrchk
-HDRCHK_USRFLAG="gcc"
-HDRCHK_SYSFLAG="gcc -D_KERNEL"
+HDRCHK_USRFLAG="$(GCC)"
+HDRCHK_SYSFLAG="$(GCC) -D_KERNEL"
 
 all: kvm kvm.so JOY_kvm_link.so
 
@@ -103,7 +104,7 @@ kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h kvm_msr.h kvm_bitops.h kv
 	$(CTFMERGE) -L VERSION -o kvm kvm.o kvm_x86.o kvm_emulate.o kvm_irq.o kvm_i8254.o kvm_lapic.o kvm_mmu.o kvm_iodev.o kvm_ioapic.o kvm_vmx.o kvm_i8259.o kvm_coalesced_mmio.o kvm_irq_comm.o kvm_cache_regs.o kvm_bitops.o
 
 kvm.so: kvm_mdb.c
-	gcc -m64 -shared \
+	$(GCC) -m64 -shared \
 	    -fPIC $(CFLAGS) $(INCLUDEDIR) -I/usr/include -o $@ kvm_mdb.c
 
 JOY_kvm_link.so: kvm_link.c
@@ -131,5 +132,3 @@ clean:
 uninstall:
 	@pfexec rem_drv kvm || /bin/true
 	@pfexec rm -f /usr/kernel/drv/kvm* /usr/kernel/drv/amd64/kvm*
-# gcc -m64 -mcmodel=kernel -D_KERNEL -D_MACHDEP -Dx86 -DCONFIG_X86_64 -DDEBUG -c -O -g -I /wd320/max/onnv.121/usr/src/uts/intel -I /wd320/max/onnv.121/usr/src/uts/i86pc kvm.c
-# gcc -m64 -mcmodel=kernel -D_KERNEL -D_MACHDEP -Dx86 -DCONFIG_X86_64 -DDEBUG -c -O -g -I /wd320/max/onnv.121/usr/src/uts/intel -I /wd320/max/onnv.121/usr/src/uts/i86pc kvm_x86.c
