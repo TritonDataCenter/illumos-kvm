@@ -20,8 +20,6 @@ HDRCHK=tools/hdrchk
 HDRCHK_USRFLAG="$(GCC)"
 HDRCHK_SYSFLAG="$(GCC) -D_KERNEL"
 
-all: kvm kvm.so JOY_kvm_link.so
-
 HEADERS=			\
 	kvm.h			\
 	kvm_bitops.h		\
@@ -69,7 +67,9 @@ HDRCHK_SYSHDRS=			\
 	kvm_x86host.h		\
 	kvm_x86impl.h
 
-kvm: kvm.c kvm_x86.c kvm_emulate.c kvm.h kvm_x86host.h kvm_msr.h kvm_bitops.h kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS) 
+world: kvm kvm.so JOY_kvm_link.so
+
+kvm: kvm.c kvm_x86.c kvm_emulate.c kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS) 
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_emulate.c
@@ -125,6 +125,9 @@ check:
 	@./tools/xxxcheck kvm_x86.c kvm.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c
 	@$(HDRCHK) $(HDRCHK_USRFLAG) $(HDRCHK_USRHDRS)
 	@$(HDRCHK) $(HDRCHK_SYSFLAG) $(HDRCHK_SYSHDRS)
+
+update:
+	git pull --rebase
 
 clean:
 	@pfexec rm -f *.o kvm kvm.so JOY_kvm_link.so
