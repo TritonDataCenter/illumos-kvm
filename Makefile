@@ -111,7 +111,7 @@ JOY_kvm_link.so: kvm_link.c
 	/opt/SUNWspro/bin/cc -O -xspace -Xa  -xildoff -errtags=yes -errwarn=%all -erroff=E_EMPTY_TRANSLATION_UNIT -erroff=E_STATEMENT_NOT_REACHED -xc99=%none    -W0,-xglobalstatic -v -K pic -DTEXT_DOMAIN=\"SUNW_OST_OSCMD\" -D_TS_ERRNO -D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT -I$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/ -I$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/../../uts/common -I$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/../modload -c -o  kvm_link.o kvm_link.c		
 	/opt/SUNWspro/bin/cc -o JOY_kvm_link.so -G -ztext -zdefs -Bdirect -M$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/mapfile-vers -M$(KERNEL_SOURCE)/usr/src/common/mapfiles/common/map.pagealign -M$(KERNEL_SOURCE)/usr/src/common/mapfiles/common/map.noexdata -h JOY_kvm_link.so kvm_link.o -L$(PROTO_AREA)/lib -L$(PROTO_AREA)/usr/lib -ldevinfo -lc
 
-install: kvm
+install: world
 	@echo "==> Installing kvm module (to $(DESTDIR)/)"
 	@mkdir -p $(DESTDIR)/usr/kernel/drv/amd64
 	@cp kvm $(DESTDIR)/usr/kernel/drv/amd64/kvm
