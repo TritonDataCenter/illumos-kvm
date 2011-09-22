@@ -1,0 +1,14 @@
+d usr 0755 root sys
+d usr/kernel 0755 root sys
+d usr/kernel/drv 0755 root sys
+d usr/kernel/drv/amd64 0755 root sys
+f usr/kernel/drv/amd64/kvm 0755 root sys
+f usr/kernel/drv/kvm.conf 0644 root sys
+d usr/lib 0755 root bin
+d usr/lib/devfsadm 0755 root sys
+d usr/lib/devfsadm/linkmod 0755 root sys
+f usr/lib/devfsadm/linkmod/JOY_kvm_link.so 0755 root sys
+d usr/lib/mdb 0755 root sys
+d usr/lib/mdb/kvm 0755 root sys
+d usr/lib/mdb/kvm/amd64 0755 root sys
+f usr/lib/mdb/kvm/amd64/kvm.so 0555 root sys

@@ -132,6 +132,11 @@ update:
 clean:
 	@pfexec rm -f *.o kvm kvm.so JOY_kvm_link.so
 
+manifest:
+	cp manifest $(DESTDIR)/$(DESTNAME)
+
 uninstall:
 	@pfexec rem_drv kvm || /bin/true
 	@pfexec rm -f /usr/kernel/drv/kvm* /usr/kernel/drv/amd64/kvm*
+
+.PHONY: manifest 
