@@ -2371,38 +2371,6 @@ kvm_mmu_gva_to_gpa_write(struct kvm_vcpu *vcpu, gva_t gva, uint32_t *error)
 	return (vcpu->arch.mmu.gva_to_gpa(vcpu, gva, access, error));
 }
 
-static int
-kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
-    struct kvm_vcpu *vcpu, uint32_t access, uint32_t *error)
-{
-	uintptr_t data = (uintptr_t)val;
-	int r = 0; /* X86EMUL_CONTINUE */
-
-	while (bytes) {
-		gpa_t gpa = vcpu->arch.mmu.gva_to_gpa(vcpu, addr,
-		    access, error);
-		unsigned offset = addr & (PAGESIZE-1);
-		unsigned toread = min(bytes, (unsigned)PAGESIZE - offset);
-		int ret;
-
-		if (gpa == UNMAPPED_GVA) {
-			r = 1; /* X86EMUL_PROPAGATE_FAULT */
-			goto out;
-		}
-		ret = kvm_read_guest(vcpu->kvm, gpa, (void *)data, toread);
-		if (ret < 0) {
-			r = 1; /* X86EMUL_UNHANDLEABLE */
-			goto out;
-		}
-
-		bytes -= toread;
-		data += toread;
-		addr += toread;
-	}
-out:
-	return (r);
-}
-
 /* used for instruction fetching */
 static int
 kvm_fetch_guest_virt(gva_t addr, void *val, unsigned int bytes,
@@ -2645,6 +2613,7 @@ emulate_instruction(struct kvm_vcpu *vcpu, unsigned long cr2,
 	int r, shadow_mask;
 	struct decode_cache *c;
 	struct kvm_run *run = vcpu->run;
+	char *ctx = NULL;
 
 	kvm_clear_exception_queue(vcpu);
 	vcpu->arch.mmio_fault_cr2 = cr2;
@@ -2680,28 +2649,43 @@ emulate_instruction(struct kvm_vcpu *vcpu, unsigned long cr2,
 		 */
 		c = &vcpu->arch.emulate_ctxt.decode;
 		if (emulation_type & EMULTYPE_TRAP_UD) {
-			if (!c->twobyte)
-				return (EMULATE_FAIL);
+			if (!c->twobyte) {
+				ctx = "non-twobyte";
+				goto fail;
+			}
+
 			switch (c->b) {
 			case 0x01: /* VMMCALL */
-				if (c->modrm_mod != 3 || c->modrm_rm != 1)
-					return (EMULATE_FAIL);
+				if (c->modrm_mod != 3 || c->modrm_rm != 1) {
+					ctx = "vmmcall";
+					goto fail;
+				}
+
 				break;
 			case 0x34: /* sysenter */
 			case 0x35: /* sysexit */
-				if (c->modrm_mod != 0 || c->modrm_rm != 0)
-					return (EMULATE_FAIL);
+				if (c->modrm_mod != 0 || c->modrm_rm != 0) {
+					ctx = "sysenter/sysexit";
+					goto fail;
+				}
+
 				break;
 			case 0x05: /* syscall */
-				if (c->modrm_mod != 0 || c->modrm_rm != 0)
-					return (EMULATE_FAIL);
+				if (c->modrm_mod != 0 || c->modrm_rm != 0) {
+					ctx = "syscall";
+					goto fail;
+				}
+
 				break;
 			default:
-				return (EMULATE_FAIL);
+				ctx = "unknown";
+				goto fail;
 			}
 
-			if (!(c->modrm_reg == 0 || c->modrm_reg == 3))
-				return (EMULATE_FAIL);
+			if (!(c->modrm_reg == 0 || c->modrm_reg == 3)) {
+				ctx = "modcrm";
+				goto fail;
+			}
 		}
 
 		KVM_VCPU_KSTAT_INC(vcpu, kvmvs_insn_emulation);
@@ -2711,7 +2695,9 @@ emulate_instruction(struct kvm_vcpu *vcpu, unsigned long cr2,
 
 			if (kvm_mmu_unprotect_page_virt(vcpu, cr2))
 				return (EMULATE_DONE);
-			return (EMULATE_FAIL);
+
+			ctx = "decode";
+			goto fail;
 		}
 	}
 
@@ -2740,9 +2726,10 @@ emulate_instruction(struct kvm_vcpu *vcpu, unsigned long cr2,
 	if (r) {
 		if (kvm_mmu_unprotect_page_virt(vcpu, cr2))
 			return (EMULATE_DONE);
+
 		if (!vcpu->mmio_needed) {
-			kvm_report_emulation_failure(vcpu, "mmio");
-			return (EMULATE_FAIL);
+			ctx = "mmio";
+			goto fail;
 		}
 
 		return (EMULATE_DO_MMIO);
@@ -2756,6 +2743,10 @@ emulate_instruction(struct kvm_vcpu *vcpu, unsigned long cr2,
 	}
 
 	return (EMULATE_DONE);
+
+fail:
+	kvm_report_emulation_failure(vcpu, ctx != NULL ? ctx : "????");
+	return (EMULATE_FAIL);
 }
 
 static int
@@ -3160,7 +3151,12 @@ kvm_find_cpuid_entry(struct kvm_vcpu *vcpu, uint32_t function, uint32_t index)
 int
 cpuid_maxphyaddr(struct kvm_vcpu *vcpu)
 {
-	return (36);  /* from linux.  number of bits, perhaps? */
+	struct kvm_cpuid_entry2 *best;
+
+	if ((best = kvm_find_cpuid_entry(vcpu, 0x80000008, 0)) != NULL)
+		return (best->eax & 0xff);
+
+	return (36);
 }
 
 void

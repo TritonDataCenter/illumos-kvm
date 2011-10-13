@@ -1992,7 +1992,7 @@ realmode_set_cr(struct kvm_vcpu *vcpu,
 	}
 }
 
-static int
+int
 kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
     struct kvm_vcpu *vcpu, uint32_t access, uint32_t *error)
 {

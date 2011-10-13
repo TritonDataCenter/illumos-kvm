@@ -287,6 +287,8 @@ extern void kvm_get_pfn(struct kvm_vcpu *, pfn_t);
 extern int kvm_read_guest_page(struct kvm *, gfn_t, void *, int, int);
 extern int kvm_read_guest_atomic(struct kvm *, gpa_t, void *, unsigned long);
 extern int kvm_read_guest(struct kvm *, gpa_t, void *, unsigned long);
+extern int kvm_read_guest_virt_helper(gva_t, void *, unsigned int,
+    struct kvm_vcpu *, uint32_t, uint32_t *);
 extern int kvm_write_guest_page(struct kvm *, gfn_t, const void *, int, int);
 extern int kvm_write_guest(struct kvm *, gpa_t, const void *, unsigned long);
 extern int kvm_clear_guest_page(struct kvm *, gfn_t, int, int);
