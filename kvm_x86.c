@@ -2585,7 +2585,7 @@ kvm_report_emulation_failure(struct kvm_vcpu *vcpu, const char *context)
 
 	kvm_read_guest_virt(rip_linear, (void *)opcodes, 4, vcpu, NULL);
 
-	cmn_err(CE_WARN, "emulation failed (%s) rip %lx %02x %02x %02x %02x\n",
+	cmn_err(CE_CONT, "!emulation failed (%s) rip %lx %02x %02x %02x %02x\n",
 	    context, rip, opcodes[0], opcodes[1], opcodes[2], opcodes[3]);
 }
 
