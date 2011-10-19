@@ -2707,7 +2707,6 @@ jmp:				/* jmp rel short */
 			c->eip = saved_eip;
 			goto cannot_emulate;
 		}
-		goto cannot_emulate;
 		break;
 	case 0xf4:		/* hlt */
 		ctxt->vcpu->arch.halt_request = 1;
