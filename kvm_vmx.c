@@ -49,6 +49,7 @@ static int bypass_guest_pf = 1;
 static int enable_vpid = 1;
 static int flexpriority_enabled = 1;
 static int enable_ept = 1;
+static int kvm_vmx_ept_required = 1;
 static int enable_unrestricted_guest = 1;
 static int emulate_invalid_guest_state = 0;
 static kmem_cache_t *kvm_vcpu_cache;
@@ -1586,6 +1587,12 @@ vmx_hardware_setup(void)
 		enable_vpid = 0;
 
 	if (!cpu_has_vmx_ept()) {
+		if (kvm_vmx_ept_required) {
+			cmn_err(CE_WARN, "kvm: insufficient hardware support "
+			    "(lacking EPT)\n");
+			return (EIO);
+		}
+
 		enable_ept = 0;
 		enable_unrestricted_guest = 0;
 	}
