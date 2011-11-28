@@ -3417,19 +3417,18 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	if (vcpu->fpu_active)
 		kvm_load_guest_fpu(vcpu);
 
-	cli();
-
 	clear_bit(KVM_REQ_KICK, &vcpu->requests);
 
 	if (vcpu->requests || issig(JUSTLOOKING)) {
 		set_bit(KVM_REQ_KICK, &vcpu->requests);
-		sti();
 		kpreempt_enable();
 		r = 1;
 		goto out;
 	}
 
 	inject_pending_event(vcpu);
+
+	cli();
 
 	/* enable NMI/IRQ window open exits if needed */
 	if (vcpu->arch.nmi_pending)
