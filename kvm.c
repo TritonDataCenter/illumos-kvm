@@ -421,6 +421,19 @@ kvm_fire_urn(struct kvm_vcpu *vcpu)
 		vcpu->urn->on_user_return(vcpu, vcpu->urn);
 }
 
+void
+kvm_ringbuf_record(kvm_ringbuf_t *ringbuf, uint32_t tag, uint64_t payload)
+{
+	kvm_ringbuf_entry_t *ent = &ringbuf->kvmr_buf[ringbuf->kvmr_ent++ &
+	    (KVM_RINGBUF_NENTRIES - 1)];
+
+	ent->kvmre_tag = tag;
+	ent->kvmre_cpuid = curthread->t_cpu->cpu_id;
+	ent->kvmre_thread = (uintptr_t)curthread;
+	ent->kvmre_tsc = gethrtime_unscaled();
+	ent->kvmre_payload = payload;
+}
+
 /*
  * Called when we've been asked to save our context. i.e. we're being swapped
  * out.
@@ -429,6 +442,8 @@ void
 kvm_ctx_save(void *arg)
 {
 	struct kvm_vcpu *vcpu = arg;
+	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
+	    KVM_RINGBUF_TAG_CTXSAVE, vcpu->cpu);
 	kvm_arch_vcpu_put(vcpu);
 	kvm_fire_urn(vcpu);
 }
@@ -444,6 +459,8 @@ kvm_ctx_restore(void *arg)
 
 	cpu = CPU->cpu_seqid;
 	struct kvm_vcpu *vcpu = arg;
+	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
+	    KVM_RINGBUF_TAG_CTXRESTORE, vcpu->cpu);
 	kvm_arch_vcpu_load(vcpu, cpu);
 }
 

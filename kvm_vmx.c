@@ -497,6 +497,9 @@ __vcpu_clear(void *arg)
 
 	vmx->vmcs->revision_id = vmcs_config.revision_id;
 
+	kvm_ringbuf_record(&vmx->vcpu.kvcpu_ringbuf,
+	    KVM_RINGBUF_TAG_VCPUCLEAR, vmx->vcpu.cpu);
+
 	if (vmx->vcpu.cpu == cpu)
 		vmcs_clear(vmx->vmcs_pa);
 
@@ -840,6 +843,9 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 	if (current_vmcs[cpu] != vmx->vmcs) {
 		uint8_t error;
 
+		kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
+		    KVM_RINGBUF_TAG_VMPTRLD, (uint64_t)current_vmcs[cpu]);
+
 		current_vmcs[cpu] = vmx->vmcs;
 
 		KVM_TRACE1(vmx__vmptrld, uint64_t, phys_addr);
@@ -853,6 +859,9 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 	if (vcpu->cpu != cpu) {
 		struct descriptor_table dt;
 		unsigned long sysenter_esp;
+
+		kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
+		    KVM_RINGBUF_TAG_VCPUMIGRATE, vcpu->cpu);
 
 		vcpu->cpu = cpu;
 

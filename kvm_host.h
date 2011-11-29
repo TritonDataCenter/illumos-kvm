@@ -100,6 +100,29 @@ extern int kvm_io_bus_unregister_dev(struct kvm *, enum kvm_bus,
 
 #define	KVM_MAX_IRQ_ROUTES 1024
 
+#define	KVM_RINGBUF_NENTRIES	512
+
+#define	KVM_RINGBUF_TAG_CTXSAVE		1
+#define	KVM_RINGBUF_TAG_CTXRESTORE	2
+#define	KVM_RINGBUF_TAG_VMPTRLD		3
+#define	KVM_RINGBUF_TAG_VCPUMIGRATE	4
+#define	KVM_RINGBUF_TAG_VCPUCLEAR	5
+
+typedef struct kvm_ringbuf_entry {
+	uint32_t kvmre_tag;			/* tag for this entry */
+	uint32_t kvmre_cpuid;			/* CPU of entry */
+	uint64_t kvmre_thread;			/* thread for entry */
+	uint64_t kvmre_tsc;			/* TSC at time of entry */
+	uint64_t kvmre_payload;			/* payload for this entry */
+} kvm_ringbuf_entry_t;
+
+typedef struct kvm_ringbuf {
+	kvm_ringbuf_entry_t kvmr_buf[KVM_RINGBUF_NENTRIES]; /* ring buffer */
+	uint32_t kvmr_ent;			/* current entry */
+} kvm_ringbuf_t;
+
+extern void kvm_ringbuf_record(kvm_ringbuf_t *, uint32_t, uint64_t);
+
 typedef struct kvm_vcpu {
 	struct kvm *kvm;
 	int vcpu_id;
@@ -117,7 +140,7 @@ typedef struct kvm_vcpu {
 	kcondvar_t kvcpu_kick_cv;
 	kvm_vcpu_stats_t kvcpu_stats;
 	kstat_t *kvcpu_kstat;
-
+	kvm_ringbuf_t kvcpu_ringbuf;
 	int sigset_active;
 	sigset_t sigset;
 	int mmio_needed;
