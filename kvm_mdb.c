@@ -276,6 +276,82 @@ kvm_mdb_gsiroutes(uintptr_t addr, uint_t flags, int argc, const mdb_arg_t *argv)
 	return (DCMD_OK);
 }
 
+int
+kvm_mdb_ringbuf_entry_init(mdb_walk_state_t *wsp)
+{
+	kvm_ringbuf_t *buf;
+	uintptr_t addr;
+
+	if (wsp->walk_addr == NULL) {
+		mdb_warn("kvm_ringbuf_entry does not support global walks\n");
+		return (WALK_ERR);
+	}
+
+	buf = mdb_alloc(sizeof (kvm_ringbuf_t), UM_SLEEP | UM_GC);
+
+	if (mdb_vread(buf, sizeof (kvm_ringbuf_t), wsp->walk_addr) == -1) {
+		mdb_warn("couldn't read kvm_ringbuf_t at %p", wsp->walk_addr);
+		return (DCMD_ERR);
+	}
+
+	wsp->walk_addr += offsetof(kvm_ringbuf_t, kvmr_buf);
+	wsp->walk_data = buf;
+	wsp->walk_arg = (void *)(uintptr_t)(buf->kvmr_ent >
+	    KVM_RINGBUF_NENTRIES ? buf->kvmr_ent - KVM_RINGBUF_NENTRIES : 0);
+
+	return (WALK_NEXT);
+}
+
+int
+kvm_mdb_ringbuf_entry_step(mdb_walk_state_t *wsp)
+{
+	kvm_ringbuf_t *buf = wsp->walk_data;
+	uintptr_t ndx = (uintptr_t)wsp->walk_arg;
+
+	if (ndx == buf->kvmr_ent)
+		return (WALK_DONE);
+
+	wsp->walk_arg = (void *)(ndx + 1);
+	ndx &= KVM_RINGBUF_NENTRIES - 1;
+
+	return (wsp->walk_callback(wsp->walk_addr +
+	    ndx * sizeof (kvm_ringbuf_entry_t), &buf->kvmr_buf[ndx],
+	    wsp->walk_cbdata));
+}
+
+int
+kvm_mdb_ringbuf_entry(uintptr_t addr, uint_t flags, int argc,
+    const mdb_arg_t *argv)
+{
+	kvm_ringbuf_entry_t ent;
+
+	if (!(flags & DCMD_ADDRSPEC))
+		return (DCMD_USAGE);
+
+	if (DCMD_HDRSPEC(flags)) {
+		mdb_printf("%16s %17s %3s %16s %-7s %16s\n", "ADDR",
+		    "TIMESTAMP", "CPU", "THREAD", "TAG", "PAYLOAD");
+	}
+
+	if (mdb_vread(&ent, sizeof (ent), addr) == -1) {
+		mdb_warn("couldn't read entry at %p", addr);
+		return (DCMD_ERR);
+	}
+
+	mdb_printf("%16p %17lld %3d %16p %-7s %16p\n", addr, ent.kvmre_tsc,
+	    ent.kvmre_cpuid, ent.kvmre_thread,
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_CTXSAVE ? "save" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_CTXRESTORE ? "restore" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_VMPTRLD ? "vmptrld" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPUMIGRATE ? "migrate" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPUCLEAR ? "clear" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPULOAD ? "load" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPUPUT ? "put" : "????",
+	    ent.kvmre_payload);
+
+	return (DCMD_OK);
+}
+
 static int
 kvm_mdb_kvm_walk_init(mdb_walk_state_t *wsp)
 {
@@ -318,6 +394,8 @@ static const mdb_dcmd_t dcmds[] = {
 	    "to a QEMU virtual address", kvm_mdb_gpa2qva },
 	{ "kvm_gsiroutes", NULL, "print out the global system "
 	    "interrupt (GSI) routing table", kvm_mdb_gsiroutes },
+	{ "kvm_ringbuf_entry", NULL, "print out a kvm ring buffer entry",
+	    kvm_mdb_ringbuf_entry },
 	{ NULL }
 };
 
@@ -326,6 +404,8 @@ static const mdb_walker_t walkers[] = {
 	    kvm_mdb_memory_slot_init, kvm_mdb_memory_slot_step },
 	{ "kvm_mem_alias", "walk kvm_mem_alias structures for a given kvm",
 	    kvm_mdb_mem_alias_init, kvm_mdb_mem_alias_step },
+	{ "kvm_ringbuf_entry", "given a kvm_ringbuf_t, walk its entries",
+	    kvm_mdb_ringbuf_entry_init, kvm_mdb_ringbuf_entry_step },
 	{ "kvm", "walk all the kvm structures",
 	    kvm_mdb_kvm_walk_init, kvm_mdb_kvm_walk_step },
 	{ NULL }
