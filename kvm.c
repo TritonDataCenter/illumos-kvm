@@ -484,6 +484,8 @@ vcpu_load(struct kvm_vcpu *vcpu)
 	installctx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
 	    NULL, NULL, NULL);
 	kvm_arch_vcpu_load(vcpu, cpu);
+	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
+	    KVM_RINGBUF_TAG_VCPULOAD, vcpu->cpu);
 	kpreempt_enable();
 }
 
@@ -502,6 +504,8 @@ vcpu_put(struct kvm_vcpu *vcpu)
 	kvm_fire_urn(vcpu);
 	removectx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
 	    NULL, NULL, NULL);
+	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
+	    KVM_RINGBUF_TAG_VCPUPUT, vcpu->cpu);
 	kpreempt_enable();
 	mutex_exit(&vcpu->mutex);
 }
