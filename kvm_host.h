@@ -109,6 +109,11 @@ extern int kvm_io_bus_unregister_dev(struct kvm *, enum kvm_bus,
 #define	KVM_RINGBUF_TAG_VCPUCLEAR	5
 #define	KVM_RINGBUF_TAG_VCPULOAD	6
 #define	KVM_RINGBUF_TAG_VCPUPUT		7
+#define	KVM_RINGBUF_TAG_RELOAD		8
+#define	KVM_RINGBUF_TAG_EMUFAIL0	9
+#define	KVM_RINGBUF_TAG_EMUFAIL1	10
+#define	KVM_RINGBUF_TAG_EMUFAIL2	11
+#define	KVM_RINGBUF_TAG_MAX		11
 
 typedef struct kvm_ringbuf_entry {
 	uint32_t kvmre_tag;			/* tag for this entry */
@@ -120,6 +125,8 @@ typedef struct kvm_ringbuf_entry {
 
 typedef struct kvm_ringbuf {
 	kvm_ringbuf_entry_t kvmr_buf[KVM_RINGBUF_NENTRIES]; /* ring buffer */
+	kvm_ringbuf_entry_t kvmr_taglast[KVM_RINGBUF_TAG_MAX + 1];
+	uint32_t kvmr_tagcount[KVM_RINGBUF_TAG_MAX + 1]; /* count of tags */
 	uint32_t kvmr_ent;			/* current entry */
 } kvm_ringbuf_t;
 

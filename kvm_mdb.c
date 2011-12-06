@@ -346,7 +346,11 @@ kvm_mdb_ringbuf_entry(uintptr_t addr, uint_t flags, int argc,
 	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPUMIGRATE ? "migrate" :
 	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPUCLEAR ? "clear" :
 	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPULOAD ? "load" :
-	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPUPUT ? "put" : "????",
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_VCPUPUT ? "put" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_RELOAD ? "reload" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_EMUFAIL0 ? "efail-0" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_EMUFAIL1 ? "efail-1" :
+	    ent.kvmre_tag == KVM_RINGBUF_TAG_EMUFAIL2 ? "efail-2" : "????",
 	    ent.kvmre_payload);
 
 	return (DCMD_OK);

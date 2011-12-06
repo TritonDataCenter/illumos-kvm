@@ -2577,16 +2577,17 @@ get_segment_base(struct kvm_vcpu *vcpu, int seg)
 void
 kvm_report_emulation_failure(struct kvm_vcpu *vcpu, const char *context)
 {
-	uint8_t opcodes[4];
+	uint64_t ops, ctx = (uint64_t)context;
 	unsigned long rip = kvm_rip_read(vcpu);
 	unsigned long rip_linear;
 
 	rip_linear = rip + get_segment_base(vcpu, VCPU_SREG_CS);
 
-	kvm_read_guest_virt(rip_linear, (void *)opcodes, 4, vcpu, NULL);
+	kvm_read_guest_virt(rip_linear, &ops, 8, vcpu, NULL);
 
-	cmn_err(CE_CONT, "!emulation failed (%s) rip %lx %02x %02x %02x %02x\n",
-	    context, rip, opcodes[0], opcodes[1], opcodes[2], opcodes[3]);
+	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf, KVM_RINGBUF_TAG_EMUFAIL0, ctx);
+	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf, KVM_RINGBUF_TAG_EMUFAIL1, rip);
+	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf, KVM_RINGBUF_TAG_EMUFAIL2, ops);
 }
 
 static struct x86_emulate_ops emulate_ops = {
@@ -3364,7 +3365,7 @@ native_set_debugreg(int regno, unsigned long value)
 static int
 vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
-	int r;
+	int r, loaded;
 
 	int req_int_win = !irqchip_in_kernel(vcpu->kvm) &&
 	    vcpu->run->request_interrupt_window;
@@ -3417,6 +3418,7 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	if (vcpu->fpu_active)
 		kvm_load_guest_fpu(vcpu);
 
+	loaded = CPU->cpu_id;
 	clear_bit(KVM_REQ_KICK, &vcpu->requests);
 
 	if (vcpu->requests || issig(JUSTLOOKING)) {
@@ -3427,6 +3429,23 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	}
 
 	inject_pending_event(vcpu);
+
+	if (CPU->cpu_id != loaded) {
+		/*
+		 * The kpreempt_disable(), above, disables kernel migration --
+		 * but it doesn't disable migration when we block.  The call
+		 * to inject_pending_event() can, through a circuitous path,
+		 * block, and we may therefore have moved to a different CPU.
+		 * That's actually okay -- we just need to reload our state
+		 * in this case.
+		 */
+		kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
+		    KVM_RINGBUF_TAG_RELOAD, loaded);
+		kvm_x86_ops->prepare_guest_switch(vcpu);
+
+		if (vcpu->fpu_active)
+			kvm_load_guest_fpu(vcpu);
+	}
 
 	cli();
 

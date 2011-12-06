@@ -426,12 +426,23 @@ kvm_ringbuf_record(kvm_ringbuf_t *ringbuf, uint32_t tag, uint64_t payload)
 {
 	kvm_ringbuf_entry_t *ent = &ringbuf->kvmr_buf[ringbuf->kvmr_ent++ &
 	    (KVM_RINGBUF_NENTRIES - 1)];
+	int id = curthread->t_cpu->cpu_id;
+	hrtime_t tsc = gethrtime_unscaled();
 
 	ent->kvmre_tag = tag;
-	ent->kvmre_cpuid = curthread->t_cpu->cpu_id;
+	ent->kvmre_cpuid = id;
 	ent->kvmre_thread = (uintptr_t)curthread;
-	ent->kvmre_tsc = gethrtime_unscaled();
+	ent->kvmre_tsc = tsc;
 	ent->kvmre_payload = payload;
+
+	ent = &ringbuf->kvmr_taglast[tag];
+	ent->kvmre_tag = tag;
+	ent->kvmre_cpuid = id;
+	ent->kvmre_thread = (uintptr_t)curthread;
+	ent->kvmre_tsc = tsc;
+	ent->kvmre_payload = payload;
+
+	ringbuf->kvmr_tagcount[tag]++;
 }
 
 /*
@@ -479,10 +490,11 @@ vcpu_load(struct kvm_vcpu *vcpu)
 	int cpu;
 
 	mutex_enter(&vcpu->mutex);
-	kpreempt_disable();
-	cpu = CPU->cpu_seqid;
 	installctx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
 	    NULL, NULL, NULL);
+
+	kpreempt_disable();
+	cpu = CPU->cpu_seqid;
 	kvm_arch_vcpu_load(vcpu, cpu);
 	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
 	    KVM_RINGBUF_TAG_VCPULOAD, vcpu->cpu);
