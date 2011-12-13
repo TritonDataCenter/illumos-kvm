@@ -246,7 +246,23 @@ __kvm_ioapic_update_eoi(struct kvm_ioapic *ioapic, int vector, int trigger_mode)
 		if (trigger_mode != IOAPIC_LEVEL_TRIG)
 			continue;
 
-		ASSERT(ent->fields.trig_mode == IOAPIC_LEVEL_TRIG);
+		if (ent->fields.trig_mode != IOAPIC_LEVEL_TRIG) {
+			/*
+			 * If the same vector is being used for two different
+			 * I/O redirection table entries with different trigger
+			 * modes, our trigger mode and the trigger mode of
+			 * the entry will differ for at least one entry.
+			 * Most operating systems don't do this (that is, most
+			 * do not reuse a vector for interrupts with different
+			 * trigger modes), but FreeBSD (at least) is a notable
+			 * exception:  it allocates vectors on a per-local APIC
+			 * basis, and will therefore reuse the same vector for
+			 * entirely different interrupt sources.  In this case,
+			 * we need do nothing else, and simply continue.
+			 */
+			continue;
+		}
+
 		ent->fields.remote_irr = 0;
 		if (!ent->fields.mask && (ioapic->irr & (1 << i)))
 			ioapic_service(ioapic, i);
