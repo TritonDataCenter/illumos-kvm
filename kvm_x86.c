@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright 2012 Joyent, Inc. All Rights Reserved.
  */
 
 #include <sys/types.h>
@@ -1767,7 +1767,8 @@ do_cpuid_ent(struct kvm_cpuid_entry2 *entry, uint32_t function,
 		0 /* Reserved */ | F(CX16) | 0 /* xTPR Update, PDCM */ |
 		0 /* Reserved, DCA */ | F(XMM4_1) |
 		F(XMM4_2) | F(X2APIC) | F(MOVBE) | F(POPCNT) |
-		0 /* Reserved, XSAVE, OSXSAVE */;
+		0 /* Reserved, XSAVE, OSXSAVE */ | F(AES) |
+		0 /* AVX, Reserved */;
 	/* cpuid 0x80000001.ecx */
 	const uint32_t kvm_supported_word6_x86_features =
 		F(LAHF_LM) | F(CMP_LEGACY) | F(SVM) | 0 /* ExtApicSpace */ |
