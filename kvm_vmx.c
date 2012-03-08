@@ -13,7 +13,7 @@
  * This work is licensed under the terms of the GNU GPL, version 2.  See
  * the COPYING file in the top-level directory.
  *
- * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright (c) 2012 Joyent, Inc. All rights reserved.
  */
 
 #include <sys/sysmacros.h>
@@ -1376,7 +1376,7 @@ kvm_cpu_vmxoff(void)
 	KVM_TRACE(vmx__vmxoff);
 
 	/* BEGIN CSTYLED */
-	__asm__ volatile ((ASM_VMX_VMXOFF) : : : "cc");
+	__asm__ volatile (ASM_VMX_VMXOFF : : : "cc");
 	/* END CSTYLED */
 	setcr4(getcr4() & ~X86_CR4_VMXE);
 }

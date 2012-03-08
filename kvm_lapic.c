@@ -15,7 +15,7 @@
  * This work is licensed under the terms of the GNU GPL, version 2.  See
  * the COPYING file in the top-level directory.
  *
- * Copyright 2011 Joyent, Inc. All rights reserved.
+ * Copyright (c) 2012 Joyent, Inc. All rights reserved.
  */
 #include <sys/types.h>
 #include <sys/atomic.h>
@@ -54,7 +54,7 @@ static int __apic_accept_irq(struct kvm_lapic *, int, int, int, int);
 #define	REG_POS(v) (((v) >> 5) << 4)
 
 
-inline uint32_t
+uint32_t
 apic_get_reg(struct kvm_lapic *apic, int reg_off)
 {
 	return (*((uint32_t *)((uintptr_t)apic->regs + reg_off)));
@@ -66,45 +66,45 @@ apic_set_reg(struct kvm_lapic *apic, int reg_off, uint32_t val)
 	*((uint32_t *)((uintptr_t)apic->regs + reg_off)) = val;
 }
 
-static inline int
+static int
 apic_test_and_set_vector(int vec, caddr_t bitmap)
 {
 	return (test_and_set_bit(VEC_POS(vec), (unsigned long *)(bitmap +
 	    REG_POS(vec))));
 }
 
-static inline int
+static int
 apic_test_and_clear_vector(int vec, caddr_t bitmap)
 {
 	return (test_and_clear_bit(VEC_POS(vec),
 	    (unsigned long *)(bitmap + REG_POS(vec))));
 }
 
-inline void
+void
 apic_set_vector(int vec, caddr_t bitmap)
 {
 	set_bit(VEC_POS(vec), (unsigned long *)(bitmap + REG_POS(vec)));
 }
 
-inline void
+void
 apic_clear_vector(int vec, caddr_t bitmap)
 {
 	clear_bit(VEC_POS(vec), (unsigned long *)(bitmap + REG_POS(vec)));
 }
 
-inline int
+int
 apic_hw_enabled(struct kvm_lapic *apic)
 {
 	return ((apic)->vcpu->arch.apic_base & MSR_IA32_APICBASE_ENABLE);
 }
 
-inline int
+int
 apic_sw_enabled(struct kvm_lapic *apic)
 {
 	return (apic_get_reg(apic, APIC_SPIV) & APIC_SPIV_APIC_ENABLED);
 }
 
-inline int
+int
 apic_enabled(struct kvm_lapic *apic)
 {
 	return (apic_sw_enabled(apic) && apic_hw_enabled(apic));
@@ -128,7 +128,7 @@ apic_lvtt_period(struct kvm_lapic *apic)
 	return (apic_get_reg(apic, APIC_LVTT) & APIC_LVT_TIMER_PERIODIC);
 }
 
-static inline int
+static int
 apic_lvt_nmi_mode(uint32_t lvt_val)
 {
 	return ((lvt_val & (APIC_MODE_MASK | APIC_LVT_MASKED)) == APIC_DM_NMI);
@@ -150,7 +150,7 @@ kvm_apic_set_version(struct kvm_vcpu *vcpu)
 	apic_set_reg(apic, APIC_LVR, v);
 }
 
-static inline int
+static int
 apic_x2apic_mode(struct kvm_lapic *apic)
 {
 	return (apic->vcpu->arch.apic_base & X2APIC_ENABLE);
@@ -211,7 +211,7 @@ find_highest_vector(void *bitmap)
 		return (fls(word[word_offset << 2]) - 1 + (word_offset << 5));
 }
 
-static inline int
+static int
 apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
 {
 	apic->irr_pending = 1;
@@ -219,14 +219,14 @@ apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
 	    APIC_IRR)));
 }
 
-static inline int
+static int
 apic_search_irr(struct kvm_lapic *apic)
 {
 	return (find_highest_vector((void *)((uintptr_t)apic->regs +
 	    APIC_IRR)));
 }
 
-static inline int
+static int
 apic_find_highest_irr(struct kvm_lapic *apic)
 {
 	int result;
@@ -240,7 +240,7 @@ apic_find_highest_irr(struct kvm_lapic *apic)
 	return (result);
 }
 
-static inline void
+static void
 apic_clear_irr(int vec, struct kvm_lapic *apic)
 {
 	apic->irr_pending = 0;
@@ -278,7 +278,7 @@ kvm_apic_set_irq(struct kvm_vcpu *vcpu, struct kvm_lapic_irq *irq)
 	    irq->level, irq->trig_mode));
 }
 
-inline int
+int
 apic_find_highest_isr(struct kvm_lapic *apic)
 {
 	int ret;
@@ -553,7 +553,7 @@ __report_tpr_access(struct kvm_lapic *apic, int write)
 	run->tpr_access.is_write = write;
 }
 
-static inline void
+static void
 report_tpr_access(struct kvm_lapic *apic, int write)
 {
 	if (apic->vcpu->arch.tpr_access_reporting)
@@ -596,7 +596,7 @@ __apic_read(struct kvm_lapic *apic, unsigned int offset)
 	return (val);
 }
 
-static inline struct kvm_lapic *
+static struct kvm_lapic *
 to_lapic(struct kvm_io_device *dev)
 {
 	return ((struct kvm_lapic *)((uintptr_t)dev -
@@ -1170,7 +1170,8 @@ kvm_inject_apic_timer_irqs(struct kvm_vcpu *vcpu)
 
 	if (apic && apic->lapic_timer.pending > 0) {
 		if (kvm_apic_local_deliver(apic, APIC_LVTT))
-			atomic_dec_32(&apic->lapic_timer.pending);
+			atomic_dec_32((volatile uint32_t *)&apic->
+			    lapic_timer.pending);
 	}
 }
 

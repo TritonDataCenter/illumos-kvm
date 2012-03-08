@@ -24,7 +24,7 @@
  *   Yaniv Kamay  <yaniv@qumranet.com>
  *
  * Ported to illumos by Joyent
- * Copyright 2011 Joyent, Inc. All rights reserved.
+ * Copyright (c) 2012 Joyent, Inc. All rights reserved.
  *
  * Authors:
  *   Max Bruning	<max@joyent.com>
@@ -783,7 +783,7 @@ kvm_free_physmem(struct kvm *kvm)
 void
 kvm_get_kvm(struct kvm *kvm)
 {
-	atomic_inc_32(&kvm->users_count);
+	atomic_inc_32((volatile uint32_t *)&kvm->users_count);
 }
 
 unsigned long
@@ -1449,7 +1449,7 @@ kvm_vm_ioctl_create_vcpu(struct kvm *kvm, uint32_t id, int *rval_p)
 
 	smp_wmb();
 
-	atomic_inc_32(&kvm->online_vcpus);
+	atomic_inc_32((volatile uint32_t *)&kvm->online_vcpus);
 
 	if (kvm->bsp_vcpu_id == id)
 		kvm->bsp_vcpu = vcpu;

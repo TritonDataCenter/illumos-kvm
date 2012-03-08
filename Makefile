@@ -1,11 +1,11 @@
 #
-# Copyright (c) 2010 Joyent Inc., All Rights Reserved.
+# Copyright (c) 2012 Joyent Inc., All Rights Reserved.
 #
 
 # Use the gcc compiler and Sun linker.
 KERNEL_SOURCE=$(PWD)/../../illumos
 PROTO_AREA=$(PWD)/../../../proto
-GCC=/usr/sfw/bin/gcc
+GCC=/opt/gcc/4.4.4/bin/gcc
 CC=$(GCC) -m64 -mcmodel=kernel
 LD=/usr/bin/ld
 CTFBINDIR=$(KERNEL_SOURCE)/usr/src/tools/proto/*/opt/onbld/bin/i386
@@ -69,7 +69,7 @@ HDRCHK_SYSHDRS=			\
 
 world: kvm kvm.so JOY_kvm_link.so
 
-kvm: kvm.c kvm_x86.c kvm_emulate.c kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS) 
+kvm: kvm.c kvm_x86.c kvm_emulate.c kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c $(HEADERS) 
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_x86.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_emulate.c
@@ -84,7 +84,6 @@ kvm: kvm.c kvm_x86.c kvm_emulate.c kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c k
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_coalesced_mmio.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_irq_comm.c
 	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_cache_regs.c
-	$(CC) $(CFLAGS) $(INCLUDEDIR) kvm_bitops.c
 	$(CTFCONVERT) -i -L VERSION kvm.o
 	$(CTFCONVERT) -i -L VERSION kvm_x86.o
 	$(CTFCONVERT) -i -L VERSION kvm_emulate.o
@@ -99,9 +98,8 @@ kvm: kvm.c kvm_x86.c kvm_emulate.c kvm_irq.c kvm_i8254.c kvm_lapic.c kvm_mmu.c k
 	$(CTFCONVERT) -i -L VERSION kvm_coalesced_mmio.o
 	$(CTFCONVERT) -i -L VERSION kvm_irq_comm.o
 	$(CTFCONVERT) -i -L VERSION kvm_cache_regs.o
-	$(CTFCONVERT) -i -L VERSION kvm_bitops.o
-	$(LD) -r -o kvm kvm.o kvm_x86.o kvm_emulate.o kvm_irq.o kvm_i8254.o kvm_lapic.o kvm_mmu.o kvm_iodev.o kvm_ioapic.o kvm_vmx.o kvm_i8259.o kvm_coalesced_mmio.o kvm_irq_comm.o kvm_cache_regs.o kvm_bitops.o
-	$(CTFMERGE) -L VERSION -o kvm kvm.o kvm_x86.o kvm_emulate.o kvm_irq.o kvm_i8254.o kvm_lapic.o kvm_mmu.o kvm_iodev.o kvm_ioapic.o kvm_vmx.o kvm_i8259.o kvm_coalesced_mmio.o kvm_irq_comm.o kvm_cache_regs.o kvm_bitops.o
+	$(LD) -r -o kvm kvm.o kvm_x86.o kvm_emulate.o kvm_irq.o kvm_i8254.o kvm_lapic.o kvm_mmu.o kvm_iodev.o kvm_ioapic.o kvm_vmx.o kvm_i8259.o kvm_coalesced_mmio.o kvm_irq_comm.o kvm_cache_regs.o
+	$(CTFMERGE) -L VERSION -o kvm kvm.o kvm_x86.o kvm_emulate.o kvm_irq.o kvm_i8254.o kvm_lapic.o kvm_mmu.o kvm_iodev.o kvm_ioapic.o kvm_vmx.o kvm_i8259.o kvm_coalesced_mmio.o kvm_irq_comm.o kvm_cache_regs.o
 
 kvm.so: kvm_mdb.c
 	$(GCC) -m64 -shared \
@@ -121,8 +119,8 @@ install: world
 	@cp JOY_kvm_link.so $(DESTDIR)/usr/lib/devfsadm/linkmod
 
 check:
-	@$(CSTYLE) kvm.c kvm_mdb.c kvm_emulate.c kvm_x86.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c $(HEADERS) kvm_link.c
-	@./tools/xxxcheck kvm_x86.c kvm.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c kvm_bitops.c
+	@$(CSTYLE) kvm.c kvm_mdb.c kvm_emulate.c kvm_x86.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c $(HEADERS) kvm_link.c
+	@./tools/xxxcheck kvm_x86.c kvm.c kvm_irq.c kvm_lapic.c kvm_i8254.c kvm_mmu.c kvm_iodev.c kvm_ioapic.c kvm_vmx.c kvm_i8259.c kvm_coalesced_mmio.c kvm_irq_comm.c kvm_cache_regs.c
 	@$(HDRCHK) $(HDRCHK_USRFLAG) $(HDRCHK_USRHDRS)
 	@$(HDRCHK) $(HDRCHK_SYSFLAG) $(HDRCHK_SYSHDRS)
 

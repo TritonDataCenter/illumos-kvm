@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2012 Joyent, Inc. All Rights Reserved.
+ * Copyright (c) 2012 Joyent, Inc. All Rights Reserved.
  */
 
 #include <sys/types.h>
@@ -2887,7 +2887,7 @@ kvm_timer_fire(void *arg)
 	mutex_enter(&vcpu->kvcpu_kick_lock);
 
 	if (timer->reinject || !timer->pending) {
-		atomic_add_32(&timer->pending, 1);
+		atomic_add_32((volatile uint32_t *)&timer->pending, 1);
 		set_bit(KVM_REQ_PENDING_TIMER, &vcpu->requests);
 	}
 
@@ -5056,7 +5056,7 @@ kvm_set_rflags(struct kvm_vcpu *vcpu, unsigned long rflags)
 	kvm_x86_ops->set_rflags(vcpu, rflags);
 }
 
-inline gpa_t
+gpa_t
 gfn_to_gpa(gfn_t gfn)
 {
 	return ((gpa_t)gfn << PAGESHIFT);
@@ -5280,7 +5280,7 @@ native_read_cr3(void)
 	return (val);
 }
 
-inline unsigned long
+unsigned long
 get_desc_limit(const struct desc_struct *desc)
 {
 	return (desc->c.b.limit0 | (desc->c.b.limit << 16));
@@ -5293,13 +5293,13 @@ get_desc_base(const struct desc_struct *desc)
 	    ((desc->c.b.base2) << 24));
 }
 
-inline void
+void
 kvm_clear_exception_queue(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.exception.pending = 0;
 }
 
-inline void
+void
 kvm_queue_interrupt(struct kvm_vcpu *vcpu, uint8_t vector, int soft)
 {
 	vcpu->arch.interrupt.pending = 1;
@@ -5307,7 +5307,7 @@ kvm_queue_interrupt(struct kvm_vcpu *vcpu, uint8_t vector, int soft)
 	vcpu->arch.interrupt.nr = vector;
 }
 
-inline void
+void
 kvm_clear_interrupt_queue(struct kvm_vcpu *vcpu)
 {
 	vcpu->arch.interrupt.pending = 0;
@@ -5320,13 +5320,13 @@ kvm_event_needs_reinjection(struct kvm_vcpu *vcpu)
 	    vcpu->arch.nmi_injected);
 }
 
-inline int
+int
 kvm_exception_is_soft(unsigned int nr)
 {
 	return (nr == BP_VECTOR) || (nr == OF_VECTOR);
 }
 
-inline int
+int
 is_protmode(struct kvm_vcpu *vcpu)
 {
 	return (kvm_read_cr0_bits(vcpu, X86_CR0_PE));
@@ -5338,7 +5338,7 @@ is_long_mode(struct kvm_vcpu *vcpu)
 	return (vcpu->arch.efer & EFER_LMA);
 }
 
-inline int
+int
 is_pae(struct kvm_vcpu *vcpu)
 {
 	return (kvm_read_cr4_bits(vcpu, X86_CR4_PAE));

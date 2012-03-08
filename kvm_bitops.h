@@ -22,11 +22,13 @@
 
 /*
  * Copyright 1992, Linus Torvalds.
- * Copyright 2011, Joyent, Inc.
+ * Copyright (c) 2012, Joyent, Inc.
  *
  * Note: inlines with more than a single statement should be marked
  * __always_inline to avoid problems with older gcc's inlining heuristics.
  */
+
+#include <sys/types.h>
 
 #define	DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
 #define	BITS_TO_LONGS(nr)	DIV_ROUND_UP(nr, 8 * sizeof (long))
@@ -47,6 +49,8 @@
 #else
 #define	BITOP_ADDR(x) "+m" (*(volatile long *) (x))
 #endif
+
+#define	ADDR	BITOP_ADDR(addr)
 
 /*
  * We do the locked ops that don't return the old value as
@@ -72,7 +76,19 @@
  * Note that @nr may be almost arbitrarily large; this function is not
  * restricted to acting on a single-word quantity.
  */
-extern inline void set_bit(unsigned int, volatile unsigned long *);
+static inline void
+set_bit(unsigned int nr, volatile unsigned long *addr)
+{
+	if (IS_IMMEDIATE(nr)) {
+		__asm__ volatile("lock orb %1,%0"
+			: CONST_MASK_ADDR(nr, addr)
+			: "iq" ((uint8_t)CONST_MASK(nr))
+			: "memory");
+	} else {
+		__asm__ volatile("lock bts %1,%0"
+			: BITOP_ADDR(addr) : "Ir" (nr) : "memory");
+	}
+}
 
 /*
  * __set_bit - Set a bit in memory
@@ -83,7 +99,11 @@ extern inline void set_bit(unsigned int, volatile unsigned long *);
  * If it's called on the same region of memory simultaneously, the effect
  * may be that only one operation succeeds.
  */
-extern inline void __set_bit(int, volatile unsigned long *);
+static inline void
+__set_bit(int nr, volatile unsigned long *addr)
+{
+	__asm__ volatile("bts %1,%0" : ADDR : "Ir" (nr) : "memory");
+}
 
 /*
  * clear_bit - Clears a bit in memory
@@ -95,8 +115,25 @@ extern inline void __set_bit(int, volatile unsigned long *);
  * you should call smp_mb__before_clear_bit() and/or smp_mb__after_clear_bit()
  * in order to ensure changes are visible on other processors.
  */
-extern inline void clear_bit(int, volatile unsigned long *);
-extern inline void __clear_bit(int, volatile unsigned long *);
+static inline void
+clear_bit(int nr, volatile unsigned long *addr)
+{
+	if (IS_IMMEDIATE(nr)) {
+		__asm__ volatile("lock andb %1,%0"
+			: CONST_MASK_ADDR(nr, addr)
+			: "iq" ((uint8_t)~CONST_MASK(nr)));
+	} else {
+		__asm__ volatile("lock btr %1,%0"
+			: BITOP_ADDR(addr)
+			: "Ir" (nr));
+	}
+}
+
+static inline void
+__clear_bit(int nr, volatile unsigned long *addr)
+{
+	__asm__ volatile("btr %1,%0" : ADDR : "Ir" (nr));
+}
 
 /*
  * test_and_set_bit - Set a bit and return its old value
@@ -106,7 +143,16 @@ extern inline void __clear_bit(int, volatile unsigned long *);
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
-extern inline int test_and_set_bit(int, volatile unsigned long *);
+static inline int
+test_and_set_bit(int nr, volatile unsigned long *addr)
+{
+	int oldbit;
+
+	__asm__ volatile("lock bts %2,%1\n\t"
+	    "sbb %0,%0" : "=r" (oldbit), ADDR : "Ir" (nr) : "memory");
+
+	return (oldbit);
+}
 
 /*
  * __test_and_set_bit - Set a bit and return its old value
@@ -117,7 +163,17 @@ extern inline int test_and_set_bit(int, volatile unsigned long *);
  * If two examples of this operation race, one can appear to succeed
  * but actually fail.  You must protect multiple accesses with a lock.
  */
-extern inline int __test_and_set_bit(int, volatile unsigned long *);
+static inline int
+__test_and_set_bit(int nr, volatile unsigned long *addr)
+{
+	int oldbit;
+
+	__asm__("bts %2,%1\n\t"
+	    "sbb %0,%0"
+	    : "=r" (oldbit), ADDR
+	    : "Ir" (nr));
+	return (oldbit);
+}
 
 /*
  * test_and_clear_bit - Clear a bit and return its old value
@@ -127,7 +183,17 @@ extern inline int __test_and_set_bit(int, volatile unsigned long *);
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
-extern inline int test_and_clear_bit(int, volatile unsigned long *);
+static inline int
+test_and_clear_bit(int nr, volatile unsigned long *addr)
+{
+	int oldbit;
+
+	__asm__ volatile("lock btr %2,%1\n\t"
+	    "sbb %0,%0"
+	    : "=r" (oldbit), ADDR : "Ir" (nr) : "memory");
+
+	return (oldbit);
+}
 
 /*
  * __test_and_clear_bit - Clear a bit and return its old value
@@ -138,11 +204,38 @@ extern inline int test_and_clear_bit(int, volatile unsigned long *);
  * If two examples of this operation race, one can appear to succeed
  * but actually fail.  You must protect multiple accesses with a lock.
  */
-extern inline int __test_and_clear_bit(int, volatile unsigned long *);
+static inline int
+__test_and_clear_bit(int nr, volatile unsigned long *addr)
+{
+	int oldbit;
 
-extern inline int constant_test_bit(unsigned int,
-    const volatile unsigned long *);
-extern inline int variable_test_bit(int, volatile const unsigned long *);
+	__asm__ volatile("btr %2,%1\n\t"
+	    "sbb %0,%0"
+	    : "=r" (oldbit), ADDR
+	    : "Ir" (nr));
+
+	return (oldbit);
+}
+
+static inline int
+constant_test_bit(unsigned int nr, const volatile unsigned long *addr)
+{
+	return (((1UL << (nr % 64)) &
+		(((unsigned long *)addr)[nr / 64])) != 0);
+}
+
+static inline int
+variable_test_bit(int nr, volatile const unsigned long *addr)
+{
+	int oldbit;
+
+	__asm__ volatile("bt %2,%1\n\t"
+	    "sbb %0,%0"
+	    : "=r" (oldbit)
+	    : "m" (*(unsigned long *)addr), "Ir" (nr));
+
+	return (oldbit);
+}
 
 /*
  * test_bit - Determine whether a bit is set
@@ -161,7 +254,14 @@ extern inline int variable_test_bit(int, volatile const unsigned long *);
  *
  * Undefined if no bit exists, so code should check against 0 first.
  */
-extern inline unsigned long __ffs(unsigned long);
+static inline unsigned long
+__ffs(unsigned long word)
+{
+	__asm__("bsf %1,%0"
+		: "=r" (word)
+		: "rm" (word));
+	return (word);
+}
 
 /*
  * ffz - find first zero bit in word
@@ -169,7 +269,14 @@ extern inline unsigned long __ffs(unsigned long);
  *
  * Undefined if no zero exists, so code should check against ~0UL first.
  */
-extern inline unsigned long ffz(unsigned long);
+static inline unsigned long
+ffz(unsigned long word)
+{
+	__asm__("bsf %1,%0"
+		: "=r" (word)
+		: "r" (~word));
+	return (word);
+}
 
 /*
  * __fls: find last set bit in word
@@ -177,35 +284,13 @@ extern inline unsigned long ffz(unsigned long);
  *
  * Undefined if no set bit exists, so code should check against 0 first.
  */
-extern inline unsigned long __fls(unsigned long);
-
-#ifdef __KERNEL__
-/*
- * ffs - find first set bit in word
- * @x: the word to search
- *
- * This is defined the same way as the libc and compiler builtin ffs
- * routines, therefore differs in spirit from the other bitops.
- *
- * ffs(value) returns 0 if value is 0 or the position of the first
- * set bit if value is nonzero. The first (least significant) bit
- * is at position 1.
- */
-extern inline int ffs(int);
-
-/*
- * fls - find last set bit in word
- * @x: the word to search
- *
- * This is defined in a similar way as the libc and compiler builtin
- * ffs, but returns the position of the most significant set bit.
- *
- * fls(value) returns 0 if value is 0 or the position of the last
- * set bit if value is nonzero. The last (most significant) bit is
- * at position 32.
- */
-extern inline int fls(int);
-
-#endif /* __KERNEL__ */
+static inline unsigned long
+__fls(unsigned long word)
+{
+	__asm__("bsr %1,%0"
+	    : "=r" (word)
+	    : "rm" (word));
+	return (word);
+}
 
 #endif /* _ASM_X86_BITOPS_H */

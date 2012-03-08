@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright (c) 2012 Joyent, Inc. All Rights Reserved.
  */
 
 #ifndef __KVM_X86_HOST_H
@@ -99,9 +99,6 @@
 #define	KVM_MAX_CPUID_ENTRIES 40
 #define	KVM_NR_FIXED_MTRR_REGION 88
 #define	KVM_NR_VAR_MTRR 8
-
-extern kmutex_t kvm_lock;
-extern list_t vm_list;
 
 struct kvm_vcpu;
 struct kvm;
