@@ -63,9 +63,9 @@ directory to point to the root of a checked out and built illumos directory.
 Building illumos KVM requires several recent additions to illumos,
 so be sure your illumos is up to date.
 
-Verify that gcc is installed and the version you'd like to use is in your path.
-Note that this has only been tested against the SFW version of gcc -- version
-3.4.
+Verify that you have gcc 4.4.4 installed that is used to build illumos.
+If you are not building this with SmartOS, you may need to modify the
+Makefile such that CC is pointing to the correct gcc.
 
 Verify that you either have SUNWmake or GNU make installed.
 
