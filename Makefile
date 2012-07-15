@@ -107,14 +107,12 @@ KERNEL_CFLAGS = \
 	-Wpointer-arith \
 	-gdwarf-2 \
 	-std=gnu99 \
-	-fno-dwarf2-indirect-strings \
 	-mno-red-zone
 
 USER_CFLAGS = \
 	-finline \
 	-gdwarf-2 \
 	-std=gnu89 \
-	-fno-dwarf2-indirect-strings \
 	-Wno-missing-braces \
 	-Wno-sign-compare \
 	-Wno-parentheses \
