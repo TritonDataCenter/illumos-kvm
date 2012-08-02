@@ -300,8 +300,9 @@ typedef struct kvm_vcpu_events {
  * The following should provide an optimization barrier.
  * If the system does reorder loads and stores, this needs to be changed.
  */
-
+#ifdef _KERNEL
 #define	smp_wmb()   __asm__ __volatile__("" ::: "memory")
 #define	smp_rmb()   __asm__ __volatile__("" ::: "memory")
+#endif
 
 #endif /* __KVM_X86_H */
