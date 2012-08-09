@@ -19,6 +19,7 @@
  * Copyright 2011 various Linux Kernel contributors.
  * Copyright 2011 Joyent, Inc. All Rights Reserved.
  * Copyright 2011 Joshua M. Clulow <josh@sysmgr.org>
+ * Copyright 2011 Richard Lowe
  */
 
 #include <sys/sysmacros.h>
@@ -948,9 +949,9 @@ typedef struct kvm_mmu_pages {
 } kvm_mmu_pages_t;
 
 #define	for_each_unsync_children(bitmap, idx)		\
-	for (idx = bt_getlowbit(bitmap, 0, 512);	\
-	    idx < 512;					\
-	    idx = bt_getlowbit(bitmap, idx+1, 512))
+	for (idx = bt_getlowbit(bitmap, 0, 511);	\
+	    (idx != -1) && (idx < 512);			\
+	    idx = bt_getlowbit(bitmap, idx+1, 511))
 
 static int
 mmu_pages_add(struct kvm_mmu_pages *pvec, struct kvm_mmu_page *sp, int idx)
@@ -1004,7 +1005,7 @@ __mmu_unsync_walk(struct kvm_mmu_page *sp, struct kvm_mmu_pages *pvec,
 		}
 	}
 
-	if (bt_getlowbit(sp->unsync_child_bitmap, 0, 512) == 512)
+	if (bt_getlowbit(sp->unsync_child_bitmap, 0, 511) == -1)
 		sp->unsync_children = 0;
 
 	return (nr_unsync_leaf);
