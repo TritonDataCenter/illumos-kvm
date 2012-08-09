@@ -18,6 +18,7 @@
  *
  * Copyright 2011 various Linux Kernel contributors.
  * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright 2011 Joshua M. Clulow <josh@sysmgr.org>
  */
 
 #include <sys/sysmacros.h>
@@ -340,8 +341,7 @@ mmu_alloc_pte_chain(struct kvm_vcpu *vcpu)
 static void
 mmu_free_pte_chain(struct kvm_pte_chain *pc)
 {
-	if (pc)
-		kmem_cache_free(pte_chain_cache, pc);
+	kmem_cache_free(pte_chain_cache, pc);
 }
 
 static struct kvm_rmap_desc *
@@ -354,8 +354,7 @@ mmu_alloc_rmap_desc(struct kvm_vcpu *vcpu)
 static void
 mmu_free_rmap_desc(struct kvm_rmap_desc *rd)
 {
-	if (rd)
-		kmem_cache_free(rmap_desc_cache, rd);
+	kmem_cache_free(rmap_desc_cache, rd);
 }
 
 /*
@@ -706,8 +705,7 @@ kvm_mmu_free_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 	avl_remove(&kvm->kvm_avlmp, sp);
 	mutex_exit(&kvm->kvm_avllock);
 	list_remove(&kvm->arch.active_mmu_pages, sp);
-	if (sp)
-		kmem_cache_free(mmu_page_header_cache, sp);
+	kmem_cache_free(mmu_page_header_cache, sp);
 	++kvm->arch.n_free_mmu_pages;
 }
 
@@ -1174,7 +1172,7 @@ kvm_mmu_get_page(struct kvm_vcpu *vcpu, gfn_t gfn, gva_t gaddr, unsigned level,
 	unsigned index;
 	unsigned quadrant;
 	list_t *bucket;
-	struct kvm_mmu_page *sp;
+	struct kvm_mmu_page *sp, *nsp = NULL;
 	struct hlist_node *node, *tmp;
 
 	role = vcpu->arch.mmu.base_role;
@@ -1191,8 +1189,8 @@ kvm_mmu_get_page(struct kvm_vcpu *vcpu, gfn_t gfn, gva_t gaddr, unsigned level,
 	index = kvm_page_table_hashfn(gfn);
 	bucket = &vcpu->kvm->arch.mmu_page_hash[index];
 
-	for (sp = list_head(bucket); sp != NULL;
-	    sp = list_next(bucket, sp)) {
+	for (sp = list_head(bucket); sp != NULL; sp = nsp) {
+		nsp = list_next(bucket, sp);
 		if (sp->gfn == gfn) {
 			if (sp->unsync)
 				if (kvm_sync_page(vcpu, sp))
@@ -1390,8 +1388,8 @@ kvm_mmu_zap_page(struct kvm *kvm, struct kvm_mmu_page *sp)
 		kvm_mmu_free_page(kvm, sp);
 	} else {
 		sp->role.invalid = 1;
-		if (!list_link_active(&sp->link))
-			list_insert_head(&kvm->arch.active_mmu_pages, sp);
+		list_remove(&kvm->arch.active_mmu_pages, sp);
+		list_insert_head(&kvm->arch.active_mmu_pages, sp);
 		kvm_reload_remote_mmus(kvm);
 	}
 	kvm_mmu_reset_last_pte_updated(kvm);
@@ -1426,7 +1424,7 @@ kvm_mmu_change_mmu_pages(struct kvm *kvm, unsigned int kvm_nr_mmu_pages)
 			struct kvm_mmu_page *page;
 
 			page = (struct kvm_mmu_page *)
-			    list_head(&kvm->arch.active_mmu_pages);
+			    list_tail(&kvm->arch.active_mmu_pages);
 
 			/* page removed by kvm_mmu_zap_page */
 			used_pages -= kvm_mmu_zap_page(kvm, page);
@@ -1447,17 +1445,21 @@ kvm_mmu_unprotect_page(struct kvm *kvm, gfn_t gfn)
 {
 	unsigned index;
 	list_t *bucket;
-	struct kvm_mmu_page *sp;
+	struct kvm_mmu_page *sp, *nsp = NULL;
 	int r;
 
 	r = 0;
 	index = kvm_page_table_hashfn(gfn);
 	bucket = &kvm->arch.mmu_page_hash[index];
 
-	for (sp = list_head(bucket); sp; sp = list_next(bucket, sp)) {
+	for (sp = list_head(bucket); sp; sp = nsp) {
+		/* preserve link to next node in case we free this one */
+		nsp = list_next(bucket, sp);
+
 		if (sp->gfn == gfn && !sp->role.direct) {
 			r = 1;
-			kvm_mmu_zap_page(kvm, sp);
+			if (kvm_mmu_zap_page(kvm, sp))
+				nsp = list_head(bucket);
 		}
 	}
 	return (r);
@@ -2545,7 +2547,7 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
     const uint8_t *new, int bytes, int guest_initiated)
 {
 	gfn_t gfn = gpa >> PAGESHIFT;
-	struct kvm_mmu_page *sp;
+	struct kvm_mmu_page *sp, *nsp = NULL;
 	list_t *bucket;
 	unsigned index;
 	uint64_t entry, gentry;
@@ -2581,7 +2583,12 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 	index = kvm_page_table_hashfn(gfn);
 	bucket = &vcpu->kvm->arch.mmu_page_hash[index];
 
-	for (sp = list_head(bucket); sp; sp = list_next(bucket, sp)) {
+	for (sp = list_head(bucket); sp; sp = nsp) {
+		/*
+		 * Keep next list node pointer as we may free the current one
+		 */
+		nsp = list_next(bucket, sp);
+
 		if (sp->gfn != gfn || sp->role.direct || sp->role.invalid)
 			continue;
 
@@ -2599,7 +2606,14 @@ kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 			 * forking, in which case it is better to unmap the
 			 * page.
 			 */
-			kvm_mmu_zap_page(vcpu->kvm, sp);
+			if (kvm_mmu_zap_page(vcpu->kvm, sp)) {
+				/*
+				 * kvm_mmu_zap_page() freed page(s) from
+				 * somewhere in the list, so start walking
+				 * again from the head.
+				 */
+				nsp = list_head(bucket);
+			}
 			KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_flooded);
 			continue;
 		}
@@ -2679,7 +2693,7 @@ __kvm_mmu_free_some_pages(struct kvm_vcpu *vcpu)
 	    !list_is_empty(&vcpu->kvm->arch.active_mmu_pages)) {
 		struct kvm_mmu_page *sp;
 
-		sp = list_remove_tail(&vcpu->kvm->arch.active_mmu_pages);
+		sp = list_tail(&vcpu->kvm->arch.active_mmu_pages);
 		kvm_mmu_zap_page(vcpu->kvm, sp);
 		KVM_KSTAT_INC(vcpu->kvm, kvmks_mmu_recycled);
 	}
@@ -2874,15 +2888,13 @@ kvm_mmu_zap_all(struct kvm *kvm)
 	 * So we hold onto the next element before zapping.
 	 */
 	mutex_enter(&kvm->mmu_lock);
-	sp = list_head(&kvm->arch.active_mmu_pages);
-	if (sp)
+
+	for (sp = list_head(&kvm->arch.active_mmu_pages);
+	    sp != NULL; sp = nsp) {
 		nsp = list_next(&kvm->arch.active_mmu_pages, sp);
 
-	while (sp) {
-		(void) kvm_mmu_zap_page(kvm, sp);
-		sp = nsp;
-		if (sp)
-			nsp = list_next(&kvm->arch.active_mmu_pages, sp);
+		if (kvm_mmu_zap_page(kvm, sp))
+			nsp = list_head(&kvm->arch.active_mmu_pages);
 	}
 
 	mutex_exit(&kvm->mmu_lock);
