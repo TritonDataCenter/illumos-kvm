@@ -298,7 +298,7 @@ install: world
 	@cp kvm.conf $(DESTDIR)/usr/kernel/drv
 	@mkdir -p $(DESTDIR)/usr/lib/mdb/kvm/amd64
 	@cp kvm.so $(DESTDIR)/usr/lib/mdb/kvm/amd64
-	@mkdir -p $(DESTDIR)/usr/lib/devfsadm
+	@mkdir -p $(DESTDIR)/usr/lib/devfsadm/linkmod
 	@cp JOY_kvm_link.so $(DESTDIR)/usr/lib/devfsadm/linkmod
 
 check: $(CSTYLE_CHK) $(XXX_CHK) $(USR_HDRCHK) $(SYS_HDRCHK)
