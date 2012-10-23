@@ -143,7 +143,14 @@ LINKMOD_CFLAGS = \
 	-O \
 	-fpic
 
+USER_LDFLAGS = \
+	-Wl,-Bdirect \
+	-Wl,-zfatal-warnings \
+	-Wl,-zassert-deflib \
+	-Wl,-zguidance
+
 DMOD_LDFLAGS = \
+	$(USER_LDFLAGS) \
 	-m64 \
 	-shared \
 	-nodefaultlibs \
@@ -161,11 +168,11 @@ DMOD_LIBS = \
 	-lc
 
 LINKMOD_LDFLAGS = \
+	$(USER_LDFLAGS) \
 	-shared \
 	-nodefaultlibs \
 	-Wl,-zdefs \
 	-Wl,-ztext \
-	-Wl,-Bdirect \
 	-Wl,-M$(KERNEL_SOURCE)/usr/src/cmd/devfsadm/mapfile-vers \
 	-Wl,-M$(KERNEL_SOURCE)/usr/src/common/mapfiles/common/map.pagealign \
 	-Wl,-M$(KERNEL_SOURCE)/usr/src/common/mapfiles/common/map.noexdata \
