@@ -145,8 +145,6 @@ walk:
 		--walker->level;
 	}
 #endif
-	ASSERT((!is_long_mode(vcpu) && is_pae(vcpu)) ||
-	    (vcpu->arch.cr3 & CR3_NONPAE_RESERVED_BITS) == 0);
 
 	pt_access = ACC_ALL;
 
