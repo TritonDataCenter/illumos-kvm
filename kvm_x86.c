@@ -1170,6 +1170,12 @@ kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 		vcpu->kvm->arch.wall_clock = data;
 		kvm_write_wall_clock(vcpu->kvm, data);
 		break;
+
+	/*
+	 * If in the future we go to update this code, we must go sync
+	 * back up with the Linux for this MSR to address several important
+	 * bugs.
+	 */
 	case MSR_KVM_SYSTEM_TIME: {
 #ifdef XXX
 		if (vcpu->arch.time_page) {

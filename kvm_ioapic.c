@@ -67,9 +67,11 @@ ioapic_read_indirect(struct kvm_ioapic *ioapic,
 		uint32_t redir_index = (ioapic->ioregsel - 0x10) >> 1;
 		uint64_t redir_content;
 
-		ASSERT(redir_index < IOAPIC_NUM_PINS);
-
-		redir_content = ioapic->redirtbl[redir_index].bits;
+		if (redir_index < IOAPIC_NUM_PINS) {
+			redir_content = ioapic->redirtbl[redir_index].bits;
+		} else {
+			redir_content = ~0ULL;
+		}
 		result = (ioapic->ioregsel & 0x1) ?
 		    (redir_content >> 32) & 0xffffffff :
 		    redir_content & 0xffffffff;
