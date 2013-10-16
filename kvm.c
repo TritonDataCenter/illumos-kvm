@@ -24,7 +24,7 @@
  *   Yaniv Kamay  <yaniv@qumranet.com>
  *
  * Ported to illumos by Joyent
- * Copyright (c) 2012 Joyent, Inc. All rights reserved.
+ * Copyright (c) 2013 Joyent, Inc. All rights reserved.
  *
  * Authors:
  *   Max Bruning	<max@joyent.com>
@@ -1380,15 +1380,18 @@ void
 kvm_vcpu_block(struct kvm_vcpu *vcpu)
 {
 	for (;;) {
+		mutex_enter(&vcpu->kvcpu_kick_lock);
+
 		if (kvm_arch_vcpu_runnable(vcpu)) {
 			set_bit(KVM_REQ_UNHALT, &vcpu->requests);
+			mutex_exit(&vcpu->kvcpu_kick_lock);
 			break;
 		}
 
-		if (issig(JUSTLOOKING))
+		if (issig(JUSTLOOKING)) {
+			mutex_exit(&vcpu->kvcpu_kick_lock);
 			break;
-
-		mutex_enter(&vcpu->kvcpu_kick_lock);
+		}
 
 		if (kvm_cpu_has_pending_timer(vcpu)) {
 			mutex_exit(&vcpu->kvcpu_kick_lock);
