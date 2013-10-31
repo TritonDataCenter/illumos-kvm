@@ -113,7 +113,8 @@ extern int kvm_io_bus_unregister_dev(struct kvm *, enum kvm_bus,
 #define	KVM_RINGBUF_TAG_EMUFAIL0	9
 #define	KVM_RINGBUF_TAG_EMUFAIL1	10
 #define	KVM_RINGBUF_TAG_EMUFAIL2	11
-#define	KVM_RINGBUF_TAG_MAX		11
+#define	KVM_RINGBUF_TAG_EMUXADD		12
+#define	KVM_RINGBUF_TAG_MAX		12
 
 typedef struct kvm_ringbuf_entry {
 	uint32_t kvmre_tag;			/* tag for this entry */

@@ -312,7 +312,8 @@ static uint32_t twobyte_table[256] = {
 	0, 0, ByteOp | DstReg | SrcMem | ModRM | Mov,
 	    DstReg | SrcMem16 | ModRM | Mov,
 	/* 0xC0 - 0xCF */
-	0, 0, 0, DstMem | SrcReg | ModRM | Mov,
+	ByteOp | DstMem | SrcReg | ModRM | Lock, DstMem | SrcReg | ModRM | Lock,
+	0, DstMem | SrcReg | ModRM | Mov,
 	0, 0, 0, Group | GroupDual | Group9,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0xD0 - 0xDF */
@@ -1544,6 +1545,28 @@ emulate_ret_far(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 	return (rc);
 }
 
+static void
+write_register_operand(struct operand *op)
+{
+	/*
+	 * The 4-byte case *is* correct: in 64-bit mode we zero-extend.
+	 */
+	switch (op->bytes) {
+	case 1:
+		*(uint8_t *)op->ptr = (uint8_t)op->val;
+		break;
+	case 2:
+		*(uint16_t *)op->ptr = (uint16_t)op->val;
+		break;
+	case 4:
+		*op->ptr = (uint32_t)op->val;
+		break;	/* 64b: zero-ext */
+	case 8:
+		*op->ptr = op->val;
+		break;
+	}
+}
+
 static int writeback(struct x86_emulate_ctxt *ctxt,
 			    struct x86_emulate_ops *ops)
 {
@@ -1552,23 +1575,7 @@ static int writeback(struct x86_emulate_ctxt *ctxt,
 
 	switch (c->dst.type) {
 	case OP_REG:
-		/*
-		 * The 4-byte case *is* correct: in 64-bit mode we zero-extend.
-		 */
-		switch (c->dst.bytes) {
-		case 1:
-			*(uint8_t *)c->dst.ptr = (uint8_t)c->dst.val;
-			break;
-		case 2:
-			*(uint16_t *)c->dst.ptr = (uint16_t)c->dst.val;
-			break;
-		case 4:
-			*c->dst.ptr = (uint32_t)c->dst.val;
-			break;	/* 64b: zero-ext */
-		case 8:
-			*c->dst.ptr = c->dst.val;
-			break;
-		}
+		write_register_operand(&c->dst);
 		break;
 	case OP_MEM:
 		if (c->lock_prefix)
@@ -2463,25 +2470,13 @@ cmp:				/* cmp */
 	case 0x86 ... 0x87:	/* xchg */
 xchg:
 		/* Write back the register source. */
-		switch (c->dst.bytes) {
-		case 1:
-			*(uint8_t *) c->src.ptr = (uint8_t) c->dst.val;
-			break;
-		case 2:
-			*(uint16_t *) c->src.ptr = (uint16_t) c->dst.val;
-			break;
-		case 4:
-			*c->src.ptr = (uint32_t) c->dst.val;
-			break;	/* 64b reg: zero-extend */
-		case 8:
-			*c->src.ptr = c->dst.val;
-			break;
-		}
+		c->src.val = c->dst.val;
+		write_register_operand(&c->src);
 		/*
 		 * Write back the memory destination with implicit LOCK
 		 * prefix.
 		 */
-		c->dst.val = c->src.val;
+		c->dst.val = c->src.orig_val;
 		c->lock_prefix = 1;
 		break;
 	case 0x88 ... 0x8b:	/* mov */
@@ -3034,6 +3029,14 @@ btc:				/* btc */
 		c->dst.bytes = c->op_bytes;
 		c->dst.val = (c->d & ByteOp) ? (int8_t) c->src.val :
 							(int16_t) c->src.val;
+		break;
+	case 0xc0 ... 0xc1:     /* xadd */
+		kvm_ringbuf_record(&ctxt->vcpu->kvcpu_ringbuf,
+		    KVM_RINGBUF_TAG_EMUXADD, (uint64_t)c->dst.ptr);
+		emulate_2op_SrcV("add", c->src, c->dst, ctxt->eflags);
+		/* Write back the register source. */
+		c->src.val = c->dst.orig_val;
+		write_register_operand(&c->src);
 		break;
 	case 0xc3:		/* movnti */
 		c->dst.bytes = c->op_bytes;
