@@ -361,7 +361,6 @@ typedef struct mtrr_state_type {
 } mtrr_state_type_t;
 
 typedef struct kvm_vcpu_arch {
-	uint64_t host_tsc;
 	/*
 	 * rip and regs accesses must go through
 	 * kvm_{register,rip}_{read,write} functions.
