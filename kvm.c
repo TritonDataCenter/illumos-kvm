@@ -2634,63 +2634,6 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		rval = kvm_vcpu_ioctl_nmi(ksp->kds_vcpu);
 		break;
 	}
-	case KVM_NET_QUEUE: {
-		struct vnode *vn;
-		file_t *fp;
-		struct stroptions *stropt;
-		mblk_t *mp;
-		queue_t *q;
-
-		fp = getf(arg);
-		if (fp == NULL) {
-			rval = EINVAL;
-			break;
-		}
-		ASSERT(fp->f_vnode);
-
-		if (fp->f_vnode->v_stream == NULL) {
-			releasef(arg);
-			rval = EINVAL;
-			break;
-		}
-
-		mp = allocb(sizeof (struct stroptions), BPRI_LO);
-		if (mp == NULL) {
-			releasef(arg);
-			rval = ENOMEM;
-		}
-
-		/*
-		 * This really just shouldn't need to exist, etc. and we
-		 * should really get the hiwat value more intelligently at least
-		 * a #define or a tunable god forbid. Oh well, as bmc said
-		 * earlier:
-		 * "I am in blood steeped in so far that I wade no more.
-		 * Returning were as tedious as go o'er.
-		 *
-		 * We'd love to just putmsg on RD(fp->f_vnode->v_stream->sd_wq)
-		 * however that would be the stream head. Instead, we need to
-		 * get the write version and then go to the next one and then
-		 * the opposite end. The doctor may hemorrhage before the
-		 * patient.
-		 *
-		 * Banquo's ghost is waiting to pop up
-		 */
-		mp->b_datap->db_type = M_SETOPTS;
-		stropt = (struct stroptions *)mp->b_rptr;
-		stropt->so_flags = SO_HIWAT;
-		stropt->so_hiwat = kvm_hiwat;
-		q = WR(fp->f_vnode->v_stream->sd_wrq);
-		q = RD(q->q_next);
-		putnext(q, mp);
-
-		releasef(arg);
-
-		rval = 0;
-		*rv = 0;
-		break;
-	}
-
 	default:
 		KVM_TRACE1(bad__ioctl, int, cmd);
 		rval = EINVAL;  /* x64, others may do other things... */

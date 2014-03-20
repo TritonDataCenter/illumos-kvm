@@ -288,7 +288,6 @@ typedef struct kvm_guest_debug {
 #define	KVM_CREATE_VM		_IO(KVMIO,   0x01) /* returns a VM fd */
 #define	KVM_GET_MSR_INDEX_LIST	_IOWR(KVMIO, 0x02, struct kvm_msr_list)
 #define	KVM_CLONE		_IO(KVMIO,   0x20)
-#define	KVM_NET_QUEUE		_IO(KVMIO,   0x21)
 
 /*
  * Check if a kvm extension is available.  Argument is extension number,
