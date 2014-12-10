@@ -352,7 +352,6 @@ typedef struct kvm_guest_debug {
 /* Another bug in KVM_SET_USER_MEMORY_REGION fixed: */
 #define	KVM_CAP_JOIN_MEMORY_REGIONS_WORKS	30
 #define	KVM_CAP_MCE				31
-#define	KVM_CAP_IRQFD				32
 #define	KVM_CAP_PIT2				33
 #define	KVM_CAP_SET_BOOT_CPU_ID			34
 #define	KVM_CAP_PIT_STATE2			35
