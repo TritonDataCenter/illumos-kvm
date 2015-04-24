@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012, Joyent, Inc.  All Rights Reserved.
+# Copyright 2015 Joyent, Inc.
 #
 
 KERNEL_SOURCE =	$(PWD)/../../illumos
@@ -331,6 +331,9 @@ clean:
 .PHONY: manifest
 manifest:
 	cp manifest $(DESTDIR)/$(DESTNAME)
+
+.PHONY: mancheck_conf
+mancheck_conf:
 
 uninstall:
 	@pfexec rem_drv kvm || /bin/true
