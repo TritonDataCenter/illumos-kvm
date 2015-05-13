@@ -5,9 +5,10 @@
 KERNEL_SOURCE =	$(PWD)/../../illumos
 MDB_SOURCE =	$(KERNEL_SOURCE)/usr/src/cmd/mdb
 PROTO_AREA =	$(PWD)/../../../proto
+STRAP_AREA =	$(PWD)/../../../proto.strap
 
-CC =		$(PROTO_AREA)/usr/bin/gcc
-LD =		$(PROTO_AREA)/usr/bin/ld
+CC =		$(STRAP_AREA)/usr/bin/gcc
+LD =		/usr/bin/ld
 CTFBINDIR =	$(KERNEL_SOURCE)/usr/src/tools/proto/*/opt/onbld/bin/i386
 CTFCONVERT =	$(CTFBINDIR)/ctfconvert
 CTFMERGE =	$(CTFBINDIR)/ctfmerge
