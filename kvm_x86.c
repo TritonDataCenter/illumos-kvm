@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright (c) 2012 Joyent, Inc. All Rights Reserved.
+ * Copyright (c) 2015 Joyent, Inc. All Rights Reserved.
  */
 
 #include <sys/types.h>
@@ -4826,9 +4826,6 @@ kvm_arch_create_vm(void)
 
 	/* Reserve bit 0 of irq_sources_bitmap for userspace irq source */
 	set_bit(KVM_USERSPACE_IRQ_SOURCE_ID, &kvm->arch.irq_sources_bitmap);
-
-	/* XXX - original is rdtscll() */
-	kvm->arch.vm_init_tsc = (uint64_t)gethrtime();
 
 	return (kvm);
 }
