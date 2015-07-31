@@ -1582,20 +1582,22 @@ alloc_kvm_area(void)
 }
 
 static void
-free_vmcs(struct vmcs *vmcs)
-{
-	kmem_free(vmcs, PAGESIZE);
-}
-
-static void
 free_kvm_area(void)
 {
 	int cpu;
 
 	for (cpu = 0; cpu < ncpus; cpu++) {
-		free_vmcs(vmxarea[cpu]);
-		vmxarea[cpu] = NULL;
+		kmem_free(vmxarea[cpu], PAGESIZE);
+		kmem_free(shared_msrs[cpu], sizeof (struct kvm_shared_msrs));
 	}
+	kmem_free(shared_msrs, ncpus * sizeof (struct kvm_shared_msrs *));
+	shared_msrs = NULL;
+	kmem_free(current_vmcs, ncpus * sizeof (struct vmcs *));
+	current_vmcs = NULL;
+	kmem_free(vmxarea_pa, ncpus * sizeof (uint64_t *));
+	vmxarea_pa = NULL;
+	kmem_free(vmxarea, ncpus * sizeof (struct vmcs *));
+	vmxarea = NULL;
 }
 
 static int
