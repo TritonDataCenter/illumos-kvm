@@ -667,7 +667,7 @@ update_exception_bitmap(struct kvm_vcpu *vcpu)
 	uint32_t eb;
 
 	eb = (1u << PF_VECTOR) | (1u << UD_VECTOR) | (1u << MC_VECTOR) |
-	    (1u << NM_VECTOR) | (1u << DB_VECTOR);
+	    (1u << NM_VECTOR) | (1u << DB_VECTOR) | (1u <<AC_VECTOR);
 
 #ifndef XXX
 	if ((vcpu->guest_debug &
@@ -3230,6 +3230,9 @@ handle_exception(struct kvm_vcpu *vcpu)
 		kvm_run->debug.arch.pc = vmcs_readl(GUEST_CS_BASE) + rip;
 		kvm_run->debug.arch.exception = ex_no;
 		break;
+	case AC_VECTOR:
+		kvm_queue_exception_e(vcpu, AC_VECTOR, error_code);
+		return (1);
 	default:
 		kvm_run->exit_reason = KVM_EXIT_EXCEPTION;
 		kvm_run->ex.exception = ex_no;
