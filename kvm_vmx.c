@@ -2731,10 +2731,24 @@ vmx_vcpu_setup(struct vcpu_vmx *vmx)
 		vmx->vcpu.arch.cr4_guest_owned_bits |= X86_CR4_PGE;
 	vmcs_writel(CR4_GUEST_HOST_MASK, ~vmx->vcpu.arch.cr4_guest_owned_bits);
 
-	/*
-	 * Initialize our guest's view of the TSC to 0.
-	 */
-	guest_write_tsc(&vmx->vcpu, 0);
+	if (vmx->vcpu.kvm->arch.tsc_offset == 0) {
+		/*
+		 * If we are the first VCPU initialized, initialize our guest's
+		 * view of the TSC to 0, and then store the derived TSC offset
+		 * to be used for any subsequent VCPUs.
+		 */
+		guest_write_tsc(&vmx->vcpu, 0);
+		vmx->vcpu.kvm->arch.tsc_offset = vmx->vcpu.arch.tsc_offset;
+	} else {
+		/*
+		 * If a VCPU has already been initialized, we'll use its
+		 * derived TSC offset to assure that our TSCs are (by default
+		 * and to the best of our ability) in sync.
+		 */
+		vmx->vcpu.arch.tsc_offset = vmx->vcpu.kvm->arch.tsc_offset;
+		vmcs_write64(TSC_OFFSET, tsc_gethrtime_tick_delta() +
+		    vmx->vcpu.arch.tsc_offset);
+	}
 
 	return (0);
 }

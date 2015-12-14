@@ -528,6 +528,7 @@ typedef struct kvm_arch {
 	gpa_t ept_identity_map_addr;
 
 	unsigned long irq_sources_bitmap;
+	uint64_t tsc_offset;
 	int64_t kvmclock_offset;
 
 	struct kvm_xen_hvm_config xen_hvm_config;
