@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright 2017 Joyent, Inc.
  */
 
 #ifndef __KVM_X86_MMU_H
@@ -85,6 +85,6 @@ extern void kvm_mmu_free_some_pages(struct kvm_vcpu *);
 extern int kvm_mmu_reload(struct kvm_vcpu *);
 extern int is_present_gpte(unsigned long);
 extern int kvm_avlmmucmp(const void *, const void *);
-extern void mmu_destroy_caches(void);
+extern void kvm_mmu_destroy_caches(void);
 
 #endif

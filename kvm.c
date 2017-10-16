@@ -24,7 +24,7 @@
  *   Yaniv Kamay  <yaniv@qumranet.com>
  *
  * Ported to illumos by Joyent
- * Copyright (c) 2013 Joyent, Inc. All rights reserved.
+ * Copyright 2017 Joyent, Inc.
  *
  * Authors:
  *   Max Bruning	<max@joyent.com>
@@ -312,6 +312,8 @@
 #include <sys/machparam.h>
 #include <sys/xc_levels.h>
 #include <asm/cpu.h>
+#include <sys/id_space.h>
+#include <sys/pc_hvm.h>
 
 #include "kvm_bitops.h"
 #include "kvm_vmx.h"
@@ -345,28 +347,31 @@ typedef struct {
 /*
  * Globals
  */
-page_t *bad_page;
-void *bad_page_kma;
-pfn_t bad_pfn;
+page_t *bad_page = NULL;
+void *bad_page_kma = NULL;
+pfn_t bad_pfn = PFN_INVALID;
 
 /*
  * Tunables
  */
 static int kvm_hiwat = 0x1000000;
 
+#define	KVM_MINOR_BASE	0
+#define	KVM_MINOR_INSTS	1
+
 /*
  * Internal driver-wide values
  */
 static void *kvm_state;		/* DDI state */
-static vmem_t *kvm_minor;	/* minor number arena */
+static id_space_t *kvm_minors;	/* minor number arena */
 static dev_info_t *kvm_dip;	/* global devinfo hanlde */
-static minor_t kvm_base_minor;	/* The only minor device that can be opened */
+static boolean_t kvm_init_failed; /* track vm hardware init failure */
 static int kvmid;		/* monotonically increasing, unique per vm */
 static int largepages_enabled = 1;
 static cpuset_t cpus_hardware_enabled;
 static kmutex_t cpus_hardware_enabled_mp;
 static volatile uint32_t hardware_enable_failed;
-static int kvm_usage_count;
+static uint_t kvm_usage_count;
 static list_t vm_list;
 static kmutex_t kvm_lock;
 static int ignore_msrs = 0;
@@ -1560,42 +1565,27 @@ hardware_disable(void *junk)
 }
 
 static void
-hardware_disable_all_nolock(void)
-{
-	kvm_usage_count--;
-	if (!kvm_usage_count)
-		on_each_cpu(hardware_disable, NULL, 1);
-}
-
-static void
 hardware_disable_all(void)
 {
-	mutex_enter(&kvm_lock);
-	hardware_disable_all_nolock();
-	mutex_exit(&kvm_lock);
+	ASSERT(MUTEX_HELD(&kvm_lock));
+
+	on_each_cpu(hardware_disable, NULL, 1);
 }
 
 static int
 hardware_enable_all(void)
 {
-	int r = 0;
+	ASSERT(MUTEX_HELD(&kvm_lock));
 
-	mutex_enter(&kvm_lock);
+	hardware_enable_failed = 0;
+	on_each_cpu(hardware_enable, NULL, 1);
 
-	kvm_usage_count++;
-	if (kvm_usage_count == 1) {
-		hardware_enable_failed = 0;
-		on_each_cpu(hardware_enable, NULL, 1);
-
-		if (hardware_enable_failed) {
-			hardware_disable_all_nolock();
-			r = EBUSY;
-		}
+	if (hardware_enable_failed) {
+		hardware_disable_all();
+		return (EBUSY);
 	}
 
-	mutex_exit(&kvm_lock);
-
-	return (r);
+	return (0);
 }
 
 /* kvm_io_bus_write - called under kvm->slots_lock */
@@ -1740,6 +1730,9 @@ out_free_1:
 	kvm_arch_hardware_unsetup();
 out_free:
 	kmem_free(bad_page_kma, PAGESIZE);
+	bad_page_kma = NULL;
+	bad_page = NULL;
+	bad_pfn = PFN_INVALID;
 out:
 	kvm_arch_exit();
 out_fail:
@@ -1792,16 +1785,113 @@ zero_constructor(void *buf, void *arg, int tags)
 	return (0);
 }
 
+static const char *kvm_excl_ident = "SmartOS KVM";
+
+static boolean_t
+kvm_hvm_init(void)
+{
+	ASSERT(MUTEX_HELD(&kvm_lock));
+
+	/*
+	 * If initialization failed on a previous open attempt, do not repeatedly
+	 * try again (which could incur additional cmn_err noise).  Detaching the
+	 * driver will lead this state to be cleared, allowing for subsequent
+	 * attempts, if desired.
+	 */
+	if (kvm_init_failed) {
+		return (B_FALSE);
+	}
+
+	/*
+	 * Demand exclusivity over the HVM resources of this machine.  A
+	 * failure to acquire this advisory lock does preclude a potential
+	 * success in the future. (So kvm_init_failed is not asserted.)
+	 */
+	if (!hvm_excl_hold(kvm_excl_ident)) {
+		return (B_FALSE);
+	}
+
+	if (vmx_init() != DDI_SUCCESS) {
+		goto fail;
+	}
+	if (hardware_enable_all() != 0) {
+		vmx_fini();
+		goto fail;
+	}
+	return (B_TRUE);
+
+fail:
+	kvm_init_failed = B_TRUE;
+	hvm_excl_rele(kvm_excl_ident);
+	return (B_FALSE);
+}
+
+static void
+kvm_hvm_fini(void)
+{
+	ASSERT(MUTEX_HELD(&kvm_lock));
+	ASSERT(kvm_usage_count == 0);
+
+	hardware_disable_all();
+	kvm_arch_hardware_unsetup();
+	vmx_fini();
+
+	/*
+	 * The bad_page_kma allocation is made during kvm_init, which is called
+	 * via the HVM-specific functions (such as vmx_init.
+	 */
+	kmem_free(bad_page_kma, PAGESIZE);
+	bad_page_kma = NULL;
+	bad_page = NULL;
+	bad_pfn = PFN_INVALID;
+
+	kvm_arch_exit();
+
+	/*
+	 * Only once all resources directly related to HVM are released can the
+	 * advisory lock be dropped.
+	 */
+	hvm_excl_rele(kvm_excl_ident);
+}
+
+static boolean_t
+kvm_hvm_incr(void)
+{
+	ASSERT(MUTEX_NOT_HELD(&kvm_lock));
+
+	mutex_enter(&kvm_lock);
+	if (kvm_usage_count == 0) {
+		if (!kvm_hvm_init()) {
+			mutex_exit(&kvm_lock);
+			return (B_FALSE);
+		}
+	}
+	VERIFY(kvm_usage_count != UINT_MAX);
+	kvm_usage_count++;
+	mutex_exit(&kvm_lock);
+
+	return (B_TRUE);
+}
+
+static void
+kvm_hvm_decr(void)
+{
+	ASSERT(MUTEX_HELD(&kvm_lock));
+	VERIFY(kvm_usage_count > 0);
+
+	kvm_usage_count--;
+	if (kvm_usage_count == 0) {
+		kvm_hvm_fini();
+	}
+}
+
 static int
 kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 {
-	minor_t instance;
-
 	if (kpm_enable == 0) {
 		cmn_err(CE_WARN, "kvm: kpm_enable must be true\n");
 		return (DDI_FAILURE);
 	}
-
 
 	if (cmd != DDI_ATTACH)
 		return (DDI_FAILURE);
@@ -1812,41 +1902,23 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	if (ddi_soft_state_init(&kvm_state, sizeof (kvm_devstate_t), 1) != 0)
 		return (DDI_FAILURE);
 
-	instance = ddi_get_instance(dip);
-	if (ddi_create_minor_node(dip, "kvm",
-	    S_IFCHR, instance, DDI_PSEUDO, 0) == DDI_FAILURE) {
+	if (ddi_create_minor_node(dip, "kvm", S_IFCHR, KVM_MINOR_BASE,
+	    DDI_PSEUDO, 0) == DDI_FAILURE) {
 		ddi_soft_state_fini(&kvm_state);
 		return (DDI_FAILURE);
 	}
 
 	mutex_init(&kvm_lock, NULL, MUTEX_DRIVER, 0);
-	if (vmx_init() != DDI_SUCCESS) {
-		ddi_soft_state_fini(&kvm_state);
-		ddi_remove_minor_node(dip, NULL);
-		mutex_destroy(&kvm_lock);
-		return (DDI_FAILURE);
-	}
-
 	mutex_init(&cpus_hardware_enabled_mp, NULL, MUTEX_DRIVER,
 	    (void *)XC_HI_PIL);
-	if (hardware_enable_all() != 0) {
-		ddi_soft_state_fini(&kvm_state);
-		ddi_remove_minor_node(dip, NULL);
-		mutex_destroy(&kvm_lock);
-		mutex_destroy(&cpus_hardware_enabled_mp);
-		vmx_fini();
-		return (DDI_FAILURE);
-	}
-
-	kvm_dip = dip;
-	kvm_base_minor = instance;
 
 	list_create(&vm_list, sizeof (struct kvm),
 	    offsetof(struct kvm, vm_list));
-	kvm_minor = vmem_create("kvm_minor", (void *)1, UINT32_MAX - 1, 1,
-	    NULL, NULL, NULL, 0, VM_SLEEP | VMC_IDENTIFIER);
+	kvm_minors = id_space_create("kvm_minor", KVM_MINOR_INSTS, INT32_MAX);
 
+	kvm_dip = dip;
 	ddi_report_dev(dip);
+	kvm_init_failed = B_FALSE;
 
 	return (DDI_SUCCESS);
 }
@@ -1854,27 +1926,18 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 static int
 kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 {
-	int instance;
-
 	if (cmd != DDI_DETACH)
 		return (DDI_FAILURE);
 
 	VERIFY(kvm_dip != NULL && kvm_dip == dip);
-	instance = ddi_get_instance(dip);
-	VERIFY(instance == kvm_base_minor);
+	VERIFY(kvm_usage_count == 0);
+
 	ddi_prop_remove_all(dip);
 	ddi_remove_minor_node(dip, NULL);
 	list_destroy(&vm_list);
-	vmem_destroy(kvm_minor);
+	id_space_destroy(kvm_minors);
 	kvm_dip = NULL;
 
-	hardware_disable_all();
-	kvm_arch_hardware_unsetup();
-	kvm_arch_exit();
-	kmem_free(bad_page_kma, PAGESIZE);
-
-	vmx_fini();
-	mmu_destroy_caches();
 	mutex_destroy(&cpus_hardware_enabled_mp);
 	mutex_destroy(&kvm_lock);
 	ddi_soft_state_fini(&kvm_state);
@@ -1913,24 +1976,24 @@ kvm_open(dev_t *devp, int flag, int otype, cred_t *credp)
 	minor_t minor;
 	kvm_devstate_t *ksp;
 
-
 	if (flag & FEXCL || flag & FNDELAY)
 		return (EINVAL);
-
 	if (otype != OTYP_CHR)
 		return (EINVAL);
-
 	if (!(flag & FREAD && flag & FWRITE))
 		return (EINVAL);
 
-	if (getminor(*devp) != kvm_base_minor)
+	if (getminor(*devp) != KVM_MINOR_BASE)
 		return (ENXIO);
 
-	minor = (minor_t)(uintptr_t)vmem_alloc(kvm_minor,
-	    1, VM_BESTFIT | VM_SLEEP);
-
+	minor = id_alloc(kvm_minors);
 	if (ddi_soft_state_zalloc(kvm_state, minor) != 0) {
-		vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
+		id_free(kvm_minors, minor);
+		return (ENXIO);
+	}
+	if (!kvm_hvm_incr()) {
+		ddi_soft_state_free(kvm_state, minor);
+		id_free(kvm_minors, minor);
 		return (ENXIO);
 	}
 
@@ -1949,23 +2012,22 @@ kvm_close(dev_t dev, int flag, int otyp, cred_t *cred)
 	minor_t minor = getminor(dev);
 	kvm_t *kvmp;
 
-	VERIFY(getminor(dev) != kvm_base_minor);
+	VERIFY(getminor(dev) != KVM_MINOR_BASE);
 	ksp = ddi_get_soft_state(kvm_state, minor);
 
+	mutex_enter(&kvm_lock);
 	if ((kvmp = ksp->kds_kvmp) != NULL) {
-		mutex_enter(&kvm_lock);
-
 		if (kvmp->kvm_clones > 0) {
 			kvmp->kvm_clones--;
-			mutex_exit(&kvm_lock);
 		} else {
 			kvm_destroy_vm(kvmp);
-			mutex_exit(&kvm_lock);
 		}
 	}
+	kvm_hvm_decr();
+	mutex_exit(&kvm_lock);
 
 	ddi_soft_state_free(kvm_state, minor);
-	vmem_free(kvm_minor, (void *)(uintptr_t)minor, 1);
+	id_free(kvm_minors, minor);
 
 	return (0);
 }
@@ -2720,7 +2782,7 @@ kvm_devmap(dev_t dev, devmap_cookie_t dhp, offset_t off, size_t len,
 /*
  * We determine which vcpu we're trying to mmap in based upon the file
  * descriptor that is used. For a given vcpu n the offset to specify it is
- * n*KVM_VCPU_MMAP_LENGTH. Thus the first vcpu is at offset 0. 
+ * n*KVM_VCPU_MMAP_LENGTH. Thus the first vcpu is at offset 0.
  */
 static int
 kvm_segmap(dev_t dev, off_t off, struct as *asp, caddr_t *addrp, off_t len,

@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright 2017 Joyent, Inc.
  * Copyright 2011 Joshua M. Clulow <josh@sysmgr.org>
  * Copyright 2011 Richard Lowe
  */
@@ -2903,7 +2903,7 @@ kvm_mmu_zap_all(struct kvm *kvm)
 }
 
 void
-mmu_destroy_caches(void)
+kvm_mmu_destroy_caches(void)
 {
 	if (pte_chain_cache)
 		kmem_cache_destroy(pte_chain_cache);
@@ -2934,7 +2934,7 @@ kvm_mmu_module_init(void)
 	return (0);
 
 nomem:
-	mmu_destroy_caches();
+	kvm_mmu_destroy_caches();
 	return (ENOMEM);
 }
 
