@@ -879,6 +879,9 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		rdmsrl(MSR_IA32_SYSENTER_ESP, sysenter_esp);
 		vmcs_writel(HOST_IA32_SYSENTER_ESP, sysenter_esp); /* 22.2.3 */
 
+		/* We also have a per-CPU %cr3 if we're using kpti */
+		vmcs_writel(HOST_CR3, read_cr3());  /* 22.2.3 */
+
 		/*
 		 * Make sure that the TSC_OFFSET reflects both this CPU's tick
 		 * delta and the guest's TSC offset.
