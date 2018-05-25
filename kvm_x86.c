@@ -29,6 +29,7 @@
 #include <sys/regset.h>
 #include <sys/fp.h>
 #include <sys/tss.h>
+#include <sys/x86_archext.h>
 
 #include <vm/page.h>
 #include <vm/hat.h>
@@ -4471,39 +4472,23 @@ kvm_arch_vcpu_ioctl_set_sregs(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs)
 	return (0);
 }
 
-void
-kvm_fx_save(struct fxsave_state *image)
-{
-	fpxsave(image);
-}
-
-void
-kvm_fx_restore(struct fxsave_state *image)
-{
-	fpxrestore(image);
-}
-
-void
-kvm_fx_finit(void)
-{
-	__asm__("finit");
-}
-
 int
 kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 {
-	struct fxsave_state *fxsave = &vcpu->arch.guest_fx_image;
+	struct fxsave_state fxsave;
 
 	vcpu_load(vcpu);
 
-	memcpy(fpu->fpr, fxsave->fx_st, 128);
-	fpu->fcw = fxsave->fx_fcw;
-	fpu->fsw = fxsave->fx_fsw;
-	fpu->ftwx = fxsave->fx_fctw;
-	fpu->last_opcode = fxsave->fx_fop;
-	fpu->last_ip = fxsave->fx_rip;
-	fpu->last_dp = fxsave->fx_rdp;
-	memcpy(fpu->xmm, fxsave->fx_xmm, sizeof (fxsave->fx_xmm));
+	hma_fpu_get_fxsave_state(vcpu->arch.guest_fpu, &fxsave);
+
+	memcpy(fpu->fpr, fxsave.fx_st, 128);
+	fpu->fcw = fxsave.fx_fcw;
+	fpu->fsw = fxsave.fx_fsw;
+	fpu->ftwx = fxsave.fx_fctw;
+	fpu->last_opcode = fxsave.fx_fop;
+	fpu->last_ip = fxsave.fx_rip;
+	fpu->last_dp = fxsave.fx_rdp;
+	memcpy(fpu->xmm, fxsave.fx_xmm, sizeof (fxsave.fx_xmm));
 
 	vcpu_put(vcpu);
 
@@ -4513,45 +4498,32 @@ kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 int
 kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 {
-	struct fxsave_state *fxsave = &vcpu->arch.guest_fx_image;
+	int ret;
+	struct fxsave_state fxsave;
 
+	bzero(&fxsave, sizeof (struct fxsave_state));
 	vcpu_load(vcpu);
 
-	memcpy(fxsave->fx_st, fpu->fpr, 128);
-	fxsave->fx_fcw = fpu->fcw;
-	fxsave->fx_fsw = fpu->fsw;
-	fxsave->fx_fctw = fpu->ftwx;
-	fxsave->fx_fop = fpu->last_opcode;
-	fxsave->fx_rip = fpu->last_ip;
-	fxsave->fx_rdp = fpu->last_dp;
-	memcpy(fxsave->fx_xmm, fpu->xmm, sizeof (fxsave->fx_xmm));
+	memcpy(fxsave.fx_st, fpu->fpr, 128);
+	fxsave.fx_fcw = fpu->fcw;
+	fxsave.fx_fsw = fpu->fsw;
+	fxsave.fx_fctw = fpu->ftwx;
+	fxsave.fx_fop = fpu->last_opcode;
+	fxsave.fx_rip = fpu->last_ip;
+	fxsave.fx_rdp = fpu->last_dp;
+	memcpy(fxsave.fx_xmm, fpu->xmm, sizeof (fxsave.fx_xmm));
+
+	ret = hma_fpu_set_fxsave_state(vcpu->arch.guest_fpu, &fxsave);
 
 	vcpu_put(vcpu);
 
-	return (0);
+	return (ret);
 }
 
 void
 fx_init(struct kvm_vcpu *vcpu)
 {
-	unsigned after_mxcsr_mask;
-
-	kvm_fx_save(&vcpu->arch.host_fx_image);
-
-	/* Initialize guest FPU by resetting ours and saving into guest's */
-	kpreempt_disable();
-	kvm_fx_save(&vcpu->arch.host_fx_image);
-	kvm_fx_finit();
-	kvm_fx_save(&vcpu->arch.guest_fx_image);
-	kvm_fx_restore(&vcpu->arch.host_fx_image);
-	kpreempt_enable();
-
-	vcpu->arch.cr0 |= X86_CR0_ET;
-	after_mxcsr_mask = offsetof(struct fxsave_state, fx_st);
-	vcpu->arch.guest_fx_image.fx_mxcsr = 0x1f80;
-	memset((void *)((uintptr_t)&vcpu->arch.guest_fx_image +
-	    after_mxcsr_mask), 0, sizeof (struct fxsave_state) -
-	    after_mxcsr_mask);
+	hma_fpu_init(vcpu->arch.guest_fpu);
 }
 
 void
@@ -4561,8 +4533,7 @@ kvm_load_guest_fpu(struct kvm_vcpu *vcpu)
 		return;
 
 	vcpu->guest_fpu_loaded = 1;
-	kvm_fx_save(&vcpu->arch.host_fx_image);
-	kvm_fx_restore(&vcpu->arch.guest_fx_image);
+	hma_fpu_start_guest(vcpu->arch.guest_fpu);
 	KVM_TRACE1(fpu, int, 1);
 }
 
@@ -4573,9 +4544,7 @@ kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
 		return;
 
 	vcpu->guest_fpu_loaded = 0;
-	kvm_fx_save(&vcpu->arch.guest_fx_image);
-	kvm_fx_restore(&vcpu->arch.host_fx_image);
-	fpdisable();
+	hma_fpu_stop_guest(vcpu->arch.guest_fpu);
 	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_fpu_reload);
 	set_bit(KVM_REQ_DEACTIVATE_FPU, &vcpu->requests);
 	KVM_TRACE1(fpu, int, 0);
@@ -4592,6 +4561,8 @@ kvm_arch_vcpu_free(struct kvm_vcpu *vcpu)
 
 	if (vcpu->kvcpu_kstat != NULL)
 		kstat_delete(vcpu->kvcpu_kstat);
+
+	hma_fpu_free(vcpu->arch.guest_fpu);
 
 	kvm_x86_ops->vcpu_free(vcpu);
 }
@@ -4617,6 +4588,8 @@ kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 		kstat_delete(kstat);
 		return (NULL);
 	}
+
+	vcpu->arch.guest_fpu = hma_fpu_alloc(KM_SLEEP);
 
 	vcpu->kvcpu_kstat = kstat;
 	vcpu->kvcpu_kstat->ks_data = &vcpu->kvcpu_stats;
