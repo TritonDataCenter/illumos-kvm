@@ -31,6 +31,7 @@
 #include <vm/page.h>
 #include <sys/pte.h>
 #include <sys/regset.h>
+#include <sys/hma.h>
 
 #include "kvm.h"
 #include "kvm_types.h"
@@ -412,8 +413,7 @@ typedef struct kvm_vcpu_arch {
 		unsigned long mmu_seq;
 	} update_pte;
 
-	struct fxsave_state host_fx_image;
-	struct fxsave_state guest_fx_image;
+	hma_fpu_t *guest_fpu;
 
 	gva_t mmio_fault_cr2;
 	struct kvm_pio_request pio;
@@ -818,10 +818,6 @@ extern unsigned long find_first_zero_bit(const unsigned long *, unsigned long);
 extern unsigned long kvm_read_tr_base(void);
 
 extern unsigned long read_msr(unsigned long);
-
-extern void kvm_fx_save(struct fxsave_state *);
-extern void kvm_fx_restore(struct fxsave_state *);
-extern void kvm_fx_finit(void);
 
 extern uint32_t get_rdx_init_val(void);
 
