@@ -30,6 +30,7 @@
 #include <sys/fp.h>
 #include <sys/tss.h>
 #include <sys/x86_archext.h>
+#include <sys/controlregs.h>
 
 #include <vm/page.h>
 #include <vm/hat.h>
@@ -4534,6 +4535,9 @@ kvm_load_guest_fpu(struct kvm_vcpu *vcpu)
 
 	vcpu->guest_fpu_loaded = 1;
 	hma_fpu_start_guest(vcpu->arch.guest_fpu);
+	if (vcpu->kvm->arch.need_xcr0) {
+		set_xcr(XFEATURE_ENABLED_MASK, XFEATURE_LEGACY_FP);
+	}
 	KVM_TRACE1(fpu, int, 1);
 }
 
@@ -4544,6 +4548,10 @@ kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
 		return;
 
 	vcpu->guest_fpu_loaded = 0;
+	if (vcpu->kvm->arch.need_xcr0) {
+		set_xcr(XFEATURE_ENABLED_MASK, vcpu->kvm->arch.host_xcr0);
+	}
+	KVM_TRACE1(fpu, int, 1);
 	hma_fpu_stop_guest(vcpu->arch.guest_fpu);
 	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_fpu_reload);
 	set_bit(KVM_REQ_DEACTIVATE_FPU, &vcpu->requests);
@@ -4800,6 +4808,14 @@ kvm_arch_create_vm(void)
 
 	/* Reserve bit 0 of irq_sources_bitmap for userspace irq source */
 	set_bit(KVM_USERSPACE_IRQ_SOURCE_ID, &kvm->arch.irq_sources_bitmap);
+
+	if ((native_read_cr4() & CR4_OSXSAVE) != 0) {
+		kvm->arch.need_xcr0 = 1;
+		kvm->arch.host_xcr0 = get_xcr(XFEATURE_ENABLED_MASK);
+	} else {
+		kvm->arch.need_xcr0 = 0;
+		kvm->arch.host_xcr0 = 0;
+	}
 
 	return (kvm);
 }
