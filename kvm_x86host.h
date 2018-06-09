@@ -533,6 +533,9 @@ typedef struct kvm_arch {
 
 	struct kvm_xen_hvm_config xen_hvm_config;
 
+	uint8_t need_xcr0;
+	uint64_t host_xcr0;
+
 	/* fields used by HYPER-V emulation */
 	uint64_t hv_guest_os_id;
 	uint64_t hv_hypercall;
