@@ -813,6 +813,8 @@ __vmx_load_host_state(struct vcpu_vmx *vmx)
 		rdmsrl(MSR_KERNEL_GS_BASE, vmx->msr_guest_kernel_gs_base);
 		wrmsrl(MSR_KERNEL_GS_BASE, vmx->msr_host_kernel_gs_base);
 	}
+
+	reset_gdtr_limit();
 }
 
 static void
