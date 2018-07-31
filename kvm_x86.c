@@ -95,6 +95,7 @@ static uint64_t efer_reserved_bits = 0xfffffffffffffafeULL;
 
 static void update_cr8_intercept(struct kvm_vcpu *);
 static struct kvm_shared_msrs_global shared_msrs_global;
+static struct kvm_shared_msrs *shared_msrs;
 
 void
 kvm_sigprocmask(int how, sigset_t *setp, sigset_t *osetp)
@@ -130,28 +131,13 @@ kvm_on_user_return(struct kvm_vcpu *vcpu, struct kvm_user_return_notifier *urn)
 		}
 	}
 	locals->registered = 0;
-	kvm_user_return_notifier_unregister(vcpu, urn);
-}
-
-static void
-shared_msr_update(unsigned slot, uint32_t msr)
-{
-	struct kvm_shared_msrs *smsr;
-	uint64_t value;
-	smsr = shared_msrs[CPU->cpu_id];
-
 	/*
-	 * only read, and nobody should modify it at this time,
-	 * so don't need lock
+	 * As the on-user-return handler indicates that this thread is either
+	 * returning to userspace or going off-cpu, the host MSR values should
+	 * be queried again prior to the next VM entry.
 	 */
-	if (slot >= shared_msrs_global.nr) {
-		cmn_err(CE_WARN, "kvm: invalid MSR slot!");
-		return;
-	}
-
-	rdmsrl_safe(msr, (unsigned long long *)&value);
-	smsr->values[slot].host = value;
-	smsr->values[slot].curr = value;
+	locals->host_saved = 0;
+	kvm_user_return_notifier_unregister(vcpu, urn);
 }
 
 void
@@ -165,26 +151,31 @@ kvm_define_shared_msr(unsigned slot, uint32_t msr)
 	smp_wmb();
 }
 
-static void
-kvm_shared_msr_cpu_online(void)
-{
-	unsigned i;
-
-	for (i = 0; i < shared_msrs_global.nr; i++)
-		shared_msr_update(i, shared_msrs_global.msrs[i]);
-}
-
 void
 kvm_set_shared_msr(struct kvm_vcpu *vcpu, unsigned slot, uint64_t value,
     uint64_t mask)
 {
-	struct kvm_shared_msrs *smsr = shared_msrs[CPU->cpu_id];
+	struct kvm_shared_msrs *smsr = &shared_msrs[CPU->cpu_id];
+	const uint32_t msr = shared_msrs_global.msrs[slot];
+	const uint_t slot_bit = 1 << slot;
+
+	ASSERT(slot < KVM_NR_SHARED_MSRS);
+
+	/* Preserve host MSR values prior to loading the guest data. */
+	if ((smsr->host_saved & slot_bit) == 0) {
+		uint64_t temp;
+
+		rdmsrl_safe(msr, (unsigned long long *)&temp);
+		smsr->values[slot].host = temp;
+		smsr->values[slot].curr = temp;
+		smsr->host_saved |= slot_bit;
+	}
 
 	if (((value ^ smsr->values[slot].curr) & mask) == 0)
 		return;
 
 	smsr->values[slot].curr = value;
-	wrmsrl(shared_msrs_global.msrs[slot], value);
+	wrmsrl(msr, value);
 
 	if (!smsr->registered) {
 		smsr->urn.on_user_return = kvm_on_user_return;
@@ -3374,8 +3365,7 @@ native_set_debugreg(int regno, unsigned long value)
 static int
 vcpu_enter_guest(struct kvm_vcpu *vcpu)
 {
-	int r, loaded;
-
+	int r;
 	int req_int_win = !irqchip_in_kernel(vcpu->kvm) &&
 	    vcpu->run->request_interrupt_window;
 
@@ -3421,13 +3411,19 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		}
 	}
 
-	kpreempt_disable();
+	/*
+	 * There are some narrow circumstances in which the event injection
+	 * process might sleep on a lock.  Since its logic does not require
+	 * guest-switch preparation or FPU data, complete the injection now
+	 * before entering the kpreempt-disabled critical section.
+	 */
+	inject_pending_event(vcpu);
 
+	kpreempt_disable();
 	kvm_x86_ops->prepare_guest_switch(vcpu);
 	if (vcpu->fpu_active)
 		kvm_load_guest_fpu(vcpu);
 
-	loaded = CPU->cpu_id;
 	clear_bit(KVM_REQ_KICK, &vcpu->requests);
 
 	if (vcpu->requests || issig(JUSTLOOKING)) {
@@ -3435,25 +3431,6 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 		kpreempt_enable();
 		r = 1;
 		goto out;
-	}
-
-	inject_pending_event(vcpu);
-
-	if (CPU->cpu_id != loaded) {
-		/*
-		 * The kpreempt_disable(), above, disables kernel migration --
-		 * but it doesn't disable migration when we block.  The call
-		 * to inject_pending_event() can, through a circuitous path,
-		 * block, and we may therefore have moved to a different CPU.
-		 * That's actually okay -- we just need to reload our state
-		 * in this case.
-		 */
-		kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
-		    KVM_RINGBUF_TAG_RELOAD, loaded);
-		kvm_x86_ops->prepare_guest_switch(vcpu);
-
-		if (vcpu->fpu_active)
-			kvm_load_guest_fpu(vcpu);
 	}
 
 	cli();
@@ -4577,11 +4554,9 @@ kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
 	if (vcpu->kvm->arch.need_xcr0) {
 		set_xcr(XFEATURE_ENABLED_MASK, vcpu->kvm->arch.host_xcr0);
 	}
-	KVM_TRACE1(fpu, int, 1);
 	hma_fpu_stop_guest(vcpu->arch.guest_fpu);
 	KVM_VCPU_KSTAT_INC(vcpu, kvmvs_fpu_reload);
 	set_bit(KVM_REQ_DEACTIVATE_FPU, &vcpu->requests);
-	KVM_TRACE1(fpu, int, 0);
 }
 
 void
@@ -4709,29 +4684,23 @@ kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu)
 }
 
 int
-kvm_arch_hardware_enable(void *garbage)
-{
-	kvm_shared_msr_cpu_online();
-
-	return (kvm_x86_ops->hardware_enable(garbage));
-}
-
-void
-kvm_arch_hardware_disable(void *garbage)
-{
-	kvm_x86_ops->hardware_disable(garbage);
-}
-
-int
 kvm_arch_hardware_setup(void)
 {
-	return (kvm_x86_ops->hardware_setup());
+	int res;
+
+	res = kvm_x86_ops->hardware_setup();
+	if (res == 0) {
+		shared_msrs = kmem_zalloc(
+		    ncpus * sizeof (struct kvm_shared_msrs), KM_SLEEP);
+	}
+	return (res);
 }
 
 void
 kvm_arch_hardware_unsetup(void)
 {
-	kvm_x86_ops->hardware_unsetup();
+	kmem_free(shared_msrs, ncpus * sizeof (struct kvm_shared_msrs));
+	shared_msrs = NULL;
 }
 
 void

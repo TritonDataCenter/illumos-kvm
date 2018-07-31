@@ -3,7 +3,7 @@
  * COPYING file in the top-level directory.
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright 2018 Joyent, Inc.
  */
 
 #ifndef __KVM_HOST_H
@@ -63,13 +63,12 @@ typedef struct kvm_shared_msrs_global {
 typedef struct kvm_shared_msrs {
 	struct kvm_user_return_notifier urn;
 	int registered;
+	uint_t host_saved;
 	struct kvm_shared_msr_values {
 		uint64_t host;
 		uint64_t curr;
 	} values[KVM_NR_SHARED_MSRS];
 } kvm_shared_msrs_t;
-
-extern struct kvm_shared_msrs **shared_msrs;
 
 /*
  * It would be nice to use something smarter than a linear search, TBD...
@@ -403,8 +402,6 @@ extern int kvm_arch_vcpu_setup(struct kvm_vcpu *);
 extern void kvm_arch_vcpu_destroy(struct kvm_vcpu *);
 
 extern int kvm_arch_vcpu_reset(struct kvm_vcpu *);
-extern int kvm_arch_hardware_enable(void *);
-extern void kvm_arch_hardware_disable(void *);
 extern int kvm_arch_hardware_setup(void);
 extern void kvm_arch_hardware_unsetup(void);
 extern void kvm_arch_check_processor_compat(void *);

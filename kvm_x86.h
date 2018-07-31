@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright 2018 Joyent, Inc.
  */
 
 #ifndef __KVM_X86_H
@@ -282,19 +282,6 @@ typedef struct kvm_vcpu_events {
 	uint32_t flags;
 	uint32_t reserved[10];
 } kvm_vcpu_events_t;
-
-/*
- * The following needs to run on each cpu.  Currently,
- * wait is always 1, so we use the kvm_xcall() routine which
- * calls xc_sync.  Later, if needed, the implementation can be
- * changed to use xc_call or xc_call_nowait.
- */
-#define	on_each_cpu(func, info, wait)	\
-	/*CSTYLED*/			\
-	({				\
-		kvm_xcall(KVM_CPUALL, func, info);	\
-	0;				\
-	})
 
 /*
  * The following should provide an optimization barrier.

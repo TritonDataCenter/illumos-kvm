@@ -13,7 +13,7 @@
  * This work is licensed under the terms of the GNU GPL, version 2.  See
  * the COPYING file in the top-level directory.
  *
- * Copyright (c) 2015 Joyent, Inc. All rights reserved.
+ * Copyright 2018 Joyent, Inc.
  */
 
 #include <sys/sysmacros.h>
@@ -23,6 +23,7 @@
 #include <sys/x86_archext.h>
 #include <sys/xc_levels.h>
 #include <sys/machsystm.h>
+#include <sys/hma.h>
 
 #include "kvm_bitops.h"
 #include "kvm_msr.h"
@@ -40,12 +41,8 @@
 /*
  * Globals
  */
-struct kvm_shared_msrs **shared_msrs;
 
 #define	VMX_NR_VPIDS				(1 << 16)
-static kmutex_t vmx_vpid_lock;
-static ulong_t *vmx_vpid_bitmap;
-static size_t vpid_bitmap_words;
 static int bypass_guest_pf = 1;
 static int enable_vpid = 1;
 static int flexpriority_enabled = 1;
@@ -73,9 +70,11 @@ __attribute__((__aligned__(PAGESIZE)))static unsigned long
     vmx_msr_bitmap_longmode[PAGESIZE / sizeof (unsigned long)];
 #endif
 
-static struct vmcs **vmxarea;  /* 1 per cpu */
-static struct vmcs **current_vmcs;
-static uint64_t *vmxarea_pa;   /* physical address of each vmxarea */
+static uintptr_t vmx_io_bitmap_a_pa;
+static uintptr_t vmx_io_bitmap_b_pa;
+static uintptr_t vmx_msr_bitmap_legacy_pa;
+static uintptr_t vmx_msr_bitmap_longmode_pa;
+
 static int vmx_has_kvm_support_override = 0;
 
 #define	KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
@@ -164,6 +163,7 @@ typedef struct vcpu_vmx {
 		} irq;
 	} rmode;
 	int vpid;
+	int cpu_lastrun;
 	char emulation_required;
 
 	/* Support for vnmi-less CPUs */
@@ -474,6 +474,23 @@ find_msr_entry(struct vcpu_vmx *vmx, uint32_t msr)
 	return (NULL);
 }
 
+
+static void
+vmcs_load(uint64_t vmcs_pa)
+{
+	uint8_t error;
+
+	KVM_TRACE1(vmx__vmptrld, uint64_t, vmcs_pa);
+
+	/*CSTYLED*/
+	__asm__ volatile (ASM_VMX_VMPTRLD_RAX "; setna %0"
+	    : "=g"(error) : "a"(&vmcs_pa), "m"(vmcs_pa)
+	    : "cc", "memory");
+
+	if (error)
+		cmn_err(CE_PANIC, "kvm: vmptrld fail: %lx\n", vmcs_pa);
+}
+
 static void
 vmcs_clear(uint64_t vmcs_pa)
 {
@@ -488,36 +505,6 @@ vmcs_clear(uint64_t vmcs_pa)
 
 	if (error)
 		cmn_err(CE_PANIC, "kvm: vmclear fail: %lx\n", vmcs_pa);
-}
-
-static void
-__vcpu_clear(void *arg)
-{
-	struct vcpu_vmx *vmx = arg;
-	int cpu = CPU->cpu_id;
-
-	vmx->vmcs->revision_id = vmcs_config.revision_id;
-
-	kvm_ringbuf_record(&vmx->vcpu.kvcpu_ringbuf,
-	    KVM_RINGBUF_TAG_VCPUCLEAR, vmx->vcpu.cpu);
-
-	if (vmx->vcpu.cpu == cpu)
-		vmcs_clear(vmx->vmcs_pa);
-
-	if (current_vmcs[cpu] == vmx->vmcs)
-		current_vmcs[cpu] = NULL;
-
-	vmx->vcpu.cpu = -1;
-	vmx->launched = 0;
-}
-
-static void
-vcpu_clear(struct vcpu_vmx *vmx)
-{
-	if (vmx->vcpu.cpu == -1)
-		return;
-
-	kvm_xcall(vmx->vcpu.cpu, __vcpu_clear, vmx);
 }
 
 static void
@@ -834,38 +821,22 @@ static void
 vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
-	uint64_t phys_addr = vmx->vmcs_pa;
-	uint64_t tsc_this, delta, new_offset;
 
-	if (vcpu->cpu != cpu) {
-		vcpu_clear(vmx);
-		set_bit(KVM_REQ_TLB_FLUSH, &vcpu->requests);
-	}
+	vmcs_load(vmx->vmcs_pa);
+	vcpu->cpu = cpu;
 
-	if (current_vmcs[cpu] != vmx->vmcs) {
-		uint8_t error;
-
-		kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
-		    KVM_RINGBUF_TAG_VMPTRLD, (uint64_t)current_vmcs[cpu]);
-
-		current_vmcs[cpu] = vmx->vmcs;
-
-		KVM_TRACE1(vmx__vmptrld, uint64_t, phys_addr);
-
-		/*CSTYLED*/
-		__asm__ volatile (ASM_VMX_VMPTRLD_RAX "; setna %0"
-		    : "=g"(error) : "a"(&phys_addr), "m"(phys_addr)
-		    : "cc");
-	}
-
-	if (vcpu->cpu != cpu) {
+	/*
+	 * Load per-CPU context into the VMCS if this vCPU previously ran on a
+	 * different host CPU.
+	 */
+	if (vmx->cpu_lastrun != cpu) {
 		struct descriptor_table dt;
 		unsigned long sysenter_esp;
 
 		kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
-		    KVM_RINGBUF_TAG_VCPUMIGRATE, vcpu->cpu);
+		    KVM_RINGBUF_TAG_VCPUMIGRATE, cpu);
 
-		vcpu->cpu = cpu;
+		set_bit(KVM_REQ_TLB_FLUSH, &vcpu->requests);
 
 		/*
 		 * We have a per-CPU TSS, GDT, IDT and GSBASE -- so we reset
@@ -890,13 +861,25 @@ vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		 */
 		vmcs_write64(TSC_OFFSET, tsc_gethrtime_tick_delta() +
 		    vcpu->arch.tsc_offset);
+
+		vmx->cpu_lastrun = cpu;
 	}
 }
 
 static void
 vmx_vcpu_put(struct kvm_vcpu *vcpu)
 {
-	__vmx_load_host_state(to_vmx(vcpu));
+	struct vcpu_vmx *vmx = to_vmx(vcpu);
+
+	__vmx_load_host_state(vmx);
+	vmcs_clear(vmx->vmcs_pa);
+	vcpu->cpu = -1;
+
+	/*
+	 * Having VMCLEARed the VMCS, a subsequent VM entry must use VMLAUNCH
+	 * rather than VMRESUME.
+	 */
+	vmx->launched = 0;
 }
 
 static void
@@ -1061,11 +1044,10 @@ move_msr_up(struct vcpu_vmx *vmx, int from, int to)
  * msrs.  Don't touch the 64-bit msrs if the guest is in legacy
  * mode, as fiddling with msrs is very expensive.
  */
-void
+static void
 setup_msrs(struct vcpu_vmx *vmx)
 {
 	int save_nmsrs, index;
-	unsigned long *msr_bitmap;
 
 	vmx_load_host_state(vmx);
 	save_nmsrs = 0;
@@ -1098,12 +1080,14 @@ setup_msrs(struct vcpu_vmx *vmx)
 	vmx->save_nmsrs = save_nmsrs;
 
 	if (cpu_has_vmx_msr_bitmap()) {
-		if (is_long_mode(&vmx->vcpu))
-			msr_bitmap = vmx_msr_bitmap_longmode;
-		else
-			msr_bitmap = vmx_msr_bitmap_legacy;
+		uintptr_t msr_bitmap;
 
-		vmcs_write64(MSR_BITMAP, kvm_va2pa((caddr_t)msr_bitmap));
+		if (is_long_mode(&vmx->vcpu))
+			msr_bitmap = vmx_msr_bitmap_longmode_pa;
+		else
+			msr_bitmap = vmx_msr_bitmap_legacy_pa;
+
+		vmcs_write64(MSR_BITMAP, msr_bitmap);
 	}
 }
 
@@ -1345,68 +1329,6 @@ vmx_disabled_by_bios(void)
 }
 
 static int
-vmx_hardware_enable(void *garbage)
-{
-	int cpu = curthread->t_cpu->cpu_seqid;
-	pfn_t pfn;
-	uint64_t old;
-#ifdef XXX
-	uint64_t phys_addr = kvtop(per_cpu(vmxarea, cpu));
-#else
-	uint64_t phys_addr;
-	XXX_KVM_PROBE;
-	phys_addr = vmxarea_pa[cpu];
-
-#endif
-
-	((struct vmcs *)(vmxarea[cpu]))->revision_id = vmcs_config.revision_id;
-
-	if (getcr4() & X86_CR4_VMXE)
-		return (DDI_FAILURE);
-
-	rdmsrl(MSR_IA32_FEATURE_CONTROL, old);
-	if ((old & (FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_VMXON_ENABLED)) !=
-	    (FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_VMXON_ENABLED)) {
-		/* enable and lock */
-		wrmsrl(MSR_IA32_FEATURE_CONTROL, old | FEATURE_CONTROL_LOCKED |
-		    FEATURE_CONTROL_VMXON_ENABLED);
-	}
-
-	KVM_TRACE1(vmx__vmxon, uint64_t, phys_addr);
-
-	setcr4(getcr4() | X86_CR4_VMXE); /* FIXME: not cpu hotplug safe */
-	/* BEGIN CSTYLED */
-	__asm__ volatile (ASM_VMX_VMXON_RAX
-		      : : "a"(&phys_addr), "m"(phys_addr)
-		      : "memory", "cc");
-	/* END CSTYLED */
-
-	ept_sync_global();
-
-	return (0);
-}
-
-/*
- * Just like cpu_vmxoff(), but with the __kvm_handle_fault_on_reboot()
- * tricks.
- */
-static void
-kvm_cpu_vmxoff(void)
-{
-	KVM_TRACE(vmx__vmxoff);
-
-	/* BEGIN CSTYLED */
-	__asm__ volatile (ASM_VMX_VMXOFF : : : "cc");
-	/* END CSTYLED */
-	setcr4(getcr4() & ~X86_CR4_VMXE);
-}
-
-static void vmx_hardware_disable(void *garbage)
-{
-	kvm_cpu_vmxoff();
-}
-
-static int
 adjust_vmx_controls(uint32_t ctl_min, uint32_t ctl_opt,
     uint32_t msr, uint32_t *result)
 {
@@ -1552,60 +1474,6 @@ setup_vmcs_config(struct vmcs_config *vmcs_conf)
 }
 
 static int
-alloc_kvm_area(void)
-{
-	int i, j;
-	pfn_t pfn;
-
-	/*
-	 * linux seems to do the allocations in a numa-aware
-	 * fashion.  We'll just allocate...
-	 */
-	vmxarea = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
-	vmxarea_pa = kmem_alloc(ncpus * sizeof (uint64_t *), KM_SLEEP);
-	current_vmcs = kmem_alloc(ncpus * sizeof (struct vmcs *), KM_SLEEP);
-	shared_msrs = kmem_alloc(ncpus * sizeof (struct kvm_shared_msrs *),
-	    KM_SLEEP);
-
-	for (i = 0; i < ncpus; i++) {
-		struct vmcs *vmcs;
-
-		/* XXX the following assumes PAGESIZE allocations */
-		/* are PAGESIZE aligned.  We could enforce this */
-		/* via kmem_cache_create, but I'm lazy */
-		vmcs = kmem_zalloc(PAGESIZE, KM_SLEEP);
-		vmxarea[i] = vmcs;
-		current_vmcs[i] = vmcs;
-		pfn = hat_getpfnum(kas.a_hat, (caddr_t)vmcs);
-		vmxarea_pa[i] = ((uint64_t)pfn << PAGESHIFT) |
-			((uint64_t)vmxarea[i] & PAGEOFFSET);
-		shared_msrs[i] = kmem_zalloc(sizeof (struct kvm_shared_msrs),
-		    KM_SLEEP);
-	}
-
-	return (0);
-}
-
-static void
-free_kvm_area(void)
-{
-	int cpu;
-
-	for (cpu = 0; cpu < ncpus; cpu++) {
-		kmem_free(vmxarea[cpu], PAGESIZE);
-		kmem_free(shared_msrs[cpu], sizeof (struct kvm_shared_msrs));
-	}
-	kmem_free(shared_msrs, ncpus * sizeof (struct kvm_shared_msrs *));
-	shared_msrs = NULL;
-	kmem_free(current_vmcs, ncpus * sizeof (struct vmcs *));
-	current_vmcs = NULL;
-	kmem_free(vmxarea_pa, ncpus * sizeof (uint64_t *));
-	vmxarea_pa = NULL;
-	kmem_free(vmxarea, ncpus * sizeof (struct vmcs *));
-	vmxarea = NULL;
-}
-
-static int
 vmx_hardware_setup(void)
 {
 	if (setup_vmcs_config(&vmcs_config) != DDI_SUCCESS)
@@ -1642,14 +1510,7 @@ vmx_hardware_setup(void)
 	if (!cpu_has_vmx_ple())
 		ple_gap = 0;
 
-
-	return (alloc_kvm_area());
-}
-
-static void
-vmx_hardware_unsetup(void)
-{
-	free_kvm_area();
+	return (0);
 }
 
 static void
@@ -2542,13 +2403,8 @@ allocate_vpid(struct vcpu_vmx *vmx)
 	vmx->vpid = 0;
 	if (!enable_vpid)
 		return;
-	mutex_enter(&vmx_vpid_lock);
-	vpid = find_first_zero_bit(vmx_vpid_bitmap, VMX_NR_VPIDS);
-	if (vpid < VMX_NR_VPIDS) {
-		vmx->vpid = vpid;
-		__set_bit(vpid, vmx_vpid_bitmap);
-	}
-	mutex_exit(&vmx_vpid_lock);
+
+	vmx->vpid = hma_vmx_vpid_alloc();
 }
 
 static void
@@ -2585,7 +2441,7 @@ vmx_disable_intercept_for_msr(uint32_t msr, int longmode_only)
 /*
  * Sets up the vmcs for emulated real mode.
  */
-static int
+static void
 vmx_vcpu_setup(struct vcpu_vmx *vmx)
 {
 	uint32_t host_sysenter_cs, msr_low, msr_high;
@@ -2598,12 +2454,11 @@ vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	uint32_t exec_control;
 
 	/* I/O */
-	vmcs_write64(IO_BITMAP_A, kvm_va2pa((caddr_t)vmx_io_bitmap_a));
-	vmcs_write64(IO_BITMAP_B, kvm_va2pa((caddr_t)vmx_io_bitmap_b));
+	vmcs_write64(IO_BITMAP_A, vmx_io_bitmap_a_pa);
+	vmcs_write64(IO_BITMAP_B, vmx_io_bitmap_b_pa);
 
 	if (cpu_has_vmx_msr_bitmap()) {
-		vmcs_write64(MSR_BITMAP,
-		    kvm_va2pa((caddr_t)vmx_msr_bitmap_legacy));
+		vmcs_write64(MSR_BITMAP, vmx_msr_bitmap_legacy_pa);
 	}
 
 	vmcs_write64(VMCS_LINK_POINTER, -1ull); /* 22.3.1.5 */
@@ -2754,8 +2609,6 @@ vmx_vcpu_setup(struct vcpu_vmx *vmx)
 		vmcs_write64(TSC_OFFSET, tsc_gethrtime_tick_delta() +
 		    vmx->vcpu.arch.tsc_offset);
 	}
-
-	return (0);
 }
 
 static int
@@ -4341,31 +4194,29 @@ vmx_destroy_vcpu(struct kvm_vcpu *vcpu)
 	vcpu_vmx_t *vmx = to_vmx(vcpu);
 
 	if (vmx->vmcs != NULL) {
-		vcpu_clear(vmx);
 		kmem_free(vmx->vmcs, PAGESIZE);
 		vmx->vmcs = NULL;
 	}
 	if (vmx->guest_msrs != NULL)
 		kmem_free(vmx->guest_msrs, PAGESIZE);
 	kvm_vcpu_uninit(vcpu);
-	mutex_enter(&vmx_vpid_lock);
-	if (vmx->vpid != 0)
-		__clear_bit(vmx->vpid, vmx_vpid_bitmap);
-	mutex_exit(&vmx_vpid_lock);
+	if (vmx->vpid != 0) {
+		hma_vmx_vpid_free(vmx->vpid);
+	}
 	kmem_cache_free(kvm_vcpu_cache, vmx);
 }
 
 struct kvm_vcpu *
 vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 {
-	int err;
 	struct vcpu_vmx *vmx = kmem_cache_alloc(kvm_vcpu_cache, KM_SLEEP);
-	int cpu;
+	int err;
 
 	if (!vmx)
 		return (NULL);
 
 	bzero(vmx, sizeof (struct vcpu_vmx));
+	vmx->cpu_lastrun = -1;
 
 	allocate_vpid(vmx);
 	err = kvm_vcpu_init(&vmx->vcpu, kvm, id);
@@ -4375,31 +4226,27 @@ vmx_create_vcpu(struct kvm *kvm, unsigned int id)
 	}
 
 	vmx->guest_msrs = kmem_zalloc(PAGESIZE, KM_SLEEP);
-
 	vmx->vmcs = kmem_zalloc(PAGESIZE, KM_SLEEP);
 
-	vmx->vmcs_pa = (hat_getpfnum(kas.a_hat, (caddr_t)vmx->vmcs) <<
-	    PAGESHIFT) | ((int64_t)(vmx->vmcs) & 0xfff);
-
-	kpreempt_disable();
-
-	cpu = curthread->t_cpu->cpu_seqid;
-
-	cmn_err(CE_CONT, "!vmcs revision_id = %x\n", vmcs_config.revision_id);
+	vmx->vmcs_pa = kvm_va2pa((caddr_t)vmx->vmcs);
 	vmx->vmcs->revision_id = vmcs_config.revision_id;
+	cmn_err(CE_CONT, "!vmcs revision_id = %x\n", vmcs_config.revision_id);
 
-	vmcs_clear(vmx->vmcs_pa);
-
-	vmx_vcpu_load(&vmx->vcpu, cpu);
-	err = vmx_vcpu_setup(vmx);
+	/*
+	 * Without the protection of save/restore ctxops, kpreempt_disable is
+	 * only effective if none of the code in the critical section
+	 * voluntarily goes off-cpu (such as blocking for a lock).
+	 */
+	kpreempt_disable();
+	vmx_vcpu_load(&vmx->vcpu, CPU->cpu_seqid);
+	vmx_vcpu_setup(vmx);
 	vmx_vcpu_put(&vmx->vcpu);
-
 	kpreempt_enable();
-	if (err)
-		vmx->vmcs = NULL;
-	if (vm_need_virtualize_apic_accesses(kvm))
+
+	if (vm_need_virtualize_apic_accesses(kvm)) {
 		if (alloc_apic_access_page(kvm) != 0)
 			goto free_vmcs;
+	}
 
 	if (enable_ept) {
 		if (!kvm->arch.ept_identity_map_addr)
@@ -4554,14 +4401,9 @@ struct kvm_x86_ops vmx_x86_ops = {
 	.cpu_has_kvm_support = vmx_has_kvm_support,
 	.disabled_by_bios = vmx_disabled_by_bios,
 
-	.hardware_enable = vmx_hardware_enable,
-	.hardware_disable = vmx_hardware_disable,
-
 	.check_processor_compatibility = vmx_check_processor_compat,
 
 	.hardware_setup = vmx_hardware_setup,
-
-	.hardware_unsetup = vmx_hardware_unsetup,
 
 	.cpu_has_accelerated_tpr = report_flexpriority,
 	.vcpu_create = vmx_create_vcpu,
@@ -4638,13 +4480,6 @@ vmx_init(void)
 	for (i = 0; i < NR_VMX_MSR; ++i)
 		kvm_define_shared_msr(i, vmx_msr_index[i]);
 
-	if (enable_vpid) {
-		vpid_bitmap_words = howmany(VMX_NR_VPIDS, 64);
-		vmx_vpid_bitmap = kmem_zalloc(sizeof (ulong_t) *
-		    vpid_bitmap_words, KM_SLEEP);
-		mutex_init(&vmx_vpid_lock, NULL, MUTEX_DRIVER, NULL);
-	}
-
 	/* A kmem cache lets us meet the alignment requirements of fx_save. */
 	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", sizeof (struct vcpu_vmx),
 	    (size_t)PAGESIZE,
@@ -4668,7 +4503,15 @@ vmx_init(void)
 	memset(vmx_msr_bitmap_legacy, 0xff, PAGESIZE);
 	memset(vmx_msr_bitmap_longmode, 0xff, PAGESIZE);
 
-	set_bit(0, vmx_vpid_bitmap); /* 0 is reserved for host */
+	/*
+	 * Cache PAs of these elements so they need not be looked up when in
+	 * the sensitive context preceding a VMCS write.
+	 */
+	vmx_io_bitmap_a_pa = kvm_va2pa((caddr_t)vmx_io_bitmap_a);
+	vmx_io_bitmap_b_pa = kvm_va2pa((caddr_t)vmx_io_bitmap_b);
+	vmx_msr_bitmap_legacy_pa = kvm_va2pa((caddr_t)vmx_msr_bitmap_legacy);
+	vmx_msr_bitmap_longmode_pa =
+	    kvm_va2pa((caddr_t)vmx_msr_bitmap_longmode);
 
 	r = kvm_init(&vmx_x86_ops);
 
@@ -4707,10 +4550,5 @@ out:
 void
 vmx_fini(void)
 {
-	if (enable_vpid) {
-		mutex_destroy(&vmx_vpid_lock);
-		kmem_free(vmx_vpid_bitmap, sizeof (ulong_t) *
-		    vpid_bitmap_words);
-	}
 	kmem_cache_destroy(kvm_vcpu_cache);
 }

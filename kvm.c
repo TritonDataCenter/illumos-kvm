@@ -24,7 +24,7 @@
  *   Yaniv Kamay  <yaniv@qumranet.com>
  *
  * Ported to illumos by Joyent
- * Copyright 2017 Joyent, Inc.
+ * Copyright 2018 Joyent, Inc.
  *
  * Authors:
  *   Max Bruning	<max@joyent.com>
@@ -313,7 +313,7 @@
 #include <sys/xc_levels.h>
 #include <asm/cpu.h>
 #include <sys/id_space.h>
-#include <sys/pc_hvm.h>
+#include <sys/hma.h>
 
 #include "kvm_bitops.h"
 #include "kvm_vmx.h"
@@ -365,12 +365,9 @@ static int kvm_hiwat = 0x1000000;
 static void *kvm_state;		/* DDI state */
 static id_space_t *kvm_minors;	/* minor number arena */
 static dev_info_t *kvm_dip;	/* global devinfo hanlde */
-static boolean_t kvm_init_failed; /* track vm hardware init failure */
+static hma_reg_t *kvm_hma_reg;
 static int kvmid;		/* monotonically increasing, unique per vm */
 static int largepages_enabled = 1;
-static cpuset_t cpus_hardware_enabled;
-static kmutex_t cpus_hardware_enabled_mp;
-static volatile uint32_t hardware_enable_failed;
 static uint_t kvm_usage_count;
 static list_t vm_list;
 static kmutex_t kvm_lock;
@@ -454,10 +451,11 @@ kvm_ringbuf_record(kvm_ringbuf_t *ringbuf, uint32_t tag, uint64_t payload)
  * Called when we've been asked to save our context. i.e. we're being swapped
  * out.
  */
-void
+static void
 kvm_ctx_save(void *arg)
 {
 	struct kvm_vcpu *vcpu = arg;
+
 	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
 	    KVM_RINGBUF_TAG_CTXSAVE, vcpu->cpu);
 	kvm_arch_vcpu_put(vcpu);
@@ -468,13 +466,12 @@ kvm_ctx_save(void *arg)
  * Called when we're being asked to restore our context. i.e. we're returning
  * from being swapped out.
  */
-void
+static void
 kvm_ctx_restore(void *arg)
 {
-	int cpu;
-
-	cpu = CPU->cpu_seqid;
 	struct kvm_vcpu *vcpu = arg;
+	const int cpu = CPU->cpu_id;
+
 	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
 	    KVM_RINGBUF_TAG_CTXRESTORE, vcpu->cpu);
 	kvm_arch_vcpu_load(vcpu, cpu);
@@ -492,15 +489,13 @@ kvm_is_mmio_pfn(pfn_t pfn)
 void
 vcpu_load(struct kvm_vcpu *vcpu)
 {
-	int cpu;
-
 	mutex_enter(&vcpu->mutex);
+
+	kpreempt_disable();
 	installctx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
 	    NULL, NULL, NULL);
 
-	kpreempt_disable();
-	cpu = CPU->cpu_seqid;
-	kvm_arch_vcpu_load(vcpu, cpu);
+	kvm_arch_vcpu_load(vcpu, CPU->cpu_id);
 	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
 	    KVM_RINGBUF_TAG_VCPULOAD, vcpu->cpu);
 	kpreempt_enable();
@@ -516,13 +511,15 @@ kvm_get_vcpu(struct kvm *kvm, int i)
 void
 vcpu_put(struct kvm_vcpu *vcpu)
 {
+	int cpu;
+
 	kpreempt_disable();
+	cpu = vcpu->cpu;
 	kvm_arch_vcpu_put(vcpu);
 	kvm_fire_urn(vcpu);
 	removectx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
 	    NULL, NULL, NULL);
-	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
-	    KVM_RINGBUF_TAG_VCPUPUT, vcpu->cpu);
+	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf, KVM_RINGBUF_TAG_VCPUPUT, cpu);
 	kpreempt_enable();
 	mutex_exit(&vcpu->mutex);
 }
@@ -1519,74 +1516,10 @@ kvm_dev_ioctl_check_extension_generic(long arg, int *rv)
 	return (kvm_dev_ioctl_check_extension(arg, rv));
 }
 
-static void
-hardware_enable(void *junk)
-{
-	int cpu;
-	int r;
 
-	cpu = curthread->t_cpu->cpu_id;
 
-	mutex_enter(&cpus_hardware_enabled_mp);
-	if (CPU_IN_SET(cpus_hardware_enabled, cpu)) {
-		mutex_exit(&cpus_hardware_enabled_mp);
-		return;
-	}
 
-	CPUSET_ADD(cpus_hardware_enabled, cpu);
-	mutex_exit(&cpus_hardware_enabled_mp);
 
-	r = kvm_arch_hardware_enable(NULL);
-
-	if (r) {
-		mutex_enter(&cpus_hardware_enabled_mp);
-		CPUSET_DEL(cpus_hardware_enabled, cpu);
-		mutex_exit(&cpus_hardware_enabled_mp);
-		atomic_inc_32(&hardware_enable_failed);
-		cmn_err(CE_WARN, "kvm: enabling virtualization CPU%d failed\n",
-			cpu);
-	}
-}
-
-void
-hardware_disable(void *junk)
-{
-	int cpu = curthread->t_cpu->cpu_id;
-
-	mutex_enter(&cpus_hardware_enabled_mp);
-	if (!CPU_IN_SET(cpus_hardware_enabled, cpu)) {
-		mutex_exit(&cpus_hardware_enabled_mp);
-		return;
-	}
-
-	CPUSET_DEL(cpus_hardware_enabled, cpu);
-	mutex_exit(&cpus_hardware_enabled_mp);
-	kvm_arch_hardware_disable(NULL);
-}
-
-static void
-hardware_disable_all(void)
-{
-	ASSERT(MUTEX_HELD(&kvm_lock));
-
-	on_each_cpu(hardware_disable, NULL, 1);
-}
-
-static int
-hardware_enable_all(void)
-{
-	ASSERT(MUTEX_HELD(&kvm_lock));
-
-	hardware_enable_failed = 0;
-	on_each_cpu(hardware_enable, NULL, 1);
-
-	if (hardware_enable_failed) {
-		hardware_disable_all();
-		return (EBUSY);
-	}
-
-	return (0);
-}
 
 /* kvm_io_bus_write - called under kvm->slots_lock */
 int
@@ -1785,45 +1718,25 @@ zero_constructor(void *buf, void *arg, int tags)
 	return (0);
 }
 
-static const char *kvm_excl_ident = "SmartOS KVM";
+static const char *kvm_hma_ident = "SmartOS KVM";
 
 static boolean_t
 kvm_hvm_init(void)
 {
+	hma_reg_t *reg;
+
 	ASSERT(MUTEX_HELD(&kvm_lock));
 
-	/*
-	 * If initialization failed on a previous open attempt, do not repeatedly
-	 * try again (which could incur additional cmn_err noise).  Detaching the
-	 * driver will lead this state to be cleared, allowing for subsequent
-	 * attempts, if desired.
-	 */
-	if (kvm_init_failed) {
+	if ((reg = hma_register(kvm_hma_ident)) == NULL) {
 		return (B_FALSE);
 	}
-
-	/*
-	 * Demand exclusivity over the HVM resources of this machine.  A
-	 * failure to acquire this advisory lock does preclude a potential
-	 * success in the future. (So kvm_init_failed is not asserted.)
-	 */
-	if (!hvm_excl_hold(kvm_excl_ident)) {
-		return (B_FALSE);
-	}
-
 	if (vmx_init() != DDI_SUCCESS) {
-		goto fail;
+		hma_unregister(reg);
+		return (B_FALSE);
 	}
-	if (hardware_enable_all() != 0) {
-		vmx_fini();
-		goto fail;
-	}
-	return (B_TRUE);
 
-fail:
-	kvm_init_failed = B_TRUE;
-	hvm_excl_rele(kvm_excl_ident);
-	return (B_FALSE);
+	kvm_hma_reg = reg;
+	return (B_TRUE);
 }
 
 static void
@@ -1831,8 +1744,8 @@ kvm_hvm_fini(void)
 {
 	ASSERT(MUTEX_HELD(&kvm_lock));
 	ASSERT(kvm_usage_count == 0);
+	ASSERT3P(kvm_hma_reg, !=, NULL);
 
-	hardware_disable_all();
 	kvm_arch_hardware_unsetup();
 	vmx_fini();
 
@@ -1847,11 +1760,8 @@ kvm_hvm_fini(void)
 
 	kvm_arch_exit();
 
-	/*
-	 * Only once all resources directly related to HVM are released can the
-	 * advisory lock be dropped.
-	 */
-	hvm_excl_rele(kvm_excl_ident);
+	hma_unregister(kvm_hma_reg);
+	kvm_hma_reg = NULL;
 }
 
 static boolean_t
@@ -1909,8 +1819,6 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 	}
 
 	mutex_init(&kvm_lock, NULL, MUTEX_DRIVER, 0);
-	mutex_init(&cpus_hardware_enabled_mp, NULL, MUTEX_DRIVER,
-	    (void *)XC_HI_PIL);
 
 	list_create(&vm_list, sizeof (struct kvm),
 	    offsetof(struct kvm, vm_list));
@@ -1918,7 +1826,6 @@ kvm_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
 
 	kvm_dip = dip;
 	ddi_report_dev(dip);
-	kvm_init_failed = B_FALSE;
 
 	return (DDI_SUCCESS);
 }
@@ -1938,7 +1845,6 @@ kvm_detach(dev_info_t *dip, ddi_detach_cmd_t cmd)
 	id_space_destroy(kvm_minors);
 	kvm_dip = NULL;
 
-	mutex_destroy(&cpus_hardware_enabled_mp);
 	mutex_destroy(&kvm_lock);
 	ddi_soft_state_fini(&kvm_state);
 
