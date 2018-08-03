@@ -32,6 +32,7 @@
 #include <sys/x86_archext.h>
 #include <sys/controlregs.h>
 #include <sys/ht.h>
+#include <sys/machsystm.h>
 
 #include <vm/page.h>
 #include <vm/hat.h>
@@ -57,6 +58,7 @@
 #include "kvm_i8254.h"
 #include "kvm_mmu.h"
 #include "kvm_cache_regs.h"
+#include "kvm_para.h"
 
 extern caddr_t smmap64(caddr_t addr, size_t len, int prot, int flags,
     int fd, off_t pos);
@@ -572,8 +574,6 @@ kvm_get_cr8(struct kvm_vcpu *vcpu)
  * kvm-specific. Those are put in the beginning of the list.
  */
 
-#define	MSR_KVM_WALL_CLOCK  0x11
-#define	MSR_KVM_SYSTEM_TIME 0x12
 
 #define	KVM_SAVE_MSRS_BEGIN	5
 static uint32_t msrs_to_save[] = {
@@ -661,9 +661,9 @@ do_set_msr(struct kvm_vcpu *vcpu, unsigned index, uint64_t *data)
 static void
 kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 {
-	int version;
+	uint32_t version;
 	struct pvclock_wall_clock wc;
-	struct timespec boot;
+	timespec_t ts;
 
 	if (!wall_clock)
 		return;
@@ -678,26 +678,15 @@ kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 
 	kvm_write_guest(kvm, wall_clock, &version, sizeof (version));
 
-	/*
-	 * The guest calculates current wall clock time by adding
-	 * system time (updated by kvm_write_guest_time below) to the
-	 * wall clock specified here.  guest system time equals host
-	 * system time for us, thus we must fill in host boot time here.
-	 */
-#ifdef XXX
-	getboottime(&boot);
-
-	wc.sec = boot.tv_sec;
-	wc.nsec = boot.tv_nsec;
+	/* Use recorded time at VM creation */
+	wc.sec = kvm->arch.boot_wallclock.tv_sec;
+	wc.nsec = kvm->arch.boot_wallclock.tv_nsec;
 	wc.version = version;
 
 	kvm_write_guest(kvm, wall_clock, &wc, sizeof (wc));
 
 	version++;
 	kvm_write_guest(kvm, wall_clock, &version, sizeof (version));
-#else
-	XXX_KVM_PROBE;
-#endif
 }
 
 static uint32_t
@@ -717,93 +706,92 @@ div_frac(uint32_t dividend, uint32_t divisor)
 }
 
 static void
-kvm_set_time_scale(uint32_t tsc_khz, struct pvclock_vcpu_time_info *hv_clock)
-{
-	uint64_t nsecs = 1000000000LL;
-	int32_t  shift = 0;
-	uint64_t tps64;
-	uint32_t tps32;
-
-	tps64 = tsc_khz * 1000LL;
-	while (tps64 > nsecs*2) {
-		tps64 >>= 1;
-		shift--;
-	}
-
-	tps32 = (uint32_t)tps64;
-	while (tps32 <= (uint32_t)nsecs) {
-		tps32 <<= 1;
-		shift++;
-	}
-
-	hv_clock->tsc_shift = shift;
-	hv_clock->tsc_to_system_mul = div_frac(nsecs, tps32);
-}
-
-static void
 kvm_write_guest_time(struct kvm_vcpu *v)
 {
-	struct timespec ts;
-	unsigned long flags;
 	struct kvm_vcpu_arch *vcpu = &v->arch;
-	void *shared_kaddr;
-	unsigned long this_tsc_khz;
+	page_t *page;
+	struct pvclock_vcpu_time_info *pvclock;
+	hrtime_t hrt;
+	uint64_t tsc;
+	uint32_t scale, version;
+	uint8_t shift;
 
-	if ((!vcpu->time_page))
+	if (vcpu->time_addr == 0)
 		return;
 
-	this_tsc_khz = cpu_tsc_khz;
-	if (vcpu->hv_clock_tsc_khz != this_tsc_khz) {
-		kvm_set_time_scale(this_tsc_khz, &vcpu->hv_clock);
-		vcpu->hv_clock_tsc_khz = this_tsc_khz;
+	page = gfn_to_page(v->kvm, vcpu->time_addr >> PAGESHIFT);
+	if (page == bad_page) {
+		vcpu->time_addr = 0;
+		return;
 	}
-
-#ifdef XXX
-	/* Keep irq disabled to prevent changes to the clock */
-	local_irq_save(flags);
-#else
-	/*
-	 * may need to mask interrupts for local_irq_save, and unmask
-	 * for local_irq_restore.  cli()/sti() might be done...
-	 */
-	XXX_KVM_PROBE;
-#endif
-	kvm_get_msr(v, MSR_IA32_TSC, &vcpu->hv_clock.tsc_timestamp);
-	gethrestime(&ts);
-#ifdef XXX
-	monotonic_to_bootbased(&ts);
-	local_irq_restore(flags);
-#else
-	XXX_KVM_PROBE;
-#endif
-
-	/* With all the info we got, fill in the values */
-
-	vcpu->hv_clock.system_time = ts.tv_nsec + (NSEC_PER_SEC *
-	    (uint64_t)ts.tv_sec) + v->kvm->arch.kvmclock_offset;
+	pvclock = (void *)((uintptr_t)page_address(page) +
+	    offset_in_page(vcpu->time_addr));
+	version = pvclock->version;
 
 	/*
-	 * The interface expects us to write an even number signaling that the
-	 * update is finished. Since the guest won't see the intermediate
-	 * state, we just increase by 2 at the end.
+	 * A note from Linux upstream about the role of the 'version' field in
+	 * the pvclock_vcpu_time_info structure:
+	 *
+	 * This VCPU is paused, but it's legal for a guest to read another
+	 * VCPU's kvmclock, so we really have to follow the specification where
+	 * it says that version is odd if data is being modified, and even
+	 * after it is consistent.
 	 */
-	vcpu->hv_clock.version += 2;
+	if (version & 1) {
+		/* uninitialized state with update bit set */
+		version += 2;
+	} else {
+		/* indicate update in progress */
+		version++;
+	}
+	pvclock->version = version;
 
-	shared_kaddr = page_address(vcpu->time_page);
+	membar_producer();
 
-	memcpy((void *)((uintptr_t)shared_kaddr + vcpu->time_offset),
-	    &vcpu->hv_clock, sizeof (vcpu->hv_clock));
+	hrt = tsc_gethrtime_params(&tsc, &scale, &shift);
+	pvclock->tsc_timestamp = tsc + vcpu->tsc_offset;
+	pvclock->system_time = hrt - v->kvm->arch.boot_hrtime;
+	pvclock->tsc_to_system_mul = scale;
+	pvclock->tsc_shift = shift;
+	pvclock->flags = PVCLOCK_TSC_STABLE_BIT;
 
-	mark_page_dirty(v->kvm, vcpu->time >> PAGESHIFT);
+	membar_producer();
+
+	/* indicate update finished */
+	pvclock->version = version + 1;
+	vcpu->time_update = hrt;
+
+	kvm_release_page_dirty(page);
+	mark_page_dirty(v->kvm, vcpu->time_addr >> PAGESHIFT);
 }
 
+/*
+ * In the upstream Linux KVM, routine updates to pvclock data are throttled to
+ * a 100ms interval.  We use that value as well.
+ */
+#define	KVMCLOCK_UPDATE_INTERVAL	(100000000U) /* 100ms in ns */
+
 static int
-kvm_request_guest_time_update(struct kvm_vcpu *v)
+kvm_request_guest_time_update(struct kvm_vcpu *v, boolean_t force)
 {
 	struct kvm_vcpu_arch *vcpu = &v->arch;
 
-	if (!vcpu->time_page)
+	if (vcpu->time_addr == 0)
 		return (0);
+
+	/*
+	 * If this is not a forced or first update request, check to see if a
+	 * reasonable (and somewhat arbitrary) amount of time has passed. If
+	 * the last update was recent, skip the pvclock update request to keep
+	 * the write rate down.
+	 */
+	if (!force || vcpu->time_update != 0) {
+		hrtime_t hrt;
+
+		hrt = gethrtime();
+		if ((hrt - vcpu->time_update) < KVMCLOCK_UPDATE_INTERVAL)
+			return (0);
+	}
 
 	set_bit(KVM_REQ_KVMCLOCK_UPDATE, &v->requests);
 
@@ -1160,49 +1148,34 @@ kvm_set_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t data)
 	case MSR_IA32_MISC_ENABLE:
 		vcpu->arch.ia32_misc_enable_msr = data;
 		break;
+
 	case MSR_KVM_WALL_CLOCK:
+	case MSR_KVM_WALL_CLOCK_NEW:
 		vcpu->kvm->arch.wall_clock = data;
 		kvm_write_wall_clock(vcpu->kvm, data);
 		break;
+	case MSR_KVM_SYSTEM_TIME:
+	case MSR_KVM_SYSTEM_TIME_NEW:
+	{
+		vcpu->arch.time_addr = 0;
+		vcpu->arch.time_val = data;
 
-	/*
-	 * If in the future we go to update this code, we must go sync
-	 * back up with the Linux for this MSR to address several important
-	 * bugs.
-	 */
-	case MSR_KVM_SYSTEM_TIME: {
-#ifdef XXX
-		if (vcpu->arch.time_page) {
-			kvm_release_page_dirty(vcpu->arch.time_page);
-			vcpu->arch.time_page = NULL;
-		}
-#else
-		XXX_KVM_PROBE;
-#endif
-
-		vcpu->arch.time = data;
-
-		/* we verify if the enable bit is set... */
-		if (!(data & 1))
+		/* nothing further to do if disabled */
+		if ((data & 1) == 0)
 			break;
 
-		/* ...but clean it before doing the actual write */
-		vcpu->arch.time_offset = data & ~(PAGEOFFSET | 1);
-#ifdef XXX
-		vcpu->arch.time_page =
-				gfn_to_page(vcpu->kvm, data >> PAGESHIFT);
-
-		if (is_error_page(vcpu->arch.time_page)) {
-			kvm_release_page_clean(vcpu->arch.time_page);
-			vcpu->arch.time_page = NULL;
+		/* insist that the time output be confined to a single page */
+		data &= ~1UL;
+		if (((data & PAGEOFFSET) +
+		    sizeof (struct pvclock_vcpu_time_info)) > PAGESIZE) {
+			break;
 		}
 
-		kvm_request_guest_time_update(vcpu);
-#else
-		XXX_KVM_PROBE;
-#endif
+		vcpu->arch.time_addr = data;
+		kvm_request_guest_time_update(vcpu, B_TRUE);
 		break;
 	}
+
 	case MSR_IA32_MCG_CTL:
 	case MSR_IA32_MCG_STATUS:
 	case MSR_IA32_MC0_CTL ... MSR_IA32_MC0_CTL + 4 * KVM_MAX_MCE_BANKS - 1:
@@ -1457,10 +1430,12 @@ kvm_get_msr_common(struct kvm_vcpu *vcpu, uint32_t msr, uint64_t *pdata)
 		data = vcpu->arch.efer;
 		break;
 	case MSR_KVM_WALL_CLOCK:
+	case MSR_KVM_WALL_CLOCK_NEW:
 		data = vcpu->kvm->arch.wall_clock;
 		break;
 	case MSR_KVM_SYSTEM_TIME:
-		data = vcpu->arch.time;
+	case MSR_KVM_SYSTEM_TIME_NEW:
+		data = vcpu->arch.time_val;
 		break;
 	case MSR_IA32_P5_MC_ADDR:
 	case MSR_IA32_P5_MC_TYPE:
@@ -1623,7 +1598,7 @@ void
 kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	kvm_x86_ops->vcpu_load(vcpu, cpu);
-	kvm_request_guest_time_update(vcpu);
+	kvm_request_guest_time_update(vcpu, B_FALSE);
 }
 
 void
@@ -4562,12 +4537,6 @@ kvm_put_guest_fpu(struct kvm_vcpu *vcpu)
 void
 kvm_arch_vcpu_free(struct kvm_vcpu *vcpu)
 {
-	if (vcpu->arch.time_page) {
-		/* XXX We aren't doing anything with the time page */
-		XXX_KVM_PROBE;
-		vcpu->arch.time_page = NULL;
-	}
-
 	if (vcpu->kvcpu_kstat != NULL)
 		kstat_delete(vcpu->kvcpu_kstat);
 
@@ -4811,6 +4780,9 @@ kvm_arch_create_vm(void)
 		kvm->arch.need_xcr0 = 0;
 		kvm->arch.host_xcr0 = 0;
 	}
+
+	/* Record time at boot (creation) */
+	gethrestime(&kvm->arch.boot_wallclock);
 
 	return (kvm);
 }
