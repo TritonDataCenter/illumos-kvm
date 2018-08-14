@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2017 Joyent, Inc.
+ * Copyright 2018 Joyent, Inc.
  */
 
 #include <sys/types.h>
@@ -31,6 +31,7 @@
 #include <sys/tss.h>
 #include <sys/x86_archext.h>
 #include <sys/controlregs.h>
+#include <sys/ht.h>
 
 #include <vm/page.h>
 #include <vm/hat.h>
@@ -3457,6 +3458,25 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 	cli();
 
+	if ((r = ht_acquire()) != 1) {
+		set_bit(KVM_REQ_KICK, &vcpu->requests);
+		sti();
+		/*
+		 * We were racing for a core against another VM's VCPU thread,
+		 * and we lost.  In this case, we want to ask the dispatcher to
+		 * migrate us to a core where we have a better chance of winning
+		 * ht_acquire().  But unlike bhyve, we don't stay affined during
+		 * the whole VCPU operation, so we immediately clear affinity.
+		 */
+		if (r == -1) {
+			thread_affinity_set(curthread, CPU_BEST);
+			thread_affinity_clear(curthread);
+		}
+		kpreempt_enable();
+		r = 1;
+		goto out;
+	}
+
 	/* enable NMI/IRQ window open exits if needed */
 	if (vcpu->arch.nmi_pending)
 		kvm_x86_ops->enable_nmi_window(vcpu);
@@ -3481,6 +3501,9 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 	KVM_TRACE1(vm__entry, int, vcpu->vcpu_id);
 
 	kvm_x86_ops->run(vcpu);
+
+	ht_release();
+
 #ifdef XXX
 	/*
 	 * If the guest has used debug registers, at least dr7
@@ -3514,6 +3537,9 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 {
 	int r;
 	struct kvm *kvm = vcpu->kvm;
+
+	if (!(curthread->t_schedflag & TS_VCPU))
+		ht_mark_as_vcpu();
 
 	if (vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED) {
 		cmn_err(CE_CONT, "!vcpu %d received sipi with vector # %x\n",
