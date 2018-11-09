@@ -334,7 +334,7 @@ struct pvclock_vcpu_time_info {
 typedef struct pvclock_vcpu_time_info pvclock_vcpu_time_info_t;
 
 /* Values for pvclock_vcpu_time_info_t`flags: */
-#define PVCLOCK_TSC_STABLE_BIT  (1 << 0)
+#define	PVCLOCK_TSC_STABLE_BIT  (1 << 0)
 
 typedef struct msi_msg {
 	uint32_t	address_lo;	/* low 32 bits of msi msg. address */

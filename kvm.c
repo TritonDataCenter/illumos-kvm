@@ -314,6 +314,7 @@
 #include <asm/cpu.h>
 #include <sys/id_space.h>
 #include <sys/hma.h>
+#include <sys/time.h>
 
 #include "kvm_bitops.h"
 #include "kvm_vmx.h"
@@ -2536,6 +2537,11 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 			break;
 		}
 
+		if (copyin(argp, &chip, sizeof (chip)) != 0) {
+			rval = EFAULT;
+			break;
+		}
+
 		rval = kvm_vm_ioctl_get_irqchip(kvmp, &chip);
 
 		if (rval == 0 && copyout(&chip, argp, sz) != 0) {
@@ -2585,6 +2591,49 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		}
 
 		rval = kvm_vm_ioctl_get_dirty_log(kvmp, &log);
+		break;
+	}
+	case KVM_SET_CLOCK: {
+		struct kvm *kvmp;
+		struct kvm_clock_data user_ns;
+		hrtime_t now_ns;
+
+		rval = 0;
+		if (copyin(argp, &user_ns, sizeof (user_ns)) != 0) {
+			rval = EFAULT;
+			break;
+		}
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+		if (user_ns.clock > INT64_MAX) {
+			/* refuse value that cannot be converted to hrtime_t */
+			rval = EINVAL;
+			break;
+		}
+
+		now_ns = gethrtime();
+		kvmp->arch.boot_hrtime = now_ns - (hrtime_t)user_ns.clock;
+		break;
+	}
+	case KVM_GET_CLOCK: {
+		struct kvm *kvmp;
+		struct kvm_clock_data user_ns;
+		hrtime_t now_ns;
+
+		if ((kvmp = ksp->kds_kvmp) == NULL) {
+			rval = EINVAL;
+			break;
+		}
+
+		now_ns = gethrtime();
+		user_ns.clock = (uint64_t)(now_ns - kvmp->arch.boot_hrtime);
+		user_ns.flags = 0;
+
+		rval = 0;
+		if (copyout(&user_ns, argp, sizeof (user_ns)) != 0)
+			rval = EFAULT;
 		break;
 	}
 	case KVM_NMI: {
