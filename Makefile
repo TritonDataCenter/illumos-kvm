@@ -1,5 +1,5 @@
 #
-# Copyright 2015 Joyent, Inc.
+# Copyright (c) 2018, Joyent, Inc.
 #
 
 KERNEL_SOURCE =	$(PWD)/../../illumos
