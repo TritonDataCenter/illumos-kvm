@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018, Joyent, Inc.
+# Copyright (c) 2019, Joyent, Inc.
 #
 
 KERNEL_SOURCE =	$(PWD)/../../illumos
@@ -11,7 +11,6 @@ CC =		$(STRAP_AREA)/usr/bin/gcc
 LD =		/usr/bin/ld
 CTFBINDIR =	$(KERNEL_SOURCE)/usr/src/tools/proto/*/opt/onbld/bin/i386
 CTFCONVERT =	$(CTFBINDIR)/ctfconvert
-CTFMERGE =	$(CTFBINDIR)/ctfmerge
 CSTYLE =	$(KERNEL_SOURCE)/usr/src/tools/scripts/cstyle
 HDRCHK =	tools/hdrchk
 HDRCHK_USRFLAG =	"$(CC)"
@@ -287,17 +286,18 @@ world: kvm kvm.so JOY_kvm_link.so
 
 kvm: $(KMOD_OBJS)
 	$(LD) -r -o $@ $(KMOD_OBJS)
-	$(CTFMERGE) -L VERSION -o $@ $(KMOD_OBJS)
+	$(CTFCONVERT) -L VERSION -o $@ $@
 
 kvm.so: $(DMOD_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $(DMOD_OBJS) $(LIBS)
+	$(CTFCONVERT) -L VERSION -o $@ $@
 
 JOY_kvm_link.so: $(LINKMOD_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $(LINKMOD_OBJS) $(LIBS)
+	$(CTFCONVERT) -L VERSION -o $@ $@
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
-	$(CTFCONVERT) -i -L VERSION $@
 
 install: world
 	@echo "==> Installing kvm module (to $(DESTDIR)/)"
