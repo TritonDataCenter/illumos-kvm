@@ -2,6 +2,8 @@
 # Copyright (c) 2019, Joyent, Inc.
 #
 
+include		$(PWD)/../../../build.env
+
 KERNEL_SOURCE =	$(PWD)/../../illumos
 MDB_SOURCE =	$(KERNEL_SOURCE)/usr/src/cmd/mdb
 PROTO_AREA =	$(PWD)/../../../proto
@@ -91,6 +93,13 @@ ALWAYS_CFLAGS = \
 	-Wno-unused \
 	-Werror \
 	-fno-inline-functions
+
+#
+# Skip dangerous GCC options (not that any specific problems are know of here).
+#
+ifneq ($(PRIMARY_COMPILER_VER),4)
+ALWAYS_CFLAGS += -fno-aggressive-loop-optimizations
+endif
 
 #
 # Replacing -O with -O2 causes the KVM host to panic.  Don't do that.
