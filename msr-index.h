@@ -19,7 +19,7 @@
  * Derived from ./arch/x86/include/asm/msr-index.h
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2011 Joyent, Inc. All Rights Reserved.
+ * Copyright 2019 Joyent, Inc.
  */
 
 #ifndef _ASM_X86_MSR_INDEX_H
@@ -383,7 +383,6 @@
 
 /* Intel VT MSRs */
 #define MSR_IA32_VMX_PINBASED_CTLS      0x00000481
-#define MSR_IA32_VMX_PROCBASED_CTLS     0x00000482
 #define MSR_IA32_VMX_EXIT_CTLS          0x00000483
 #define MSR_IA32_VMX_ENTRY_CTLS         0x00000484
 #define MSR_IA32_VMX_MISC               0x00000485
@@ -393,7 +392,6 @@
 #define MSR_IA32_VMX_CR4_FIXED1         0x00000489
 #define MSR_IA32_VMX_VMCS_ENUM          0x0000048a
 #define MSR_IA32_VMX_PROCBASED_CTLS2    0x0000048b
-#define MSR_IA32_VMX_EPT_VPID_CAP       0x0000048c
 
 /* AMD-V MSRs */
 
