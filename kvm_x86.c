@@ -17,7 +17,7 @@
  * GPL HEADER END
  *
  * Copyright 2011 various Linux Kernel contributors.
- * Copyright 2018 Joyent, Inc.
+ * Copyright 2019 Joyent, Inc.
  */
 
 #include <sys/types.h>
@@ -31,7 +31,7 @@
 #include <sys/tss.h>
 #include <sys/x86_archext.h>
 #include <sys/controlregs.h>
-#include <sys/ht.h>
+#include <sys/smt.h>
 #include <sys/machsystm.h>
 
 #include <vm/page.h>
@@ -3410,15 +3410,16 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 	cli();
 
-	if ((r = ht_acquire()) != 1) {
+	if ((r = smt_acquire()) != 1) {
 		set_bit(KVM_REQ_KICK, &vcpu->requests);
 		sti();
 		/*
 		 * We were racing for a core against another VM's VCPU thread,
 		 * and we lost.  In this case, we want to ask the dispatcher to
 		 * migrate us to a core where we have a better chance of winning
-		 * ht_acquire().  But unlike bhyve, we don't stay affined during
-		 * the whole VCPU operation, so we immediately clear affinity.
+		 * smt_acquire().  But unlike bhyve, we don't stay affined
+		 * during the whole VCPU operation, so we immediately clear
+		 * affinity.
 		 */
 		if (r == -1) {
 			thread_affinity_set(curthread, CPU_BEST);
@@ -3454,7 +3455,7 @@ vcpu_enter_guest(struct kvm_vcpu *vcpu)
 
 	kvm_x86_ops->run(vcpu);
 
-	ht_release();
+	smt_release();
 
 #ifdef XXX
 	/*
@@ -3491,7 +3492,7 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 	struct kvm *kvm = vcpu->kvm;
 
 	if (!(curthread->t_schedflag & TS_VCPU))
-		ht_mark_as_vcpu();
+		smt_mark_as_vcpu();
 
 	if (vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED) {
 		cmn_err(CE_CONT, "!vcpu %d received sipi with vector # %x\n",
