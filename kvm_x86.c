@@ -5062,8 +5062,10 @@ native_read_msr(unsigned int msr)
 	return (EAX_EDX_VAL(val, low, high));
 }
 
+/* See __vmx_load_host_state(). */
+#pragma weak native_write_msr = dtrace_native_write_msr
 void
-native_write_msr(unsigned int msr, unsigned low, unsigned high)
+dtrace_native_write_msr(unsigned int msr, unsigned low, unsigned high)
 {
 	__asm__ volatile("wrmsr" : : "c" (msr),
 	    "a"(low), "d" (high) : "memory");
@@ -5185,8 +5187,10 @@ kvm_load_fs(unsigned short sel)
 	__asm__("mov %0, %%fs" : : "rm"(sel));
 }
 
+/* See __vmx_load_host_state(). */
+#pragma weak kvm_load_gs = dtrace_kvm_load_gs
 void
-kvm_load_gs(unsigned short sel)
+dtrace_kvm_load_gs(unsigned short sel)
 {
 	__asm__("mov %0, %%gs" : : "rm"(sel));
 }

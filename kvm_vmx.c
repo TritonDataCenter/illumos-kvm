@@ -13,7 +13,7 @@
  * This work is licensed under the terms of the GNU GPL, version 2.  See
  * the COPYING file in the top-level directory.
  *
- * Copyright 2018 Joyent, Inc.
+ * Copyright 2019 Joyent, Inc.
  */
 
 #include <sys/sysmacros.h>
@@ -776,17 +776,12 @@ __vmx_load_host_state(struct vcpu_vmx *vmx)
 
 		kvm_load_ldt(vmx->host_state.ldt_sel);
 		/*
-		 * If we have to reload GS, we must take care to preserve our
-		 * GSBASE.  Note that between the kvm_load_gs() and the
-		 * completion of writing the MSR, GS is essentially in a
-		 * corrupt state -- we cannot allow code to be revectored
-		 * in this window.  In particular, this means that we not
-		 * hit a DTrace probe in this window (which will need the
-		 * intact GS to get to the CPU pointer).  Both kvm_load_gs()
-		 * and wrmsrl() turn into inlines or non-instrumentable
-		 * leaf routines, but vmcs_readl() has an SDT probe -- so we
-		 * call vmcs_readl() to get the HOST_GS_BASE before the call
-		 * to kvm_load_gs().
+		 * Reloading %gs effectively zeroes the upper 32 bits of the gs
+		 * base, so we need to restore our own value after the load. As
+		 * %gs is essentially corrupt in between this load and the
+		 * update of gsbase, then, we must be careful not to take an FBT
+		 * trap. We do this by marking the two functions as untraceable:
+		 * they have a dtrace_ prefix, which DTrace knows to ignore.
 		 */
 		cli();
 		gsbase = vmcs_readl(HOST_GS_BASE);
