@@ -19,8 +19,7 @@
  * CDDL HEADER END
  */
 /*
- * Copyright 2012 Joyent Inc.  All rights reserved.
- * Use is subject to license terms.
+ * Copyright 2019 Joyent, Inc.
  */
 
 #include <mdb/mdb_param.h>
@@ -57,7 +56,7 @@ kvm_mdb_memory_slot_init(mdb_walk_state_t *wsp)
 	struct kvm kvm;
 	uintptr_t addr;
 
-	if (wsp->walk_addr == NULL) {
+	if (wsp->walk_addr == (uintptr_t)NULL) {
 		mdb_warn("kvm_memory_slot does not support global walks");
 		return (WALK_ERR);
 	}
@@ -105,7 +104,7 @@ kvm_mdb_mem_alias_init(mdb_walk_state_t *wsp)
 	struct kvm kvm;
 	uintptr_t addr;
 
-	if (wsp->walk_addr == NULL) {
+	if (wsp->walk_addr == (uintptr_t)NULL) {
 		mdb_warn("kvm_mem_alias does not support global walks");
 		return (WALK_ERR);
 	}
@@ -282,7 +281,7 @@ kvm_mdb_ringbuf_entry_init(mdb_walk_state_t *wsp)
 	kvm_ringbuf_t *buf;
 	uintptr_t addr;
 
-	if (wsp->walk_addr == NULL) {
+	if (wsp->walk_addr == (uintptr_t)NULL) {
 		mdb_warn("kvm_ringbuf_entry does not support global walks\n");
 		return (WALK_ERR);
 	}
@@ -361,7 +360,7 @@ kvm_mdb_kvm_walk_init(mdb_walk_state_t *wsp)
 {
 	list_t list;
 	GElf_Sym sym;
-	if (wsp->walk_addr != NULL) {
+	if (wsp->walk_addr != (uintptr_t)NULL) {
 		mdb_warn("kvm does not support non-global walks\n");
 		return (WALK_ERR);
 	}

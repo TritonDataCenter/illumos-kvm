@@ -24,7 +24,7 @@
  *   Yaniv Kamay  <yaniv@qumranet.com>
  *
  * Ported to illumos by Joyent
- * Copyright 2018 Joyent, Inc.
+ * Copyright 2019 Joyent, Inc.
  *
  * Authors:
  *   Max Bruning	<max@joyent.com>
@@ -2060,7 +2060,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 
 	switch (cmd) {
 	case KVM_GET_API_VERSION:
-		if (arg != NULL) {
+		if (arg != (intptr_t)NULL) {
 			rval = EINVAL;
 			break;
 		}
@@ -2068,7 +2068,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		break;
 
 	case KVM_CREATE_VM:
-		if (arg != NULL) {
+		if (arg != (intptr_t)NULL) {
 			rval = EINVAL;
 			break;
 		}
@@ -2123,7 +2123,7 @@ kvm_ioctl(dev_t dev, int cmd, intptr_t arg, int md, cred_t *cr, int *rv)
 		break;
 
 	case KVM_GET_VCPU_MMAP_SIZE:
-		if (arg != NULL) {
+		if (arg != (intptr_t)NULL) {
 			rval = EINVAL;
 			break;
 		}
