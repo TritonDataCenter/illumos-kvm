@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019, Joyent, Inc.
+# Copyright 2019 Joyent, Inc.
 #
 
 include		$(PWD)/../../../build.env
@@ -108,6 +108,7 @@ KERNEL_CFLAGS = \
 	$(ALWAYS_CFLAGS) \
 	-m64 \
 	-mcmodel=kernel \
+	-fno-shrink-wrap \
 	-g \
 	-O \
 	-fno-inline \
