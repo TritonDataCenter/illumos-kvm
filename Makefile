@@ -108,7 +108,6 @@ KERNEL_CFLAGS = \
 	$(ALWAYS_CFLAGS) \
 	-m64 \
 	-mcmodel=kernel \
-	-fno-shrink-wrap \
 	-g \
 	-O \
 	-fno-inline \
@@ -118,6 +117,14 @@ KERNEL_CFLAGS = \
 	-gdwarf-2 \
 	-std=gnu99 \
 	-mno-red-zone
+
+#
+# Fix fbt entry probes.
+#
+ifneq ($(PRIMARY_COMPILER_VER),4)
+KERNEL_CFLAGS += \
+	-fno-shrink-wrap
+endif
 
 USER_CFLAGS = \
 	-finline \
