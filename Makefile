@@ -123,7 +123,9 @@ KERNEL_CFLAGS = \
 #
 ifneq ($(PRIMARY_COMPILER_VER),4)
 KERNEL_CFLAGS += \
-	-fno-shrink-wrap
+	-fno-shrink-wrap \
+	-mindirect-branch=thunk-extern \
+	-mindirect-branch-register
 endif
 
 USER_CFLAGS = \
