@@ -1,5 +1,5 @@
 #
-# Copyright 2019 Joyent, Inc.
+# Copyright 2020 Joyent, Inc.
 #
 
 include		$(PWD)/../../../build.env
@@ -159,6 +159,7 @@ DMOD_CFLAGS = \
 LINKMOD_CFLAGS = \
 	$(ALWAYS_CFLAGS) \
 	$(USER_CFLAGS) \
+	-m32 \
 	-O \
 	-fpic
 
@@ -312,7 +313,7 @@ kvm.so: $(DMOD_OBJS)
 	$(CTFCONVERT) -L VERSION -o $@ $@
 
 JOY_kvm_link.so: $(LINKMOD_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $(LINKMOD_OBJS) $(LIBS)
+	$(CC) -m32 $(LDFLAGS) -o $@ $(LINKMOD_OBJS) $(LIBS)
 	$(CTFCONVERT) -L VERSION -o $@ $@
 
 %.o: %.c $(HEADERS)
