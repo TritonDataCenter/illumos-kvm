@@ -181,8 +181,8 @@ DMOD_LDFLAGS = \
 	-Wl,-zdefs \
 	-Wl,-zignore \
 	-Wl,-M$(MDB_SOURCE)/common/modules/conf/mapfile-extern \
-	-L$(PROTO_AREA)/lib \
-	-L$(PROTO_AREA)/usr/lib
+	-L$(PROTO_AREA)/lib/amd64 \
+	-L$(PROTO_AREA)/usr/lib/amd64
 
 DMOD_LIBS = \
 	-lc
