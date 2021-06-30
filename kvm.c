@@ -489,11 +489,12 @@ kvm_is_mmio_pfn(pfn_t pfn)
 void
 vcpu_load(struct kvm_vcpu *vcpu)
 {
+	struct ctxop *ctx = installctx_preallocate();
 	mutex_enter(&vcpu->mutex);
 
 	kpreempt_disable();
 	installctx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
-	    NULL, NULL, NULL);
+	    NULL, NULL, NULL, ctx);
 
 	kvm_arch_vcpu_load(vcpu, CPU->cpu_id);
 	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
