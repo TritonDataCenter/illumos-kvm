@@ -161,6 +161,7 @@ typedef struct kvm_vcpu {
 	struct kvm_vcpu_arch arch;
 	ddi_umem_cookie_t cookie;
 	struct kvm_user_return_notifier *urn;
+	struct ctxop *ctxop;
 } kvm_vcpu_t;
 
 typedef struct kvm_memory_slot {
