@@ -95,7 +95,7 @@ ALWAYS_CFLAGS = \
 	-fno-inline-functions
 
 #
-# Skip dangerous GCC options (not that any specific problems are know of here).
+# Skip dangerous GCC options (not that any specific problems are known of here).
 #
 ifneq ($(PRIMARY_COMPILER_VER),4)
 ALWAYS_CFLAGS += -fno-aggressive-loop-optimizations
@@ -162,6 +162,9 @@ LINKMOD_CFLAGS = \
 	-m32 \
 	-O \
 	-fpic
+
+KERNEL_LDFLAGS = \
+	-ztype=kmod
 
 USER_LDFLAGS = \
 	-Wl,-Bdirect \
@@ -291,6 +294,7 @@ LINKMOD_OBJS =	$(LINKMOD_SRCS:%.c=%.o)
 
 kvm :	CPPFLAGS =	$(KERNEL_CPPFLAGS)
 kvm :	CFLAGS =	$(KERNEL_CFLAGS)
+kvm :	LDFLAGS =	$(KERNEL_LDFLAGS)
 
 kvm.so :	CPPFLAGS =	$(DMOD_CPPFLAGS)
 kvm.so :	CFLAGS =	$(DMOD_CFLAGS)
@@ -305,7 +309,7 @@ JOY_kvm_link.so :	LIBS =		$(LINKMOD_LIBS)
 world: kvm kvm.so JOY_kvm_link.so
 
 kvm: $(KMOD_OBJS)
-	$(LD) -r -o $@ $(KMOD_OBJS)
+	$(LD) $(LDFLAGS) -o $@ $(KMOD_OBJS)
 	$(CTFCONVERT) -L VERSION -o $@ $@
 
 kvm.so: $(DMOD_OBJS)
