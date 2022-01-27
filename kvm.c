@@ -489,12 +489,9 @@ kvm_is_mmio_pfn(pfn_t pfn)
 void
 vcpu_load(struct kvm_vcpu *vcpu)
 {
-	struct ctxop *ctx = installctx_preallocate();
 	mutex_enter(&vcpu->mutex);
-
 	kpreempt_disable();
-	installctx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
-	    NULL, NULL, NULL, ctx);
+	ctxop_attach(curthread, vcpu->ctxop);
 
 	kvm_arch_vcpu_load(vcpu, CPU->cpu_id);
 	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf,
@@ -518,8 +515,7 @@ vcpu_put(struct kvm_vcpu *vcpu)
 	cpu = vcpu->cpu;
 	kvm_arch_vcpu_put(vcpu);
 	kvm_fire_urn(vcpu);
-	removectx(curthread, vcpu, kvm_ctx_save, kvm_ctx_restore, NULL,
-	    NULL, NULL, NULL);
+	ctxop_detach(curthread, vcpu->ctxop);
 	kvm_ringbuf_record(&vcpu->kvcpu_ringbuf, KVM_RINGBUF_TAG_VCPUPUT, cpu);
 	kpreempt_enable();
 	mutex_exit(&vcpu->mutex);
@@ -567,6 +563,12 @@ kvm_reload_remote_mmus(struct kvm *kvm)
 	make_all_cpus_request(kvm, KVM_REQ_MMU_RELOAD);
 }
 
+static const struct ctxop_template kvm_ctxop_tpl = {
+	.ct_rev		= CTXOP_TPL_REV,
+	.ct_save	= kvm_ctx_save,
+	.ct_restore	= kvm_ctx_restore
+};
+
 int
 kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
 {
@@ -586,6 +588,8 @@ kvm_vcpu_init(struct kvm_vcpu *vcpu, struct kvm *kvm, unsigned id)
 		return (r);
 	}
 
+	vcpu->ctxop = ctxop_allocate(&kvm_ctxop_tpl, vcpu);
+
 	return (0);
 }
 
@@ -594,6 +598,7 @@ kvm_vcpu_uninit(struct kvm_vcpu *vcpu)
 {
 	kvm_arch_vcpu_uninit(vcpu);
 	ddi_umem_free(vcpu->cookie);
+	ctxop_free(vcpu->ctxop);
 }
 
 /*
