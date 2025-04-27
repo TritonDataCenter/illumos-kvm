@@ -3030,9 +3030,9 @@ btc:				/* btc */
 		c->dst.val = (c->d & ByteOp) ? (int8_t) c->src.val :
 							(int16_t) c->src.val;
 		break;
-	case 0xc0 ... 0xc1:     /* xadd */
+	case 0xc0 ... 0xc1:	/* xadd */
 		kvm_ringbuf_record(&ctxt->vcpu->kvcpu_ringbuf,
-		    KVM_RINGBUF_TAG_EMUXADD, (uint64_t)c->dst.ptr);
+			KVM_RINGBUF_TAG_EMUXADD, (uint64_t)c->dst.ptr);
 		emulate_2op_SrcV("add", c->src, c->dst, ctxt->eflags);
 		/* Write back the register source. */
 		c->src.val = c->dst.orig_val;
