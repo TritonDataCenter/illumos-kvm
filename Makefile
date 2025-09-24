@@ -1,5 +1,6 @@
 #
 # Copyright 2020 Joyent, Inc.
+# Copyright 2025 Edgecast Cloud LLC.
 #
 
 include		$(PWD)/../../../build.env
@@ -131,7 +132,7 @@ endif
 USER_CFLAGS = \
 	-finline \
 	-gdwarf-2 \
-	-std=gnu89 \
+	-std=gnu99 \
 	-Wno-missing-braces \
 	-Wno-sign-compare \
 	-Wno-parentheses \
@@ -177,7 +178,7 @@ DMOD_LDFLAGS = \
 	-m64 \
 	-shared \
 	-nodefaultlibs \
-	-std=gnu89 \
+	-std=gnu99 \
 	-Wl,-M$(KERNEL_SOURCE)/usr/src/common/mapfiles/common/map.pagealign \
 	-Wl,-M$(KERNEL_SOURCE)/usr/src/common/mapfiles/common/map.noexdata \
 	-Wl,-ztext \
