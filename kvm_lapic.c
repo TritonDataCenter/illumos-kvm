@@ -16,6 +16,7 @@
  * the COPYING file in the top-level directory.
  *
  * Copyright (c) 2012 Joyent, Inc. All rights reserved.
+ * Copyright (c) 2018 SoftNAS, LLC
  */
 #include <sys/types.h>
 #include <sys/atomic.h>
@@ -895,6 +896,7 @@ void
 kvm_free_lapic(struct kvm_vcpu *vcpu)
 {
 	struct kvm_lapic *apic = vcpu->arch.apic;
+
 	if (apic == NULL)
 		return;
 
@@ -966,12 +968,11 @@ kvm_lapic_set_base(struct kvm_vcpu *vcpu, uint64_t value)
 void
 kvm_lapic_reset(struct kvm_vcpu *vcpu)
 {
-	struct kvm_lapic *apic;
+	struct kvm_lapic *apic = vcpu->arch.apic;
 	int i;
 
-	ASSERT(vcpu);
-	apic = vcpu->arch.apic;
-	ASSERT(apic != NULL);
+	if (apic == NULL)
+		return;
 
 	/* Stop the timer in case it's a reset to an active apic */
 	mutex_enter(&cpu_lock);
@@ -1008,13 +1009,14 @@ kvm_lapic_reset(struct kvm_vcpu *vcpu)
 	update_divide_count(apic);
 	apic->lapic_timer.pending = 0;
 
-	if (kvm_vcpu_is_bsp(vcpu))
-		vcpu->arch.apic_base |= MSR_IA32_APICBASE_BSP;
+	/* also sets APIC_LDR in x2apic mode */
+	kvm_lapic_set_base(vcpu, APIC_DEFAULT_PHYS_BASE |
+	    MSR_IA32_APICBASE_BSP);
 	apic_update_ppr(apic);
 
 	vcpu->arch.apic_arb_prio = 0;
 
-	cmn_err(CE_CONT, "!%s: vcpu=%p, id=%d, base_msr= %lx PRIx64 "
+	cmn_err(CE_CONT, "!%s: vcpu=%p, id=%d, base_msr=%" PRIx64 ", "
 	    "base_address=%lx\n", __func__, vcpu, kvm_apic_id(apic),
 	    vcpu->arch.apic_base, apic->base_address);
 }
@@ -1116,7 +1118,6 @@ kvm_create_lapic(struct kvm_vcpu *vcpu)
 	apic->base_address = APIC_DEFAULT_PHYS_BASE;
 	vcpu->arch.apic_base = APIC_DEFAULT_PHYS_BASE;
 
-	kvm_lapic_reset(vcpu);
 	kvm_iodevice_init(&apic->dev, &apic_mmio_ops);
 	apic->dev.lapic = apic;
 

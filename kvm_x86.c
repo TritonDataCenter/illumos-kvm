@@ -3497,7 +3497,6 @@ __vcpu_run(struct kvm_vcpu *vcpu)
 	if (vcpu->arch.mp_state == KVM_MP_STATE_SIPI_RECEIVED) {
 		cmn_err(CE_CONT, "!vcpu %d received sipi with vector # %x\n",
 		    vcpu->vcpu_id, vcpu->arch.sipi_vector);
-		kvm_lapic_reset(vcpu);
 		r = kvm_arch_vcpu_reset(vcpu);
 		if (r)
 			return (r);
@@ -4645,6 +4644,7 @@ free_vcpu:
 int
 kvm_arch_vcpu_reset(struct kvm_vcpu *vcpu)
 {
+	kvm_lapic_reset(vcpu);
 	vcpu->arch.nmi_pending = 0;
 	vcpu->arch.nmi_injected = 0;
 
