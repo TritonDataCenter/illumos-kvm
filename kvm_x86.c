@@ -757,6 +757,8 @@ kvm_write_guest_time(struct kvm_vcpu *v)
 
 	membar_producer();
 
+	DTRACE_PROBE1(kvm_write_pvclock, struct pvclock_vcpu_time_info *, pvclock);
+
 	/* indicate update finished */
 	pvclock->version = version + 1;
 	vcpu->time_update = hrt;
@@ -4787,6 +4789,7 @@ kvm_arch_create_vm(void)
 
 	/* Record time at boot (creation) */
 	gethrestime(&kvm->arch.boot_wallclock);
+	kvm->arch.boot_hrtime = gethrtime();
 
 	return (kvm);
 }
